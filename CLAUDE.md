@@ -4,7 +4,7 @@ Side-view **3D** elemental action game (three.js, plain ES modules, **no build s
 https://ricsard0981.github.io/elemental-commit/ (GitHub Pages, auto-deploys on every push to `main`
 via `.github/workflows/pages.yml`).
 
-**Read `docs/HANDOFF.md` first.** It has the full history, decisions and the owner's preferences.
+**Read `docs/DEVELOPER_GUIDE.md` and `docs/HANDOFF.md` first.** It has the full history, decisions and the owner's preferences.
 The current task is **`docs/MILESTONE_2_PLAN.md`** (approved; one big drop).
 
 ## Run / test

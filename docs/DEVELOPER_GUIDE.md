@@ -472,8 +472,11 @@ The iPhone 13 hasn't been re-measured since M2 landed. That's the big open quest
 - Credits are in [`vendor/CREDITS.md`](../vendor/CREDITS.md).
 - Everything else (costumes, VFX, shaders, textures, scenery, audio) is original and generated in code.
 
-The optimisation scripts used gltf-transform: prune, resample, dedup, quantize and texture compression. They live
-outside the repo. The steps are written down in the M2 section of [`HANDOFF.md`](HANDOFF.md).
+The optimisation scripts used gltf-transform and live outside the repo. To redo it:
+- drop the eye and hair meshes and the normal/roughness maps
+- resize textures to 512 px WebP
+- quantize normals, UVs and weights (not positions: the costume shader reads raw bind-pose positions)
+- keep the wanted clips, drop finger, scale and non-pelvis translation tracks, then `resample()` and `dedup()`
 
 ---
 
@@ -511,8 +514,9 @@ any bus event name.
 `GFX_OPTS`. If it changes shader programs, add it to the return value of `applyQuality()` so it triggers a re-warm.
 
 **…tweak how a hero looks?** Use `buildCostume()` and the per-element kits (`fireKit` etc.) in `hero.js`. Positions are
-T-pose model space in metres: +X is the character's left, +Z is forward. The joint positions are in the comments of the
-M2 notes (male head joint at y 1.60, shoulders x ±0.21 at y 1.46).
+T-pose model space in metres: +X is the character's left, +Z is forward. Landmarks on the male body: head joint at
+y 1.60, shoulders at x ±0.21, y 1.46, elbows at x ±0.46, wrists at x ±0.71, pelvis at y 0.95, knees at y 0.54. The female
+body is about 3 % smaller.
 
 ---
 

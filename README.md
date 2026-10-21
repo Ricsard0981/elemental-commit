@@ -87,6 +87,9 @@ Hit-stop · slow-mo on parry/kills · camera trauma shake + FOV punch + look-ahe
 
 ## Project layout
 
+The full developer guide (history, architecture, every system, performance rules, how-tos) is [`docs/DEVELOPER_GUIDE.md`](docs/DEVELOPER_GUIDE.md).
+
+
 ```
 index.html / style.css       UI shell (HUD, menus, skill tree)
 src/main.js                  game loop, run lifecycle, arenas, checkpoints, finish
