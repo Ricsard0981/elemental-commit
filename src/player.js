@@ -9,11 +9,12 @@ import * as In from './input.js';
 import * as UI from './ui.js';
 import { acquireHero, heroReady } from './hero.js';
 import { emit } from './events.js';
-import { hitEnemy } from './combat.js';
+import { hitEnemy, enemyBox } from './combat.js';
 import { haptic, S } from './settings.js';
 import { clamp, damp, lerp, rand, easeOut, sign } from './util.js';
 
 const tmp = [];
+const BUF = { main: 0.16, jump: 0.14, dash: 0.16, s1: 0.16, s2: 0.16, ranged: 0.12, guard: 0.09 }; // seconds of REAL time (≈ 8–10 frames)
 const _hv = new THREE.Vector3();
 const capsule = new THREE.CapsuleGeometry(1, 1, 4, 10), sph = new THREE.SphereGeometry(1, 16, 12), box = new THREE.BoxGeometry(1, 1, 1);
 
@@ -25,11 +26,13 @@ export class Player {
     this.state = 'free'; this.lockT = 0; this.stun = 0; this.hurtI = 0; this.dashInv = 0;
     this.guarding = false; this.guardT = 99; this.parryWindow = 0.22;
     this.cd = { ranged: 0, guard: 0, s1: 0, s2: 0, dash: 0 }; this.cdMax = { ranged: 1, guard: 1, s1: 1, s2: 1, dash: 1 };
-    this.buf = { main: 0, jump: 0, s1: 0, s2: 0, dash: 0 };
+    this.buf = { main: 0, jump: 0, s1: 0, s2: 0, dash: 0, ranged: 0, guard: 0 };
     this.atk = null; this.combo = 0; this.comboT = 0; this.castT = 0; this.castSlot = '';
     this.dash = null; this.slam = null; this.fly = 0; this.haste = 0; this.dmgBuff = 1; this.dmgBuffT = 0; this.drBuff = 0;
     this.squash = 0; this.dead = false; this.reborn = false; this.critBonus = 0; this.sinceHurt = 99;
     this.safeX = 4; this.runPhase = 0; this.stepT = 0; this.turn = 0; this.shieldK = 0;
+    this.clock = 0; this.bufStamp = {}; this.guardPresses = []; this.latchT = -9; this.latchUp = this.latchDown = false; this.latchAx = 0; this.lastKind = ''; this.noEnT = -9;
+    this.blink = 0; this.counterT = 0; this.deadT = 0; this.moveIntent = false; this.landK = 0; this.parryBase = 0.18;
     this.castSeq = 0; this.leanT = 0; this.airHits = 0; this.acombo = 0; this.acomboT = 0; this.imbue = null; this.hero = null; this.infEnergy = false; this.noCooldowns = false; this.cheering = false;
     this.refreshMods(true);
     this.hp = this.hpMax; this.energy = this.energyMax * 0.6;
@@ -47,7 +50,7 @@ export class Player {
     this.hpMax = 100 + this.mods.hp;
     this.energyMax = 100 + this.mods.energy;
     this.maxJumps = 2 + this.mods.jumps;
-    this.parryWindow = 0.22 * (1 + this.mods.parry);
+    this.parryBase = 0.18 * (1 + this.mods.parry); this.parryWindow = this.parryBase; // ~11 frames at 60 fps, skills widen it
     if (!first && old) this.hp = Math.min(this.hpMax, this.hp + (this.hpMax - old));
   }
 
@@ -189,11 +192,18 @@ export class Player {
   }
   // ground combo / launcher (Up + Attack) / air chain (Attack in the air) / slam (Down + Attack in the air)
   startAttack() {
-    const m = this.el.main, ax = In.axis();
+    const m = this.el.main;
+    // direction is latched when the button was pressed (a short hold of Up/Down still counts), live input otherwise
+    const fresh = this.clock - this.latchT < 0.3;
+    const ax = (fresh && this.latchAx) || In.axis();
+    const up = (fresh && this.latchUp) || In.down('up'), down = (fresh && this.latchDown) || In.down('down');
+    this.latchT = -9;
     const air = !this.onGround;
     let kind = 'ground';
-    if (air) kind = In.down('down') ? 'slam' : 'air'; else if (In.down('up')) kind = 'launcher';
+    if (air) kind = down ? 'slam' : 'air'; else if (up) kind = 'launcher';
     if (kind === 'air' && this.airHits >= 6) { this.buf.main = 0; return; } // land first: no endless air stall
+    if (kind !== this.lastKind) { this.comboT = 0; this.acomboT = 0; } // a different move type always starts its own chain at hit 1
+    this.lastKind = kind;
     const sp = this.mods.hurricane ? 0.8 : 1, hs = this.haste > 0 ? 0.78 : 1, k = sp * hs;
     let cfg, i = 0;
     if (kind === 'ground') {
@@ -209,11 +219,28 @@ export class Player {
     const hitAt = kind === 'slam' ? cfg.windup : cfg.hitAt * k;
     this.atk = { kind, cfg, i, clip: cfg.clip, t: 0, dur: cfg.dur * k, hitAt, cancelAt: (cfg.cancelAt ?? cfg.dur * 0.7) * k, struck: false, landed: false, hit: new Set() };
     this.state = 'attack'; this.guarding = false;
-    this.vx = this.facing * (cfg.lunge ?? 0) * (kind === 'ground' ? (this.onGround ? 1 : 0.6) : 1);
+    this.vx = this.facing * (cfg.lunge ?? 0) * 0.25; // a nudge during startup; the real lunge happens at contact
     if (kind === 'air') this.vy = this.vy > 0 ? this.vy * 0.35 : Math.max(this.vy * 0.2, -1);
     if (kind === 'slam') { this.vy = 0; this.vx = 0; }
     this.buf.main = 0;
     emit('attack', { kind, i });
+  }
+  // oldest buffered action that can actually start now (first input wins; failed ones don't block the others)
+  oldestBuf() {
+    let best = null, bs = Infinity;
+    for (const k of ['dash', 'main', 's1', 's2']) {
+      if (this.buf[k] <= 0 || this.bufStamp[k] >= bs) continue;
+      if (k === 'dash' && (this.cd.dash > 0 || (!this.onGround && !this.airDash))) continue;
+      if ((k === 's1' || k === 's2') && (this.cd[k] > 0 || (!this.infEnergy && this.energy < this.el[k].cost))) continue;
+      bs = this.bufStamp[k]; best = k;
+    }
+    return best;
+  }
+  // after contact an attack can be cancelled into a buffered special / ranged / jump
+  tryBufferedCast() {
+    for (const k of ['s1', 's2']) if (this.buf[k] > 0 && this.cd[k] <= 0 && this.tryCast(k)) { this.buf[k] = 0; return true; }
+    if ((In.down('ranged') || this.buf.ranged > 0) && this.cd.ranged <= 0 && this.tryCast('ranged')) { this.buf.ranged = 0; return true; }
+    return false;
   }
   tryJump() {
     if (this.buf.jump <= 0 || this.guarding) return false;
@@ -224,7 +251,7 @@ export class Player {
   tryCast(slot) {
     const a = this.el[slot];
     if (this.cd[slot] > 0) return false;
-    if (!this.infEnergy && this.energy < a.cost) { UI.noEnergy(slot); sfx.hover(); return false; }
+    if (!this.infEnergy && this.energy < a.cost) { if (this.clock - this.noEnT > 0.35) { this.noEnT = this.clock; UI.noEnergy(slot); sfx.hover(); } return false; }
     if (!this.infEnergy) this.energy -= a.cost;
     this.castSeq++;
     let cd = (a.cdFn ? a.cdFn(this) : a.cd);
@@ -248,14 +275,27 @@ export class Player {
 
   // ------------------------------------------------------------ update
   update(dt) {
-    if (this.dead) { this.group.visible = false; this.scarf.forEach((s) => (s.m.visible = false)); this.shield.visible = false; this.hero?.hideAll(); this.syncModel(); return; }
-    // input buffering works even during hit-stop (dt = 0)
-    for (const k of ['main', 'jump', 's1', 's2', 'dash']) if (In.hitNow(k)) this.buf[k] = k === 'jump' ? 0.14 : 0.22;
+    const rdt = G.rdt || dt;
+    if (this.dead) {
+      this.deadT += rdt; // let the death animation play, then hide
+      if (this.hero && this.deadT < 1.5) { this.hero.update(rdt, this); this.shield.visible = false; this.syncModel(); return; }
+      this.group.visible = false; this.scarf.forEach((s) => (s.m.visible = false)); this.shield.visible = false; this.hero?.hideAll(); this.syncModel(); return;
+    }
+    // Input buffering: runs on REAL time (hit-stop and slow-mo don't stretch it), works during hit-stop (dt = 0), first press wins.
+    this.clock += rdt;
+    for (const k of ['main', 'jump', 's1', 's2', 'dash']) if (In.hitNow(k)) {
+      this.buf[k] = BUF[k]; this.bufStamp[k] = this.clock;
+      if (k === 'main') { this.latchT = this.clock; this.latchUp = In.down('up'); this.latchDown = In.down('down'); this.latchAx = In.axis(); }
+    }
+    if (In.hitNow('ranged')) this.buf.ranged = BUF.ranged;
+    if (In.hitNow('guard')) { this.buf.guard = BUF.guard; this.guardPresses.push(this.clock); if (this.guardPresses.length > 6) this.guardPresses.shift(); }
+    for (const k in this.buf) this.buf[k] = Math.max(0, this.buf[k] - rdt);
+    if (this.cheering) for (const k in this.buf) this.buf[k] = 0;
     if (dt <= 0) return;
     const m = this.mods, el = this.el;
     // timers
     for (const k in this.cd) if (this.cd[k] > 0) { this.cd[k] -= dt; if (this.cd[k] <= 0) { this.cd[k] = 0; if (k !== 'guard' && k !== 'dash') UI.ready(k); } }
-    for (const k in this.buf) this.buf[k] = Math.max(0, this.buf[k] - dt);
+    this.blink = Math.max(0, this.blink - dt); this.counterT = Math.max(0, this.counterT - dt);
     this.hurtI = Math.max(0, this.hurtI - dt); this.dashInv = Math.max(0, this.dashInv - dt);
     this.stun = Math.max(0, this.stun - dt);
     this.comboT = Math.max(0, this.comboT - dt); this.acomboT = Math.max(0, this.acomboT - dt); this.sinceHurt += dt;
@@ -265,12 +305,16 @@ export class Player {
     if (m.regen && this.sinceHurt > 4 && this.hp < this.hpMax) this.hp = Math.min(this.hpMax, this.hp + m.regen * dt);
     this.coyote = this.onGround ? 0.1 : Math.max(0, this.coyote - dt);
 
-    const ax = In.axis();
+    const ax = this.cheering ? 0 : In.axis(); this.moveIntent = ax !== 0;
     const canAct = this.state === 'free' && this.stun <= 0;
     // ---- guard
-    const gHeld = In.down('guard');
-    if (gHeld && !this.guarding && this.cd.guard <= 0 && this.stun <= 0 && (this.state === 'free' || (this.state === 'attack' && this.atk.t > this.atk.cancelAt) || this.state === 'cast' && this.lockT < 0.12)) {
+    const gHeld = (In.down('guard') || this.buf.guard > 0) && !this.cheering; // a tap inside hit-stop still raises the guard
+    const slamDive = this.state === 'attack' && this.atk && this.atk.kind === 'slam' && !this.atk.landed;
+    if (gHeld && !this.guarding && this.cd.guard <= 0 && this.stun <= 0 && !slamDive && (this.state === 'free' || (this.state === 'attack' && this.atk.t > this.atk.cancelAt) || this.state === 'cast' && this.lockT < 0.12)) {
       this.guarding = true; this.guardT = 0; this.state = 'free'; this.atk = null; sfx.guardUp(this.key);
+      // spam penalty: every extra press inside 0.5 s shrinks the perfect window (down to 30 %)
+      const recent = this.guardPresses.filter((t) => this.clock - t < 0.5).length;
+      this.parryWindow = this.parryBase * Math.max(0.3, 1 - 0.3 * Math.max(0, recent - 1));
       ring(this.x + this.facing * 0.7, this.y + 1.1, 0.5, el.color2, { r0: 0.2, r1: 1.4, dur: 0.22 });
     }
     if (this.guarding) {
@@ -307,22 +351,35 @@ export class Player {
         this.vx = damp(this.vx, 0, 9, dt);
         if (!a.struck && a.t >= a.hitAt) {
           a.struck = true;
+          this.vx = this.facing * (a.cfg.lunge ?? 0) * (a.kind === 'ground' ? (this.onGround ? 1 : 0.6) : 1); // the lunge lands WITH the strike
           if (a.kind === 'launcher') el.main.launcher.strike(this);
           else if (a.kind === 'air') el.main.air.strike(this, a.i);
           else el.main.strike(this, a.i);
+          this.hero?.kick(this.facing, a.kind === 'launcher' ? 0.4 : a.i === 2 ? 0.34 : 0.22); // hair / cape follow-through
         }
-        if (a.t >= a.cancelAt && this.buf.jump > 0 && !this.stun && a.struck && this.tryJump()) { this.state = 'free'; this.atk = null; this.comboT = 0; } // follow a launcher straight into a jump
-        else if (a.t >= a.cancelAt && this.buf.main > 0 && !this.stun) {
-          // chain into next hit
-          this.comboT = 0.5; this.acomboT = 0.5; this.startAttack();
-        } else if (a.t >= a.dur) { this.state = 'free'; this.comboT = a.kind === 'ground' ? 0.45 : 0; this.acomboT = a.kind === 'air' ? 0.45 : 0; this.atk = null; }
-        if (this.atk && a.t >= a.cancelAt && this.buf.dash > 0 && this.tryDash()) this.buf.dash = 0;
+        // contact window: a target that steps into the same swing a few frames late is still hit once
+        if (a.struck && a.box && a.t < a.hitAt + (a.cfg.active ?? 0.07)) {
+          for (const e of G.enemies) {
+            if (e.dead || e.spawnT > 0 || a.hit.has(e)) continue;
+            const eb = enemyBox(e), b = a.box;
+            if (eb.x0 < b.x1 && eb.x1 > b.x0 && eb.y0 < b.y1 && eb.y1 > b.y0) { a.hit.add(e); hitEnemy(e, b.dmg, b.o); }
+          }
+        }
+        const canCancel = a.t >= a.cancelAt && !this.stun;
+        if (canCancel && a.struck && this.buf.jump > 0 && this.tryJump()) { this.state = 'free'; this.atk = null; this.comboT = 0; } // follow a launcher straight into a jump
+        else if (canCancel && this.buf.main > 0) {
+          this.comboT = 0.5; this.acomboT = 0.5; this.startAttack(); // chain into the next hit
+        } else if (canCancel && a.struck && this.tryBufferedCast()) { /* cancelled into a special / ranged */ }
+        else if (a.t >= a.dur) { this.state = 'free'; this.comboT = a.kind === 'ground' ? 0.45 : 0; this.acomboT = a.kind === 'air' ? 0.45 : 0; this.atk = null; }
+        if (this.atk && canCancel && this.buf.dash > 0 && this.tryDash()) this.buf.dash = 0;
+        // recovery: you can already steer (and turn) a little once the cancel window is open
+        if (this.atk && a.t >= a.cancelAt && ax && !this.stun) { this.vx += clamp(ax * 8.2 * 0.5 - this.vx, -40 * dt, 40 * dt); this.facing = sign(ax); }
       }
     } else if (this.state === 'cast') {
       this.lockT -= dt; this.castT += dt;
       this.vx = damp(this.vx, 0, 8, dt);
       if (this.lockT <= 0) this.state = 'free';
-      if (this.buf.dash > 0 && this.tryDash()) this.buf.dash = 0;
+      if (this.buf.dash > 0 && !this.stun && this.tryDash()) this.buf.dash = 0;
     } else if (this.state === 'free' && this.stun <= 0) {
       // movement
       let sm = 1;
@@ -334,12 +391,12 @@ export class Player {
       // jump
       this.tryJump();
       // actions
-      if (this.buf.dash > 0 && !this.guarding) { this.buf.dash = 0; this.tryDash(); }
-      else if (!this.guarding) {
-        if (this.buf.main > 0) this.startAttack();
-        else if (In.down('ranged')) this.tryCast('ranged');
-        else if (this.buf.s1 > 0) { this.buf.s1 = 0; this.tryCast('s1'); }
-        else if (this.buf.s2 > 0) { this.buf.s2 = 0; this.tryCast('s2'); }
+      if (!this.guarding && !this.cheering) {
+        const nb = this.oldestBuf();
+        if (nb === 'dash') { if (this.tryDash()) this.buf.dash = 0; }
+        else if (nb === 'main') this.startAttack();
+        else if (nb === 's1' || nb === 's2') { if (this.tryCast(nb)) this.buf[nb] = 0; }
+        else if ((In.down('ranged') || this.buf.ranged > 0) && this.tryCast('ranged')) this.buf.ranged = 0;
       }
     } else if (this.stun > 0) {
       this.vx = damp(this.vx, 0, 5, dt);
@@ -391,7 +448,7 @@ export class Player {
     this.onGround = false;
   }
   land(vy) {
-    const k = clamp(-vy / 28, 0, 1);
+    const k = clamp(-vy / 28, 0, 1); this.landK = k;
     this.airHits = 0; this.acombo = 0; this.acomboT = 0;
     if (this.slam) { const f = this.slam; this.slam = null; f(); }
     if (this.state === 'attack' && this.atk && this.atk.kind === 'slam' && !this.atk.landed) {
@@ -405,6 +462,7 @@ export class Player {
     }
   }
   fellInPit() {
+    this.atk = null; this.slam = null; if (this.state === 'attack' || this.state === 'cast') this.state = 'free';
     this.x = this.safeX; this.y = groundAt(this.safeX) + 0.2; this.vx = this.vy = 0;
     this.hp = Math.max(1, this.hp - 15); this.hurtI = 1.4;
     sfx.hurt(); shake(0.4); post.aberr = 0.01; UI.damageVignette();
@@ -466,7 +524,7 @@ export class Player {
       this.body.scale.set(sxz, sy, sxz);
     }
     // blink on i-frames
-    const blink = this.hurtI > 0 && this.dashInv <= 0 && Math.floor(G.time * 25) % 2 === 0;
+    const blink = this.blink > 0 && this.dashInv <= 0 && Math.floor(G.time * 25) % 2 === 0;
     this.group.visible = !blink;
     // shield visuals
     const want = this.guarding ? 1 : 0;
@@ -566,7 +624,7 @@ export class Player {
   respawn(x) {
     this.dead = false; this.hp = this.hpMax; this.energy = this.energyMax * 0.5; this.x = x; this.y = groundAt(x) + 0.1; this.vx = this.vy = 0;
     this.hurtI = 2; this.state = 'free'; this.atk = null; this.guarding = false; this.dash = null; this.stun = 0; this.group.visible = true;
-    this.fly = 0; this.haste = 0; this.dmgBuff = 1; this.slam = null; this.safeX = x; this.airHits = 0; this.acombo = 0; this.cheering = false;
+    this.fly = 0; this.haste = 0; this.dmgBuff = 1; this.slam = null; this.safeX = x; this.airHits = 0; this.acombo = 0; this.cheering = false; this.deadT = 0; this.blink = 0; this.counterT = 0; this.lastKind = ''; for (const k in this.buf) this.buf[k] = 0;
     this.hero?.reset();
     for (const k in this.cd) this.cd[k] = 0;
     this.syncModel();

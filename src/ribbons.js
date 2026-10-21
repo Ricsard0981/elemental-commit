@@ -59,6 +59,8 @@ export class Ribbon {
     scene.add(this.mesh);
     this.snap = true; this.visible = true;
   }
+  // impulse for follow-through: pushes the chain forward, more towards the tip
+  kick(dx, dy = 0) { for (let i = 1; i < this.n; i++) { const k = i / (this.n - 1); this.pts[i].x += dx * k; this.pts[i].y += dy * k; } }
   setAnchor(x, y) { if (this.snap) { for (const p of this.pts) p.set(x, y); this.snap = false; } this.pts[0].set(x, y); }
   // spring chain: each point trails the previous one
   follow(dt, dirx, seg, sag, wave, t, k = 16) {

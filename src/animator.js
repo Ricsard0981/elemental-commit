@@ -14,12 +14,15 @@ export class Animator {
   play(name, { fade = 0.12, speed = 1, loop = true, from = 0, force = false } = {}) {
     const a = this.actions[name];
     if (!a) return null;
-    if (this.cur === a && !force && loop) { a.timeScale = speed; return a; }
+    // already the current clip: just update its speed (one-shots are NOT restarted every frame; pass force to restart)
+    if (this.cur === a && !force) { a.timeScale = speed; return a; }
+    const prev = this.cur;
     a.reset(); a.enabled = true;
     a.setLoop(loop ? THREE.LoopRepeat : THREE.LoopOnce, Infinity);
     a.clampWhenFinished = !loop;
     a.timeScale = speed; a.time = from; a.setEffectiveWeight(1);
-    if (this.cur && this.cur !== a) a.crossFadeFrom(this.cur, fade, false); else a.fadeIn(fade);
+    // crossfade from a different clip; restarting the same clip is an instant cut (a fade-in from zero weight would dip to the bind pose)
+    if (prev && prev !== a) a.crossFadeFrom(prev, fade, false); else if (!prev) a.fadeIn(fade);
     a.play();
     this.cur = a; this.curName = name;
     return a;

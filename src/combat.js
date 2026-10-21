@@ -104,6 +104,10 @@ export function hitEnemy(e, base, o = {}) {
   if (e.stun > 0 && m.crushing) d *= 1.5;
   if (e.vulnerable > 0) d *= 1.25;
   d = Math.max(1, Math.round(d));
+  if (p.counterT > 0 && o.kind === 'main') { // the strike right after a perfect parry: a counter
+    p.counterT = 0; d = Math.round(d * 1.5); o = { ...o, poise: (o.poise ?? d) * 2, big: true };
+    floatText(e.x, e.y + e.h + 1.2, 'COUNTER', { color: '#ffd33d', size: 18, dur: 0.9 }); emit('counter', { e });
+  }
   const dir = o.dir ?? (Math.sign(e.x - p.x) || 1);
   e.hp -= d; e.flash = 0.06; e.hurtT = 2.2; e.recoil = 1; e.kdir = dir;
   // knockback
@@ -184,9 +188,12 @@ export function killEnemy(e, o = {}) {
 
 export function hitBox(x0, x1, y0, y1, dmg, o = {}) {
   const box = { x0, x1, y0, y1 }, hit = [];
+  // remember the player's melee box so the swing's contact window can still catch a target that steps in a few frames late
+  const pa = G.player?.atk, rec = o.kind === 'main' && pa && !pa.box && !o.noRecord;
+  if (rec) pa.box = { x0, x1, y0, y1, dmg, o };
   for (const e of G.enemies.slice()) {
     if (e.dead || e.spawnT > 0) continue;
-    if (overlap(box, enemyBox(e))) { hitEnemy(e, dmg, o); hit.push(e); }
+    if (overlap(box, enemyBox(e))) { hitEnemy(e, dmg, o); hit.push(e); if (rec) pa.hit.add(e); }
   }
   return hit;
 }
@@ -310,13 +317,15 @@ export function damagePlayer(amount, src = {}) {
     // normal block
     const red = g.reduction + p.mods.dr;
     const taken = Math.max(0, Math.round(amount * (1 - Math.min(0.95, red))));
+    p.hurtI = Math.max(p.hurtI, 0.12); // one attack can't be blocked twice (brute smash + its wave)
+    const late = p.guardT > win && p.guardT < win + 0.18;
     sfx.block(); haptic('block'); shake(0.22); hitstop(0.05);
     sparks(p.x + p.facing * 0.7, p.y + 1.1, el.color2, 14, 8, 0.25, 0.4, p.facing);
     ring(p.x + p.facing * 0.7, p.y + 1.1, 0.6, el.color2, { r0: 0.2, r1: 1.6, dur: 0.25 });
     p.vx -= Math.sign(src.x - p.x) * (g.knockback ?? 5);
     p.guardFlash = 0.15;
     if (p.mods.thorns) explode(p.x + p.facing * 0.5, p.y + 1, 3, amount * 2.2, { color: el.color, kx: 8, stun: 0.6 });
-    floatText(p.x, p.y + 2.4, taken > 0 ? `-${taken}` : 'BLOCKED', { color: taken > 0 ? '#ffa657' : '#9ecbff', size: 18 });
+    floatText(p.x, p.y + 2.4, (late ? 'LATE ' : '') + (taken > 0 ? `-${taken}` : 'BLOCKED'), { color: taken > 0 ? '#ffa657' : '#9ecbff', size: 18 });
     if (taken > 0) { p.hp -= taken; G.stats.damageTaken += taken; if (p.hp <= 0) return playerDown(src); }
     if (src.proj) endProj(src.proj, true);
     p.energy = Math.min(p.energyMax, p.energy + 6);
@@ -326,7 +335,11 @@ export function damagePlayer(amount, src = {}) {
   const dr = clamp(p.mods.dr + (p.drBuff || 0), 0, 0.8);
   const dmg = Math.max(1, Math.round(amount * (1 - dr)));
   p.hp -= dmg; G.stats.damageTaken += dmg;
-  p.hurtI = 0.9; p.stun = 0.22;
+  p.hurtI = 0.9; p.stun = 0.22; p.blink = 0.9;
+  // a real hit interrupts whatever you were doing and drops the buffered inputs (no stale actions after the stun)
+  if (p.state === 'attack' || p.state === 'cast') { p.state = 'free'; p.atk = null; p.slam = null; p.castT = 0; }
+  for (const k in p.buf) p.buf[k] = 0;
+  p.comboT = 0; p.acomboT = 0;
   p.vx = Math.sign(p.x - src.x || 1) * 7; p.vy = Math.max(p.vy, 6);
   p.squash = 0.55;
   comboBreak();
@@ -355,7 +368,7 @@ function playerDown(src) {
 function perfectParry(src) {
   const p = G.player, el = ELEMENTS[G.element];
   G.stats.parries++;
-  p.hurtI = 0.5;
+  p.hurtI = 0.5; p.counterT = 0.45; p.guarding = false; p.cd.guard = 0.4; p.guardPresses.length = 0; // guard drops so the counter can start
   sfx.parry(); haptic('parry'); hitstop(0.16); slowmo(0.22, 0.5);
   shake(0.55); punchFov(5); post.aberr = 0.02; post.bloomBoost = 0.9; screenFlash(0xffffff, 0.35);
   const x = p.x + p.facing * 0.6, y = p.y + 1.1;

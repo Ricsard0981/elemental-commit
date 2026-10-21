@@ -12,10 +12,10 @@ import { Q, scene } from './engine.js';
 import { G } from './state.js';
 import { clamp, damp, lerp, rand, easeOut } from './util.js';
 
-const _v = new THREE.Vector3(), _v2 = new THREE.Vector3(), _q = new THREE.Quaternion(), _q2 = new THREE.Quaternion(), _q3 = new THREE.Quaternion(), _e = new THREE.Euler(), _qm = new THREE.Quaternion();
+const ZERO = new THREE.Vector3(), _v = new THREE.Vector3(), _v2 = new THREE.Vector3(), _q = new THREE.Quaternion(), _q2 = new THREE.Quaternion(), _q3 = new THREE.Quaternion(), _e = new THREE.Euler(), _qm = new THREE.Quaternion();
 
 // fraction of each clip where the strike lands, so hitboxes and visuals line up
-export const CLIP_PEAK = { Punch_Jab: 0.34, Punch_Cross: 0.36, Sword_Attack: 0.42 };
+export const CLIP_PEAK = { Punch_Jab: 0.2, Punch_Cross: 0.23, Sword_Attack: 0.27 }; // measured: full-extension frame of the lead hand (peaks.mjs)
 export function heroReady() { return !!assets.ok; }
 const POOL = {};
 export function clearHeroPool() { for (const k in POOL) { POOL[k].forEach((h) => h.dispose()); POOL[k] = []; } }
@@ -87,7 +87,7 @@ export class Hero {
         m.castShadow = true; m.userData.ph = i * 1.26; scene.add(m); this.shards.push(m);
       }
     }
-    this.cur = {}; this.pelY = 0; this.spin = 0; this.dive = 0;
+    this.cur = {}; this.tgt = {}; this.pelY = 0; this.spin = 0; this.spinC = 0; this.dive = 0;
     this.landT = 0; this.wasGround = true; this._atk = null; this._cast = -1; this._hurt = 0; this.lean = 0; this.t = rand(10);
   }
 
@@ -258,7 +258,8 @@ export class Hero {
   // ---------------------------------------------------------------- procedural combat layers
   // deltas are expressed in the model frame: X = sideways (pitch), Y = up (twist), Z = forward (lean). Positive pitch tips the
   // upper end forwards for the spine, and swings a hanging limb BACKWARDS, so limb values below are negated for "forward".
-  rot(name, px, py = 0, pz = 0) { const c = this.cur[name] || (this.cur[name] = new THREE.Vector3()); c.set(px, py, pz); }
+  rot(name, px, py = 0, pz = 0) { const c = this.tgt[name] || (this.tgt[name] = new THREE.Vector3()); c.set(px, py, pz); if (!this.cur[name]) this.cur[name] = new THREE.Vector3(); }
+  kick(dir, k) { for (const r of [...this.hair, this.cape]) r?.kick(dir * k, k * 0.2); }
   applyOverlay(dt) {
     const m = this.model;
     m.getWorldQuaternion(_qm);
@@ -279,7 +280,7 @@ export class Hero {
   // choose the layer for the current move (angles in radians)
   pose(p, dt) {
     const T = (n, x, y, z) => this.rot(n, x, y, z);
-    for (const n in this.cur) this.cur[n].set(0, 0, 0);
+    for (const n in this.tgt) this.tgt[n].set(0, 0, 0);
     let pelY = 0, spin = 0, dive = 0;
     const a = p.atk, st = p.state;
     const arms = (r, l, rl, ll) => { T('upperarm_r', -r); T('upperarm_l', -l); T('lowerarm_r', -rl); T('lowerarm_l', -ll); };
@@ -319,7 +320,14 @@ export class Hero {
     } else if (st === 'dash') {
       T('spine_01', 0.5); T('spine_02', 0.2); arms(-1.2, -1.0, 0.6, 0.6); T('thigh_r', -0.9); T('thigh_l', 0.8);
     }
-    this.pelY = damp(this.pelY, pelY, 20, dt); this.spin = spin; this.dive = damp(this.dive, dive, 18, dt);
+    // pose deltas ease in fast and ease OUT slower, so cancelling a move never pops the arms / torso
+    for (const n in this.cur) { const c = this.cur[n], t = this.tgt[n]; const k = t && t.lengthSq() >= c.lengthSq() ? 34 : 15; c.lerp(t || ZERO, 1 - Math.exp(-k * dt)); }
+    this.pelY = damp(this.pelY, pelY, 20, dt); this.dive = damp(this.dive, dive, 18, dt);
+    // spins: a big spin finishes its turn forward instead of unwinding backwards; small angles just ease out
+    if (spin !== 0) this.spinC = spin;
+    else if (this.spinC > 1.2) { this.spinC += dt * 16; if (this.spinC >= Math.PI * 2 - 0.05) this.spinC = 0; }
+    else this.spinC = damp(this.spinC, 0, 14, dt);
+    this.spin = this.spinC;
   }
 
   // ---------------------------------------------------------------- per-frame
@@ -332,7 +340,8 @@ export class Hero {
   hideAll() { this.hair.forEach((r) => r.setVisible(false)); this.cape?.setVisible(false); this.trails.forEach((t) => t.setVisible(false)); this.shards?.forEach((m) => (m.visible = false)); }
   reset() {
     this.hair.forEach((r) => (r.snap = true)); if (this.cape) this.cape.snap = true; this.an.play('Idle_Loop', { fade: 0, force: true });
-    this._atk = null; this._hurt = 0; this._cast = -1; this.wasGround = true; this.landT = 0; this.lean = 0; this.spin = 0; this.dive = 0; this.pelY = 0;
+    this._atk = null; this._hurt = 0; this._cast = -1; this._dash = false; this.wasGround = true; this.landT = 0; this.lean = 0; this.spin = 0; this.spinC = 0; this.dive = 0; this.pelY = 0;
+    for (const n in this.cur) { this.cur[n].set(0, 0, 0); this.tgt[n]?.set(0, 0, 0); }
     this.trails.forEach((t) => { t.on = 0; t.fade = 0; t.setVisible(false); }); this.group.visible = true;
   }
   setImbue(im) {
@@ -343,9 +352,11 @@ export class Hero {
   setGuardTint(on) { /* costume is a shader: guard feedback comes from the shield + pose */ }
   playAttack(name, hitAt) {
     if (!this.an.has(name)) return;
-    const d = this.an.dur(name), peak = CLIP_PEAK[name] ?? 0.38;
-    const speed = clamp((d * peak) / Math.max(0.04, hitAt), 0.9, 4.2);
-    this.an.play(name, { fade: 0.05, speed, loop: false, force: true });
+    // contact sync: the clip's strike moment (peak × length) must land exactly on hitAt. Speed is capped (fast moves would
+    // look like a blur), and when the cap bites we start part-way into the clip instead, skipping the slow wind-up.
+    const d = this.an.dur(name), tp = d * (CLIP_PEAK[name] ?? 0.38);
+    const speed = clamp(tp / Math.max(0.04, hitAt), 0.9, 2.4);
+    this.an.play(name, { fade: 0.05, speed, loop: false, force: true, from: Math.max(0, tp - hitAt * speed) });
   }
   update(dt, p) {
     this.t += dt;
@@ -361,17 +372,18 @@ export class Hero {
         an.play(p.castSlot === 'ranged' ? 'Spell_Simple_Shoot' : 'Spell_Simple_Enter', { fade: 0.06, speed: p.castSlot === 'ranged' ? 1.6 : 1.3, loop: false, force: true });
       } else if (st === 'cast') { /* hold */ }
       else if (p.stun > 0) { if (!this._hurt) an.play('Hit_Chest', { fade: 0.03, speed: 1.1, loop: false, force: true }); this._hurt = 1; }
-      else if (st === 'dash') an.play('Roll', { fade: 0.04, speed: 1.47 / 0.22, loop: false });
+      else if (st === 'dash') { if (!this._dash) an.play('Roll', { fade: 0.04, speed: 4.5, loop: false, force: true }); this._dash = true; }
       else if (p.guarding) an.play('Idle_Loop', { fade: 0.08, speed: 1.2 });
       else if (airborne) {
         if (this.wasGround) an.play(p.vy > 2 ? 'Jump_Start' : 'Jump_Loop', { fade: 0.05, loop: p.vy <= 2, speed: p.vy > 2 ? 2.2 : 1 });
         else if (an.curName === 'Jump_Start' && an.cur.time > 0.5) an.play('Jump_Loop', { fade: 0.12 });
         else if (p.vy < -2 && an.curName !== 'Jump_Loop' && an.curName !== 'Jump_Start') an.play('Jump_Loop', { fade: 0.1 });
       } else if (this.landT > 0) { /* landing */ }
-      else if (Math.abs(p.vx) > 1.2) an.play(Math.abs(p.vx) > 7.5 ? 'Sprint_Loop' : 'Jog_Fwd_Loop', { fade: 0.1, speed: clamp(Math.abs(p.vx) / (Math.abs(p.vx) > 7.5 ? 8.5 : 5.5), 0.7, 1.5) });
+      else if (Math.abs(p.vx) > 1.2 && (p.moveIntent || p.vx * p.facing > 0)) an.play(Math.abs(p.vx) > 7.5 ? 'Sprint_Loop' : 'Jog_Fwd_Loop', { fade: 0.1, speed: clamp(Math.abs(p.vx) / (Math.abs(p.vx) > 7.5 ? 8.5 : 5.5), 0.45, 1.5) });
       else an.play('Idle_Loop', { fade: 0.15 });
+      if (st !== 'dash') this._dash = false;
       if (p.stun <= 0) this._hurt = 0;
-      if (!this.wasGround && p.onGround && st === 'free') { this.landT = 0.14; an.play('Jump_Land', { fade: 0.05, speed: 3.4, loop: false, force: true }); }
+      if (!this.wasGround && p.onGround && st === 'free' && Math.abs(p.vx) < 6.5) { this.landT = 0.14; an.play('Jump_Land', { fade: 0.05, speed: 2.2 + p.landK * 2.6, loop: false, force: true }); } // running landings stay in the run
       if (!p.onGround && this.landT > 0) this.landT = 0;
     }
     this.landT = Math.max(0, this.landT - dt);
