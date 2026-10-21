@@ -1,6 +1,6 @@
 import { G } from './state.js';
 import { ELEMENTS, KEYS } from './elements.js';
-import { SKILLS, TREE_BRANCHES, prog, pointsLeft, spent, xpNeed, canBuy, isUnlocked, buy, respec, MAX_LEVEL, bestRun, setResonance } from './skills.js';
+import { SKILLS, TREE_BRANCHES, prog, pointsLeft, spent, xpNeed, canBuy, isUnlocked, buy, respec, MAX_LEVEL, bestRun, setResonance, TEMPER, temperRank, buyTemper, setFork, forkOf } from './skills.js';
 import { sfx } from './audio.js';
 import { css, clamp } from './util.js';
 
@@ -225,13 +225,17 @@ export function renderTree() {
       const n = document.createElement('button');
       n.className = 'node ' + (owned ? 'owned' : buyable ? 'avail' : unlocked ? 'poor' : 'locked');
       n.id = 'node-' + s.id;
-      n.innerHTML = `<div class="ico">${s.icon}</div><div class="nt"><b>${s.name}</b><span>${s.desc}</span></div><div class="cost">${owned ? '✔' : s.cost}</div>`;
+      const fk = s.forks ? (forkOf(el, s) || (owned ? s.forks[0] : null)) : null;
+      if (s.forks) n.classList.add('forky');
+      n.innerHTML = `<div class="ico">${fk ? fk.icon : s.icon}</div><div class="nt"><b>${fk ? s.name + ': ' + fk.name : s.name}</b><span>${fk ? fk.desc : s.desc}</span>${s.forks ? `<em class="fork-tag">${owned ? 'tap to change path' : 'choose a path'}</em>` : ''}</div><div class="cost">${owned ? '✔' : s.cost}</div>`;
       n.onclick = () => {
+        if (owned && s.forks) { openForkPicker(s); return; }
         if (buy(el, s)) {
           sfx.buy(); H.skillsChanged(); renderTree();
           const nn = $('node-' + s.id); restart(nn, 'bought');
           const r = nn.getBoundingClientRect(); burst(r.left + r.width / 2, r.top + r.height / 2);
           if (s.branch === 3 && s.tier === 0) openResPicker();
+          if (s.forks) openForkPicker(s);
         } else { sfx.hover(); restart(n, 'shake'); }
       };
       n.onmouseenter = () => sfx.hover();
@@ -239,6 +243,17 @@ export function renderTree() {
     }
     cols.appendChild(col);
   }
+  // Tempering: the stat track. 15 ranks exist, you will never own them all.
+  const tp = document.createElement('div'); tp.className = 'temper'; tp.id = 'temper';
+  tp.innerHTML = '<h4>Tempering <small>stats · 1 point per rank</small></h4><div class="temper-row"></div>';
+  for (const t of TEMPER) {
+    const r = temperRank(el, t.id), can = r < t.max && pts > 0;
+    const c = document.createElement('button'); c.id = 'node-' + t.id; c.className = 'temper-card' + (can ? ' avail' : '') + (r >= t.max ? ' maxed' : '');
+    c.innerHTML = `<span class="ti">${t.icon}</span><b>${t.name}</b><small>${t.per}</small><i class="pips">${Array.from({ length: t.max }, (_, k) => `<u class="${k < r ? 'on' : ''}"></u>`).join('')}</i>`;
+    c.onclick = () => { if (buyTemper(el, t)) { sfx.buy(); H.skillsChanged(); renderTree(); restart($('node-' + t.id), 'bought'); } else { sfx.hover(); restart(c, 'shake'); } };
+    tp.querySelector('.temper-row').appendChild(c);
+  }
+  tree.appendChild(tp);
   requestAnimationFrame(drawLines);
 }
 function drawLines() {
@@ -262,6 +277,18 @@ function drawLines() {
   }
 }
 addEventListener('resize', () => requestAnimationFrame(drawLines));
+
+// ---- Tier-3 fork: pick one of two masteries (re-pickable any time while the node is owned)
+export function openForkPicker(s) {
+  const el = G.element, cur = prog(el).fork[s.id];
+  let m = $('forkmodal');
+  if (!m) { m = document.createElement('section'); m.id = 'forkmodal'; m.className = 'screen'; document.body.appendChild(m); }
+  m.innerHTML = `<div class="panel wide"><h2>${s.name}</h2><p class="muted">Choose one. You can switch for free whenever you like.</p>
+    <div class="res-cards">${s.forks.map((f) => `<button class="res-card fork-card ${cur === f.id ? 'on' : ''}" data-f="${f.id}"><span class="ri fi">${f.icon}</span><b>${f.name}</b><small>${f.desc}</small></button>`).join('')}</div></div>`;
+  m.classList.add('show');
+  m.querySelectorAll('.fork-card').forEach((b) => (b.onclick = () => { setFork(el, s.id, b.dataset.f); sfx.buy(); m.classList.remove('show'); H.skillsChanged(); renderTree(); toast(`${s.name}: <b>${s.forks.find((f) => f.id === b.dataset.f).name}</b>`, ELEMENTS[el].css); }));
+  m.onclick = (ev) => { if (ev.target === m) m.classList.remove('show'); };
+}
 
 // ---- Resonance: pick the secondary element (T1 of the 4th branch)
 export function openResPicker() {

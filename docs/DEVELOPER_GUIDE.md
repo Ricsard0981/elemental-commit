@@ -541,3 +541,7 @@ body is about 3 % smaller.
   the desktop build.
 
 That's the project. It's small, it's loud, and it's mine. Go hit something. ✦
+
+
+## Addendum: Combat Lock
+See `docs/COMBAT_LOCK.md` for the combat rules, `src/dbg.js` for the debug overlay (Lab → Combat debug) and `skills.js` for the new mechanic trees (forks, Tempering).

@@ -42,7 +42,7 @@ export class Player {
   refreshMods(first) {
     const owned = prog(this.key).owned;
     const old = this.hpMax;
-    this.mods = computeMods(this.key, owned, prog(this.key).res);
+    this.mods = computeMods(this.key, owned, prog(this.key).res, prog(this.key).temper, prog(this.key).fork);
     if (G.training && G.trainRes && G.trainRes !== this.key) { this.mods.resKey = G.trainRes; this.mods.resPower = 2; this.mods.resFinisher = true; this.mods.resonance = true; }
     const rk = this.mods.resKey;
     this.imbue = rk ? { key: rk, color: ELEMENTS[rk].color, style: { fire: 0, water: 1, earth: 2, air: 3 }[rk], power: 1 + this.mods.resPower } : null;
@@ -320,7 +320,7 @@ export class Player {
     if (this.guarding) {
       this.guardT += dt;
       if (!gHeld || this.stun > 0 || this.state === 'dash') { this.guarding = false; this.cd.guard = 0.3; }
-      if (m.immovable && this.key === 'earth') this.hp = Math.min(this.hpMax, this.hp + 4 * dt);
+      if (m.immovable && this.key === 'earth' && G.time - (this.lastBlockT || -9) < 2) this.hp = Math.min(this.hpMax, this.hp + 4 * dt);
     }
 
     // ---- state machine

@@ -312,6 +312,16 @@ body.training #progress { display: none; }
 #resmodal { z-index: 60; background: rgba(1,4,9,.72); backdrop-filter: blur(6px); } .res-cards { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
 .res-card { --c: #fff; display: flex; flex-direction: column; align-items: center; gap: 6px; width: 170px; padding: 16px 12px; border-radius: 16px; border-color: color-mix(in srgb, var(--c) 45%, var(--line)); background: linear-gradient(180deg, color-mix(in srgb, var(--c) 10%, #161b22), #0d1117); }
 .res-card .ri { width: 46px; height: 46px; color: var(--c); filter: drop-shadow(0 0 12px var(--c)); } .res-card .ri svg { width: 100%; height: 100%; } .res-card b { color: var(--c); font-size: 18px; letter-spacing: .05em; } .res-card small { color: var(--mute); text-align: center; line-height: 1.35; }
+.node.forky .fork-tag { font-style: normal; font-size: 10.5px; color: var(--c2); letter-spacing: .08em; text-transform: uppercase; }
+.fork-card .fi { font-size: 38px; display: grid; place-items: center; } .fork-card { width: 220px; }
+.temper { margin-top: 18px; } .temper h4 { margin: 0 0 8px; letter-spacing: .14em; text-transform: uppercase; font-size: 12px; color: var(--mute); } .temper h4 small { text-transform: none; letter-spacing: 0; margin-left: 8px; }
+.temper-row { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
+.temper-card { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 10px 6px; border-radius: 12px; border: 1.5px solid var(--line); background: #161b22; }
+.temper-card .ti { font-size: 20px; color: var(--c2); } .temper-card small { color: var(--mute); font-size: 11px; text-align: center; }
+.temper-card .pips { display: flex; gap: 4px; margin-top: 4px; } .temper-card .pips u { width: 14px; height: 6px; border-radius: 3px; background: #0d1117; border: 1px solid var(--line); } .temper-card .pips u.on { background: var(--c); border-color: var(--c); }
+.temper-card.avail { border-color: var(--green); box-shadow: 0 0 18px -6px var(--green); } .temper-card.maxed { border-color: var(--c); }
+@media (max-width: 900px), (max-height: 520px) { .temper-row { gap: 5px; } .temper-card { padding: 6px 3px; } .temper-card small { font-size: 9px; } .temper-card b { font-size: 11px; } .fork-card { width: 150px; } }
+#forkmodal { z-index: 60; background: rgba(1,4,9,.72); backdrop-filter: blur(6px); }
 .res-card:hover, .res-card.on { border-color: var(--c); box-shadow: 0 12px 40px -10px var(--c); transform: translateY(-4px); }
 @media (max-width: 900px), (max-height: 520px) { .branches { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; } .branch { gap: 10px; } .node { padding: 6px 7px; gap: 6px; min-height: 52px; } .node .ico { width: 26px; height: 26px; font-size: 14px; } .node .nt b { font-size: 11.5px; } .node .nt span { font-size: 9.5px; line-height: 1.2; } .node .cost { min-width: 20px; height: 20px; font-size: 10px; } .branch h4 { font-size: 10px; letter-spacing: .14em; } .res-card { width: 120px; padding: 10px 8px; } .res-card small { font-size: 10px; } }
 @media (max-width: 560px) { .branches { grid-template-columns: 1fr; } }

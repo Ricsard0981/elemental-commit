@@ -98,9 +98,9 @@ export function launchEnemy(e, vy, dir = 1) {
 }
 export function juggleLift(e) {
   if (e.flying) { e.vy = Math.max(e.vy, 2.5); return; }
-  e.juggle++; const n = e.juggle;
+  e.juggle++; const n = e.juggle; const hook = G.player?.mods.skyhook ? 1.15 : 1;
   // juggle decay: every air hit lifts less and the fall gets faster, so a chain always ends
-  if (n <= 6) e.vy = Math.max(e.vy, 10 * Math.pow(0.76, n - 1) * (e.heavy ? 0.75 : 1)); else e.vy = Math.min(e.vy, 0.5);
+  if (n <= 6) e.vy = Math.max(e.vy, 10 * Math.pow(0.76, n - 1) * (e.heavy ? 0.75 : 1) * hook); else e.vy = Math.min(e.vy, 0.5);
   e.vx *= 0.5;
   emit('airHit', { e, n }); sfx.airhit(n);
 }
@@ -132,10 +132,15 @@ export function hitEnemy(e, base, o = {}) {
   const crit = !o.noCrit && Math.random() < 0.1 + (p.critBonus || 0);
   if (crit) d *= 1.75;
   if (e.chill > 0 && m.frostbite) d *= 1.3;
+  if (e.burn > 0 && m.brand) d *= 1.25;
   if (e.stun > 0 && m.crushing) d *= 1.5;
   if (e.vulnerable > 0) d *= 1.25;
   d = Math.max(1, Math.round(d)); const dRaw = d;
   if (e.shield) d = Math.max(1, Math.round(d * 0.3)); // phase-2 shield: damage barely matters, break its poise
+  if (p.blockCharge >= 3 && o.kind === 'main' && m.rebound) { // Rebound: three blocks load your next main attack
+    p.blockCharge = 0; d = Math.round(d * 2); o = { ...o, poise: (o.poise ?? d) * 3, big: true };
+    floatText(e.x, e.y + e.h + 1.2, 'REBOUND', { color: '#e0b070', size: 18, dur: 0.9 });
+  }
   if (p.counterT > 0 && o.kind === 'main') { // the strike right after a perfect parry: a counter
     p.counterT = 0; d = Math.round(d * 1.5); o = { ...o, poise: (o.poise ?? d) * 2, big: true };
     floatText(e.x, e.y + e.h + 1.2, 'COUNTER', { color: '#ffd33d', size: 18, dur: 0.9 }); emit('counter', { e });
@@ -153,10 +158,21 @@ export function hitEnemy(e, base, o = {}) {
   if (e.boss && e.poise <= 0) { e.poise = e.poiseMax; e.onStagger?.(); }
   // statuses
   if (o.burn) { e.burn = Math.max(e.burn, o.burn); e.burnDps = Math.max(e.burnDps || 0, o.burnDps || 8); }
-  if (o.chill) e.chill = Math.max(e.chill, o.chill);
+  if (o.chill) {
+    e.chill = Math.max(e.chill, o.chill);
+    if (m.freeze && !e.boss && e.frozen <= 0) { // Deep Chill: the third chilling hit freezes the target solid
+      e.chillStacks = (e.chillStacks || 0) + 1;
+      if (e.chillStacks >= 3) { e.chillStacks = 0; e.frozen = 0.8; e.stun = Math.max(e.stun, 0.8); sparks(e.x, e.y + e.h * 0.5, 0x9fe8ff, 14, 8, 0.25, 0.5); floatText(e.x, e.y + e.h + 1.1, 'FROZEN', { color: '#9fe8ff', size: 18, dur: 0.9 }); sfx.stagger(false); }
+    }
+  }
   if (o.stun && !e.boss) { e.stun = Math.max(e.stun, o.stun); e.onStun?.(); }
   if (o.pull) e.vx += o.pull;
   if (o.kind === 'main' && m.resKey && !o.noImbue) applyImbue(e, o, p, dir);
+  // Shatter: finishers, launchers, spikes and slams burst frozen enemies
+  if (e.frozen > 0 && m.shatter && (o.launch || o.finisher || o.bounce || o.spike || o.big)) {
+    e.frozen = 0; floatText(e.x, e.y + e.h + 1.2, 'SHATTER', { color: '#cfeeff', size: 20, dur: 0.9 });
+    later(0.02, () => explode(e.x, e.y + e.h * 0.5, 2.8, 22, { color: 0x9fe8ff, chill: 2.5, noImbue: true, quiet: false }));
+  }
   // launch / juggle
   let launched = false;
   if (o.launch) launched = launchEnemy(e, o.launch, dir);
@@ -180,6 +196,7 @@ export function hitEnemy(e, base, o = {}) {
   }
   floatText(e.x, e.y + e.h + 0.4, crit ? `${d}!` : String(d), { cls: crit ? 'crit' : '', color: crit ? '#ffd33d' : '#ffffff', size: crit ? 34 : big ? 26 : 20, dur: crit ? 1.1 : 0.8, vy: crit ? 3.4 : 2.6 });
   if (crit) ring(e.x, e.y + e.h * 0.5, 0.6, 0xffd33d, { r0: 0.2, r1: 1.8, dur: 0.3 });
+  if (m.skyhook && !p.onGround && o.kind === 'main') { p.airDash = true; p.cd.dash = Math.min(p.cd.dash, 0.1); } // Skyhook: air hits refund the air dash
   if (!o.noCombo) comboAdd(1);
   if (!o.noEnergy && !p.infEnergy) p.energy = Math.min(p.energyMax, p.energy + (o.kind === 'main' ? 4.5 : 1.5));
   else if (p.infEnergy) p.energy = p.energyMax;
@@ -224,6 +241,10 @@ export function killEnemy(e, o = {}) {
   giveXP(e.xp, e.x, e.y + e.h);
   // fire passive
   if (e.burn > 0 && p.mods.deathExplode) later(0.12, () => explode(e.x, cy, 3.6, 38, { color: 0xff6a2b, burn: 3, chain: true }));
+  if (e.burn > 0 && p.mods.spreadBurn) { // Spreading Embers
+    ring(e.x, cy, 0.5, 0xff6a2b, { r0: 0.4, r1: 5, dur: 0.4 });
+    for (const o2 of G.enemies) if (o2 !== e && !o2.dead && Math.hypot(o2.x - e.x, o2.y - e.y) < 5) { o2.burn = Math.max(o2.burn, 3); o2.burnDps = Math.max(o2.burnDps || 0, 8); }
+  }
   e.onDeath?.();
   emit('kill', { e });
   p.energy = Math.min(p.energyMax, p.energy + 10);
@@ -348,6 +369,11 @@ export function updateProjectiles(dt) {
 
 // ----------------------------------------------------------------- player damage / defence
 export function damagePlayer(amount, src = {}) {
+  const r = damagePlayerInner(amount, src);
+  if (r !== 'iframes') emit('playerHit', { result: r, amount, src });
+  return r;
+}
+function damagePlayerInner(amount, src) {
   const p = G.player;
   if (!p || p.dead || p.hurtI > 0 || p.dashInv > 0) return 'iframes';
   const el = ELEMENTS[G.element], g = el.guard;
@@ -361,6 +387,9 @@ export function damagePlayer(amount, src = {}) {
     const red = g.reduction + p.mods.dr;
     const taken = Math.max(0, Math.round(amount * (1 - Math.min(0.95, red))));
     p.hurtI = Math.max(p.hurtI, 0.12); // one attack can't be blocked twice (brute smash + its wave)
+    p.lastBlockT = G.time;
+    if (p.mods.burnGuard && src.enemy) { src.enemy.burn = Math.max(src.enemy.burn, 3); src.enemy.burnDps = Math.max(src.enemy.burnDps || 0, 8); ring(src.enemy.x, src.enemy.y + 1, 0.5, 0xff6a2b, { r0: 0.3, r1: 1.6, dur: 0.3 }); }
+    if (p.mods.rebound) { p.blockCharge = Math.min(3, (p.blockCharge || 0) + 1); if (p.blockCharge === 3) floatText(p.x, p.y + 3.1, 'REBOUND READY', { color: '#e0b070', size: 16, dur: 0.9 }); }
     const late = p.guardT > win && p.guardT < win + 0.18;
     sfx.block(); haptic('block'); fb('block');
     sparks(p.x + p.facing * 0.7, p.y + 1.1, el.color2, 14, 8, 0.25, 0.4, p.facing);
@@ -378,12 +407,17 @@ export function damagePlayer(amount, src = {}) {
   const dr = clamp(p.mods.dr + (p.drBuff || 0), 0, 0.8);
   const dmg = Math.max(1, Math.round(amount * (1 - dr)));
   p.hp -= dmg; G.stats.damageTaken += dmg;
-  p.hurtI = 0.9; p.stun = 0.22; p.blink = 0.9;
+  // Stonewill: while winding up a combo hit you keep swinging (damage is taken, but no stun / knockback / interruption)
+  const stoneArmor = p.mods.stonewill && p.state === 'attack' && p.atk && p.atk.kind !== 'slam' && p.atk.t < p.atk.cancelAt;
+  p.hurtI = 0.9; p.stun = stoneArmor ? 0 : 0.22; p.blink = 0.9;
+  if (stoneArmor) floatText(p.x, p.y + 3, 'STONEWILL', { color: '#e0b070', size: 14, dur: 0.6 });
   // a real hit interrupts whatever you were doing and drops the buffered inputs (no stale actions after the stun)
-  if (p.state === 'attack' || p.state === 'cast') { p.state = 'free'; p.atk = null; p.slam = null; p.castT = 0; }
-  for (const k in p.buf) p.buf[k] = 0;
-  p.comboT = 0; p.acomboT = 0;
-  p.vx = Math.sign(p.x - src.x || 1) * 7; p.vy = Math.max(p.vy, 6);
+  else {
+    if (p.state === 'attack' || p.state === 'cast') { p.state = 'free'; p.atk = null; p.slam = null; p.castT = 0; }
+    for (const k in p.buf) p.buf[k] = 0;
+    p.comboT = 0; p.acomboT = 0;
+  }
+  if (!stoneArmor) { p.vx = Math.sign(p.x - src.x || 1) * 7; p.vy = Math.max(p.vy, 6); }
   p.squash = 0.55;
   comboBreak();
   sfx.hurt(); haptic('hurt'); fb('hurt');

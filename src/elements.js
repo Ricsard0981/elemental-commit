@@ -88,6 +88,12 @@ const fire = {
       flashLight(cx, cy, 2, 0xff6a2b, 35, 0.25);
       melee(p, { range: i === 2 ? 3.1 : 2.5, h: 2.2, y0: -0.1, dmg: [11, 11, 18][i], kx: i === 2 ? 11 : 5, ky: i === 2 ? 5 : 0, color: 0xff6a2b, big: i === 2, finisher: i === 2, ...burn });
       if (i === 2) explode(p.x + p.facing * 2.4, p.y + 0.9, 2.3, 8, { color: 0xff6a2b, burn: 2, shake: 0.35 });
+      if (i === 2 && m.firePillar) { // Inferno Mastery: a pillar of fire stays in the floor
+        const px = p.x + p.facing * 2.6, py = groundAt(px);
+        ring(px, py + 0.05, 0.5, 0xffc233, { r0: 0.3, r1: 2, dur: 0.4, flat: true });
+        zone(0, 0, { dur: 3, tick: 0.3, onFrame: () => { for (let j = 0; j < 3; j++) glow.emit(px + rand(-0.6, 0.6), py + 0.1, rand(-0.3, 0.3), 0, rand(4, 8), 0, rgb(Math.random() < 0.5 ? 0xff6a2b : 0xffc233, 1.8), rand(0.5, 0.9), 0, 0.6, -2); },
+          onTick: () => hitBox(px - 1.1, px + 1.1, py - 0.3, py + 4, 6, { kind: 'special', burn: 2, burnDps: 9, kx: 0, noCombo: true, quiet: true, hitstop: 0, shake: 0, color: 0xff6a2b, poise: 1 }) });
+      }
     },
   },
   ranged: {
@@ -121,7 +127,8 @@ const fire = {
       p.startDash({ dir: p.facing, speed: dist / dur, dur, inv: 0.34, vy0: 0, tint: 0xff6a2b,
         tick(pl, dt) {
           const b = { x0: pl.x - 0.9, x1: pl.x + 0.9, y0: pl.y - 0.2, y1: pl.y + 2 };
-          for (const e of G.enemies) if (!e.dead && e.spawnT <= 0 && !hit.has(e)) { const eb = enemyBox(e); if (eb.x0 < b.x1 && eb.x1 > b.x0 && eb.y0 < b.y1 && eb.y1 > b.y0) { hit.add(e); hitEnemy(e, 32, { kind: 'special', dir: pl.facing, kx: 9, ky: 6, burn: 3, burnDps: 10, big: true, color: 0xff6a2b }); } }
+          for (const e of G.enemies) if (!e.dead && e.spawnT <= 0 && !hit.has(e)) { const eb = enemyBox(e); if (eb.x0 < b.x1 && eb.x1 > b.x0 && eb.y0 < b.y1 && eb.y1 > b.y0) { hit.add(e); hitEnemy(e, 32, { kind: 'special', dir: pl.facing, kx: 9, ky: 6, burn: 3, burnDps: 10, big: true, color: 0xff6a2b });
+            if (pl.mods.cadence) { pl.cd.ranged = 0; pl.energy = Math.min(pl.energyMax, pl.energy + 15); floatText(pl.x, pl.y + 3, 'CADENCE', { color: '#ffc233', size: 14, dur: 0.6 }); } } }
           for (let i = 0; i < 6; i++) glow.emit(pl.x + rand(-0.4, 0.4), pl.y + rand(0.2, 1.8), rand(-0.3, 0.3), -pl.facing * rand(2, 8), rand(-1, 3), 0, rgb(Math.random() < 0.5 ? 0xff6a2b : 0xffc233, 1.8), rand(0.5, 1), 0, 0.5, -2, 1);
         },
         end(pl) {
@@ -138,13 +145,13 @@ const fire = {
     name: 'Meteor Storm', desc: 'Call down a barrage of meteors on the area ahead of you (or at your cursor).', cost: 50, cd: 14, lock: 0.55,
     cdFn: () => 14,
     cast(p, a, mouse) {
-      const arm = p.mods.armageddon, n = arm ? 9 : 5, rad = arm ? 3.4 : 2.7;
+      const arm = p.mods.armageddon, flare = p.mods.solarFlare, n = flare ? 1 : arm ? 9 : 5, rad = flare ? 7.5 : arm ? 3.4 : 2.7;
       const cx = mouse ? mouse.wx : p.x + p.facing * 7;
       sfx.cast('fire'); screenFlash(0xff6a2b, 0.25); shake(0.25); punchFov(3);
       ring(p.x, p.y + 1, 0.5, 0xff6a2b, { r0: 0.3, r1: 4, dur: 0.5 });
       for (let i = 0; i < n; i++) {
-        const tx = clamp(cx + (i - (n - 1) / 2) * (arm ? 1.7 : 2.1) + rand(-0.6, 0.6), 2, 264);
-        later(0.15 + i * 0.16, () => {
+        const tx = flare ? clamp(cx, 2, 264) : clamp(cx + (i - (n - 1) / 2) * (arm ? 1.7 : 2.1) + rand(-0.6, 0.6), 2, 264);
+        later(flare ? 0.5 : 0.15 + i * 0.16, () => {
           const gy = groundAt(tx); if (gy < -20) return;
           ring(tx, gy + 0.05, 0.5, 0xffc233, { r0: 0.2, r1: rad, dur: 0.6, flat: true });
           const m = new THREE.Mesh(new THREE.IcosahedronGeometry(0.7, 1), new THREE.MeshBasicMaterial({ color: new THREE.Color(0xff8a3a).multiplyScalar(2.4), toneMapped: false }));
@@ -154,10 +161,11 @@ const fire = {
           addFx((dt) => {
             t += dt; const k = Math.min(1, t / 0.55);
             x = lerp(tx - 7, tx, k); y = lerp(gy + 26, gy, k * k);
-            m.position.set(x, y, 0); m.rotation.x += dt * 8; m.scale.setScalar(1 + (arm ? 0.5 : 0));
+            m.position.set(x, y, 0); m.rotation.x += dt * 8; m.scale.setScalar(flare ? 3.2 : 1 + (arm ? 0.5 : 0));
             for (let j = 0; j < 4; j++) glow.emit(x + rand(-0.4, 0.4), y + rand(-0.4, 0.4), 0, rand(-2, 2) - 4, rand(2, 6), 0, rgb(Math.random() < 0.5 ? 0xff6a2b : 0xffc233, 1.8), rand(0.6, 1.1), 0, 0.5, 0, 1);
             if (k >= 1) { scene.remove(m); m.geometry.dispose();
-              explode(tx, gy + 0.6, rad, 38, { color: 0xff6a2b, burn: 3, burnDps: 9, kx: 9, ky: 9, shake: arm ? 0.7 : 0.5, hitstop: 0.06 });
+              explode(tx, gy + 0.6, rad, flare ? 90 : 38, { color: 0xff6a2b, burn: flare ? 5 : 3, burnDps: flare ? 14 : 9, kx: 9, ky: 9, stun: flare ? 1.4 : 0, shake: flare || arm ? 0.7 : 0.5, hitstop: flare ? 0.12 : 0.06 });
+              if (flare) { shake(0.8); screenFlash(0xffc233, 0.35); }
               if (arm) punchFov(2);
               return false; }
             return true;
@@ -198,7 +206,8 @@ const water = {
             onHit: (q, e) => hitEnemy(e, 6, { kind: 'ranged', chill: 1.5, color: 0x9fe8ff, noCombo: false }) }); }
       };
       spawnProj({ x: p.x + a.x * 0.8, y: p.y + 1.2 + a.y * 0.6, vx: a.x * 22, vy: a.y * 22, r: 0.3, color: 0x4db8ff, trailC: 0x9fe8ff, dmg: 9, life: 1.2, homing: { turn: 5.5, range: 7 },
-        onHit: (pr, e) => { hitEnemy(e, 10, { kind: 'ranged', dir: Math.sign(pr.vx), chill: 2.2, color: 0x2ea8ff }); if (m.split) split(pr); sparks(pr.x, pr.y, 0x9fe8ff, 12, 7); ring(pr.x, pr.y, 0.4, 0x9fe8ff, { r0: 0.1, r1: 1.4, dur: 0.25 }); } });
+        onHit: (pr, e) => { hitEnemy(e, 10, { kind: 'ranged', dir: Math.sign(pr.vx), chill: 2.2, color: 0x2ea8ff }); if (m.split) split(pr);
+          if (m.riptide && !e.boss && !e.dead) { const dx = p.x - e.x; e.vx = Math.sign(dx) * Math.min(26, Math.abs(dx) * 5 + 8); e.stun = Math.max(e.stun, 0.3); ring(e.x, e.y + e.h * 0.5, 0.4, 0x9fe8ff, { r0: 1.4, r1: 0.2, dur: 0.25 }); } sparks(pr.x, pr.y, 0x9fe8ff, 12, 7); ring(pr.x, pr.y, 0.4, 0x9fe8ff, { r0: 0.1, r1: 1.4, dur: 0.25 }); } });
       sparks(p.x + a.x, p.y + 1.2, 0x9fe8ff, 6, 5, 0.2, 0.3);
     },
   },
@@ -236,10 +245,11 @@ const water = {
         for (let i = 0; i < 2; i++) dust.emit(x, Math.max(gy, 0) + h * rand(0.6, 1), rand(-1, 1), (backwards ? -dir : dir) * rand(1, 4), rand(1, 3), 0, rgb(0xe8f6ff, 1), 0.6, 1.5, 0.6, 3, 1);
         ripple(x, 0.8, 0x2ea8ff, 12, 0.6);
         shake(0.02);
+        if (p.mods.undertow) for (const e of G.enemies) if (!e.dead && e.spawnT <= 0 && !e.boss && Math.abs(e.x - x) < 5 && e.y < Math.max(gy, 0) + h) { e.vx += Math.sign(x - e.x) * 36 * dt; e.chill = Math.max(e.chill, 5); }
         for (const e of G.enemies) {
           if (e.dead || e.spawnT > 0 || hit.has(e)) continue;
           if (Math.abs(e.x - x) < 1.6 * scl && e.y < Math.max(gy, 0) + h) {
-            hit.add(e); hitEnemy(e, 32 * (big ? 1.35 : 1), { kind: 'special', dir: backwards ? -dir : dir, kx: 14, ky: 8, chill: 3.5, stun: 0.4, big: true, color: 0x2ea8ff, poise: 90 });
+            hit.add(e); hitEnemy(e, 32 * (big ? 1.35 : 1), { kind: 'special', dir: backwards ? -dir : dir, kx: p.mods.undertow ? 2 : 14, ky: 8, chill: p.mods.undertow ? 5 : 3.5, stun: 0.4, big: true, color: 0x2ea8ff, poise: 90 });
             if (big) p.energy = Math.min(p.energyMax, p.energy + 5);
           }
         }
@@ -336,7 +346,8 @@ const earth = {
         ring(x, gy + 0.05, 0.5, 0xe0b070, { r0: 0.5, r1: 11 * mult, dur: 0.7, flat: true }); ring(x, gy + 0.6, 0.5, 0xffffff, { r0: 0.3, r1: 5, dur: 0.4 });
         puff(x, gy + 0.3, 14, 0x8b949e, 1.8, 1); cubes(x, gy + 0.5, 0xb98a4e, 22, 12, 0.4, false, 1.8);
         ripple(x, 3.2, 0xc08a4b, 18, 1.4); flashLight(x, gy + 1, 2, 0xe0b070, 70, 0.5);
-        for (const d of [-1, 1]) groundWave(x, d, { len: 10 * mult, speed: 18, dmg: 38 * mult, color: 0xc08a4b, stun: 1.6, kx: 10, ky: 9, thick: 1.4, height: 2.4 });
+        const sp = p.mods.spire;
+        for (const d of [-1, 1]) groundWave(x, d, { len: (10 + (sp ? 6 : 0)) * mult, speed: 18, dmg: 38 * mult, color: 0xc08a4b, stun: sp ? 2.5 : 1.6, kx: sp ? 3 : 10, ky: sp ? 12 : 9, thick: 1.4, height: 2.4, hitOpts: sp ? { launch: 14 } : {} });
         explode(x, gy + 0.6, 3.4 * mult, 18, { color: 0xc08a4b, stun: 1.2, noGround: true, shake: 0 });
       };
       later(0.22, () => { p.vy = -36; p.slam = () => { impact(1); if (p.mods.aftershock) later(0.5, () => impact(1.25)); }; });
@@ -453,7 +464,10 @@ const air = {
         }
         if (tk >= 0.3) { tk = 0; for (const e of G.enemies) if (!e.dead && e.spawnT <= 0 && Math.abs(e.x - cx) < R) hitEnemy(e, eye ? 11 : 9, { kind: 'special', kx: 0, ky: 0, color: 0xcfe9ff, quiet: false, hitstop: 0.015, shake: 0.08, poise: 6, noCrit: false }); }
         if (bolts && bk >= 0.7) { bk = 0; const e = nearest(cx, gy + 2, R + 4); if (e) { bolt(cx, gy + 10, e.x, e.y + e.h / 2, 0xe8f6ff); hitEnemy(e, 24, { kind: 'special', color: 0xffffff, stun: 0.5, big: true }); shake(0.2); } }
-        if (t >= dur) { scene.remove(g); g.children.forEach((m) => { m.geometry.dispose(); }); return false; }
+        if (t >= dur) {
+          if (p.mods.jetstream) { ring(cx, Math.max(0, gy) + 1, 0.5, 0xcfe9ff, { r0: 0.5, r1: R * 1.4, dur: 0.4 }); for (const e of G.enemies) if (!e.dead && e.spawnT <= 0 && !e.boss && Math.abs(e.x - cx) < R + 1) { e.vy = 17; e.vx *= 0.3; e.air = true; e.juggle = 0; e.lift = 0.4; } sfx.wave(); }
+          scene.remove(g); g.children.forEach((m) => { m.geometry.dispose(); }); return false;
+        }
         return true;
       });
     },

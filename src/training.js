@@ -1,5 +1,6 @@
 // Training Grounds: sandbox (dummies, DPS meter, spawner, toggles), endless waves and combo trials.
 // Everything here listens to the combat event bus (events.js) so it never touches the combat code itself.
+import { setCombatDebug } from './dbg.js';
 import { G } from './state.js';
 import { on } from './events.js';
 import { ELEMENTS, KEYS } from './elements.js';
@@ -201,7 +202,7 @@ export function renderLab() {
     <div class="juggle"><span>last hit <b id="d-last">0</b></span><span>juggle <b id="d-jug">0 hits · 0.0 m · 0.0 s</b></span><span>best <b id="d-best">0 hits</b></span></div><button id="d-reset" class="mini">Reset meter</button></section>`;
   if (T.mode === 'sandbox') {
     h += `<section class="lab-sec"><h4>Spawn</h4><div class="chips">${[['bug', 'Bug'], ['pointer', 'Pointer'], ['brute', 'Bot'], ['boss', 'Boss'], ['dummy', 'Dummy']].map(([k, n]) => `<button class="mini" data-spawn="${k}">${n}</button>`).join('')}<button class="mini warn" data-act="clear">Clear</button><button class="mini" data-act="dummies">Reset dummies</button></div></section>`;
-    h += `<section class="lab-sec"><h4>Toggles</h4>${toggleRow('attack', 'Enemies attack back', '', () => G.trainAttack)}${toggleRow('energy', 'Infinite energy', '', () => p.infEnergy)}${toggleRow('cd', 'No cooldowns', '', () => p.noCooldowns)}</section>`;
+    h += `<section class="lab-sec"><h4>Toggles</h4>${toggleRow('attack', 'Enemies attack back', '', () => G.trainAttack)}${toggleRow('energy', 'Infinite energy', '', () => p.infEnergy)}${toggleRow('cd', 'No cooldowns', '', () => p.noCooldowns)}${toggleRow('dbg', 'Combat debug', 'timings, buffers, tells, tokens', () => G.combatDbg)}</section>`;
   }
   if (T.mode !== 'endless') {
     h += `<section class="lab-sec"><h4>Element</h4><div class="chips">${KEYS.map((k) => `<button class="mini el ${G.element === k ? 'on' : ''}" style="--c:${ELEMENTS[k].css}" data-el="${k}">${ELEMENTS[k].name}</button>`).join('')}</div>
@@ -220,7 +221,7 @@ export function renderLab() {
   }));
   body.querySelectorAll('[data-tgl]').forEach((b) => (b.onclick = () => {
     sfx.click(); const k = b.dataset.tgl, p2 = G.player;
-    if (k === 'attack') G.trainAttack = !G.trainAttack; else if (k === 'energy') p2.infEnergy = !p2.infEnergy; else if (k === 'cd') { p2.noCooldowns = !p2.noCooldowns; for (const c in p2.cd) p2.cd[c] = 0; }
+    if (k === 'attack') G.trainAttack = !G.trainAttack; else if (k === 'energy') p2.infEnergy = !p2.infEnergy; else if (k === 'dbg') setCombatDebug(!G.combatDbg); else if (k === 'cd') { p2.noCooldowns = !p2.noCooldowns; for (const c in p2.cd) p2.cd[c] = 0; }
     b.classList.toggle('on'); b.setAttribute('aria-checked', String(b.classList.contains('on')));
   }));
   body.querySelectorAll('[data-el]').forEach((b) => (b.onclick = () => { sfx.click(); T.handlers.switchElement(b.dataset.el); }));
@@ -261,7 +262,7 @@ export function startMode(mode, handlers) {
 }
 export function stopTraining() {
   T.active = false; T.trial = null; T.endless = null; T.dummies = [];
-  G.trainAttack = true; G.trainRes = null;
+  G.trainAttack = true; G.trainRes = null; setCombatDebug(false);
   const lab = $('lab'); if (lab) lab.classList.remove('show');
   document.body.classList.remove('training');
   $('endless-over')?.classList.remove('show');

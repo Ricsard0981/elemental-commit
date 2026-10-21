@@ -81,3 +81,10 @@ Main-level reskin and world overhaul, new levels and bosses, perfect dodge, ulti
 - `window.__game` now also exposes `startTraining`, `TR`, `EV` (event bus), `In`.
 - Debug camera hooks: `cam.fovLock` and `cam.zoomLock` (used by the screenshot scripts).
 - Test scripts used this session are kept outside the repo; the flows covered are listed in `docs/MILESTONE_2.md`.
+
+## Combat Lock drop (read `docs/COMBAT_LOCK.md`)
+- Phases A–E done in one drop: input buffering/animation timing/parry rules, one `FEEDBACK` table + rewritten synth audio, encounter director
+  (attack tokens) + enemy roles + two-phase boss with the game-breaking exploits closed, mechanic-driven skill trees (forks + Tempering stat track,
+  save v2 refunds nodes), Training Grounds "Combat debug" overlay and `window.__game.dbg()`.
+- New files: `src/dbg.js`, `docs/COMBAT_LOCK.md`. The skill ids changed (see `skills.js`); old saves keep level/XP/Resonance and refund nodes.
+- Not verified by the author: iPhone 13 fps/touch feel, in-ear audio. Decisions: no CC0 audio samples added (could not audition them).

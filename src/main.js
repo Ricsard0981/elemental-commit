@@ -19,6 +19,7 @@ import { setVolumes, setSlow, setAmbience } from './audio.js';
 import { clamp } from './util.js';
 import { loadAssets, assets } from './assets.js';
 import { enterArena, leaveArena, updateArena, ARENA_L } from './arena.js';
+import { updateCombatDebug, snapshot as dbgSnapshot } from './dbg.js';
 import { startMode, stopTraining, updateTraining, showSelect, endlessOver, setTrainHandlers, T as TR } from './training.js';
 import { setLevelVisible } from './world.js';
 import * as EV from './events.js';
@@ -133,7 +134,7 @@ function respawn() {
   if (G.training) {
     UI.show('death', false); const tp = G.player;
     G.mode = 'play'; G.ts = 1; G.tsTarget = 1; G.tsHold = 0; G.freeze = 0;
-    tp.respawn(12); tp.reborn = false; comboBreak(); cam.x = tp.x; UI.hideBoss();
+    tp.respawn(12); comboBreak(); cam.x = tp.x; UI.hideBoss();
     ring(tp.x, tp.y + 1, 0.5, 0xffffff, { r0: 0.3, r1: 6, dur: 0.7 }); sfx.checkpoint();
     return;
   }
@@ -145,7 +146,6 @@ function respawn() {
   G.mode = 'play'; G.ts = 1; G.tsTarget = 1; G.tsHold = 0; G.freeze = 0;
   bossStarted = false; UI.hideBoss();
   p.respawn(G.checkpointX);
-  p.reborn = false;
   cam.x = p.x; cam.zoom = 1.2;
   comboBreak();
   ring(p.x, p.y + 1, 0.5, 0x39d353, { r0: 0.3, r1: 7, dur: 0.8 });
@@ -363,6 +363,7 @@ function frame(now) {
   G.dt = gdt; G.rdt = rdt;
   setSlow(G.ts); audio.lowHp = !!(p && !p.dead && G.mode === 'play' && p.hp / p.hpMax < 0.3);
   G.time += gdt;
+  updateCombatDebug(rdt);
   In.updateAim();
 
   if (active && p) {
@@ -419,4 +420,4 @@ document.getElementById('loading').classList.add('done');
 requestAnimationFrame(frame);
 
 import * as ENG from './engine.js';
-window.__game = { EV, startTraining, TR, S, Q, perfStats, openSettings, ENG, G, startRun, respawn, spawnEnemy, openSkills, closeSkills, ELEMENTS, prog, giveXP, cam, finishRun, In };
+window.__game = { EV, startTraining, TR, S, Q, perfStats, openSettings, ENG, G, startRun, respawn, spawnEnemy, openSkills, closeSkills, ELEMENTS, prog, giveXP, cam, finishRun, In, dbg: dbgSnapshot };
