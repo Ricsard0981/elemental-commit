@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import * as ENGW from './engine.js';
 import { G } from './state.js';
 import { initEngine, stepEngine, updateCamera, cam, render, ring, flashLight, screenFlash, shake, punchFov, floatText, sparks, cubes, post, scene } from './engine.js';
 import * as In from './input.js';
@@ -10,12 +11,18 @@ import { spawnEnemy, updateEnemies, clearEnemies } from './enemies.js';
 import { updateProjectiles, updatePickups, clearAll, spawnCommits, spawnCommit, later, giveXP, comboBreak, killEnemy } from './combat.js';
 import { prog, recordRun, pointsLeft } from './skills.js';
 import * as UI from './ui.js';
+import { initTouch, updateTouch, setElement as touchElement, layout as touchLayout } from './touch.js';
+import { S, touchOn, onSetting, qualityLevel, isTouchDevice } from './settings.js';
+import { renderSettings } from './settingsUI.js';
+import { applyQuality, adaptResolution, perfStats, Q } from './engine.js';
+import { setVolumes } from './audio.js';
 
 const canvas = document.getElementById('c');
 initEngine(canvas);
 In.initInput(canvas);
 buildWorld();
 cam.bx1 = L - 12;
+ENGW.warmup();
 
 let last = performance.now(), prevMode = 'play', hintIdx = 0, runT = 0, bossStarted = false, winTimer = 0;
 G.checkpointX = 4;
@@ -56,7 +63,10 @@ function startRun(key) {
   flashLight(p.x, p.y + 2, 2, ELEMENTS[key].color, 80, 0.8);
   sfx.cast(key);
   UI.banner('git checkout -b ' + key, 'Reach the end of the contribution graph', '#' + ELEMENTS[key].color.toString(16).padStart(6, '0'), 3);
-  UI.setHint(hints[0].text, 9);
+  UI.setHint(hintText(hints[0]), 9);
+  touchElement(key);
+  ENGW.renderer.compile(scene, ENGW.camera); // compile the player/run materials behind the intro banner
+  if (touchOn() && S.fullscreen) goFullscreen();
   document.getElementById('menu').classList.remove('show');
 }
 function toMenu() {
@@ -96,7 +106,29 @@ function closeSkills() {
   UI.show('pause', G.mode === 'paused');
 }
 function skillsChanged() { G.player.refreshMods(); UI.refreshCards(); }
-function pause() { if (G.mode !== 'play') return; G.mode = 'paused'; UI.show('pause', true); }
+function pause() { if (G.mode !== 'play') return; G.mode = 'paused'; UI.show('pause', true); In.releaseAllVirtual(); }
+let settingsPrev = 'menu';
+function openSettings() {
+  if (G.mode === 'settings') return;
+  settingsPrev = G.mode; G.mode = 'settings';
+  UI.show('pause', false); renderSettings(); UI.show('settings', true); sfx.click();
+}
+function closeSettings() {
+  UI.show('settings', false); G.mode = settingsPrev; sfx.click();
+  UI.show('pause', G.mode === 'paused');
+}
+const hintText = (h) => (touchOn() && h.touch ? (S.lefty ? h.touch.replace('<b>left</b>', '<b>right</b>') : h.touch) : h.text);
+function syncBody() {
+  document.body.classList.toggle('touch', touchOn());
+  document.body.classList.toggle('showfps', !!S.fps);
+}
+function goFullscreen() {
+  const d = document.documentElement;
+  try {
+    const p = d.requestFullscreen ? d.requestFullscreen({ navigationUI: 'hide' }) : d.webkitRequestFullscreen?.();
+    Promise.resolve(p).then(() => screen.orientation?.lock?.('landscape')).catch(() => {});
+  } catch { /* not allowed — fine */ }
+}
 function resume() { if (G.mode !== 'paused') return; G.mode = 'play'; UI.show('pause', false); }
 
 UI.initUI({
@@ -104,6 +136,20 @@ UI.initUI({
   openSkills, closeSkills, skillsChanged, resume, toMenu, respawn,
   again: () => startRun(G.element),
 });
+initTouch(); syncBody();
+document.getElementById('btn-pause').onclick = () => { pause(); sfx.click(); };
+document.getElementById('btn-pause-settings').onclick = openSettings;
+document.getElementById('btn-settings-menu').onclick = openSettings;
+document.getElementById('btn-settings-close').onclick = closeSettings;
+onSetting((k) => {
+  if (k === 'quality') applyQuality(qualityLevel());
+  if (k === 'sfx' || k === 'music') setVolumes();
+  if (k === 'touch' || k === 'fps') { syncBody(); touchLayout(); }
+});
+// auto-pause when the app is backgrounded or the phone is rotated to portrait
+document.addEventListener('visibilitychange', () => { if (document.hidden) pause(); });
+const portrait = matchMedia('(orientation: portrait)');
+portrait.addEventListener?.('change', () => { if (portrait.matches && touchOn()) pause(); });
 
 // ----------------------------------------------------------------- world logic
 function updateArenas(dt, p) {
@@ -176,7 +222,7 @@ function updateCheckpoints(p) {
   }
 }
 function updateHints(p) {
-  while (hintIdx < hints.length && p.x > hints[hintIdx].x) { if (hintIdx > 0) UI.setHint(hints[hintIdx].text, 8); hintIdx++; }
+  while (hintIdx < hints.length && p.x > hints[hintIdx].x) { if (hintIdx > 0) UI.setHint(hintText(hints[hintIdx]), 8); hintIdx++; }
 }
 
 // ----------------------------------------------------------------- boss / finish
@@ -203,14 +249,18 @@ function finishRun() {
 }
 
 // ----------------------------------------------------------------- main loop
+const fpsEl = document.getElementById('fps');
+let fpsT = 0;
 function frame(now) {
   requestAnimationFrame(frame);
-  const rdt = Math.min(0.05, (now - last) / 1000); last = now;
+  const rawMs = now - last;
+  const rdt = Math.min(0.05, rawMs / 1000); last = now;
+  const t0 = performance.now();
   const p = G.player;
 
   // global input
-  if (In.hitNow('skills') && p && G.mode !== 'menu') { G.mode === 'skills' ? closeSkills() : openSkills(); }
-  if (In.hitNow('pause')) { if (G.mode === 'play') pause(); else if (G.mode === 'paused') resume(); else if (G.mode === 'skills') closeSkills(); }
+  if (In.hitNow('skills') && p && G.mode !== 'menu' && G.mode !== 'settings') { G.mode === 'skills' ? closeSkills() : openSkills(); }
+  if (In.hitNow('pause')) { if (G.mode === 'play') pause(); else if (G.mode === 'paused') resume(); else if (G.mode === 'skills') closeSkills(); else if (G.mode === 'settings') closeSettings(); }
   if (G.mode === 'dead' && addEventListenerOnce.r && document.getElementById('death').classList.contains('show')) { addEventListenerOnce.r = false; respawn(); }
   if (G.mode === 'win' && winKeys.again) { winKeys.again = false; startRun(G.element); }
 
@@ -250,7 +300,14 @@ function frame(now) {
   stepEngine(gdt, rdt, groundAt);
   updateWorld(gdt || rdt * 0.1, cam.x, p ? p.x : tx, now / 1000);
   UI.updateHUD(rdt);
+  updateTouch();
+  const t1 = performance.now();
   render();
+  const t2 = performance.now();
+  perfStats.js = perfStats.js ? perfStats.js * 0.95 + (t1 - t0) * 0.05 : t1 - t0;
+  perfStats.render = perfStats.render ? perfStats.render * 0.95 + (t2 - t1) * 0.05 : t2 - t1;
+  if (rawMs > 0 && rawMs < 250) adaptResolution(rawMs);
+  if (S.fps && (fpsT += rdt) > 0.5) { fpsT = 0; fpsEl.textContent = `${perfStats.fps} fps · ${Q.level} · res ${(Q.scale * 100) | 0}% · js ${perfStats.js.toFixed(1)}ms`; }
   In.endFrame(rdt);
 }
 
@@ -260,10 +317,11 @@ addEventListener('keydown', (e) => {
   if (e.code === 'KeyM') toggleMute();
   initAudio();
 });
-addEventListener('pointerdown', () => initAudio(), { once: true });
+// iOS only unlocks audio inside a real user gesture — try on every tap until it's running
+for (const ev of ['pointerdown', 'pointerup', 'touchend']) addEventListener(ev, () => initAudio(), { passive: true });
 
 document.getElementById('loading').classList.add('done');
 requestAnimationFrame(frame);
 
 import * as ENG from './engine.js';
-window.__game = { ENG, G, startRun, respawn, spawnEnemy, openSkills, closeSkills, ELEMENTS, prog, giveXP, cam, finishRun, In };
+window.__game = { S, Q, perfStats, openSettings, ENG, G, startRun, respawn, spawnEnemy, openSkills, closeSkills, ELEMENTS, prog, giveXP, cam, finishRun, In };

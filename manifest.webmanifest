@@ -1,0 +1,12 @@
+{
+  "name": "Elemental Commit",
+  "short_name": "Elemental",
+  "description": "Side-view 3D elemental action game inside a GitHub contribution graph.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#0d1117",
+  "theme_color": "#0d1117",
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}

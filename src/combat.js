@@ -7,6 +7,7 @@ import { ELEMENTS } from './elements.js';
 import { addXP, xpNeed, prog } from './skills.js';
 import { clamp, rand, pick, randi, easeOut } from './util.js';
 import * as UI from './ui.js';
+import { haptic } from './settings.js';
 
 // ----------------------------------------------------------------- time helpers
 export const hitstop = (s) => { G.freeze = Math.max(G.freeze, s); };
@@ -38,7 +39,7 @@ export function giveXP(amount, x, y) {
 }
 function levelUp(n) {
   const p = G.player;
-  sfx.levelUp();
+  sfx.levelUp(); haptic('level');
   p.hp = p.hpMax; p.energy = p.energyMax;
   const c = ELEMENTS[G.element].color;
   for (let i = 0; i < 3; i++) later(i * 0.12, () => ring(p.x, p.y + 0.9, 0.5, i % 2 ? 0xffffff : c, { r0: 0.4, r1: 5 + i * 3, dur: 0.7 + i * 0.1 }));
@@ -83,7 +84,7 @@ export function hitEnemy(e, base, o = {}) {
   shake(o.shake ?? (crit ? 0.3 : big ? 0.25 : 0.14));
   sparks(e.x, e.y + e.h * 0.55, col, crit ? 16 : 9, crit ? 11 : 8, 0.26, 0.45, dir);
   sparks(e.x, e.y + e.h * 0.55, 0xffffff, 4, 6, 0.18, 0.25, dir);
-  if (!o.quiet) sfx.hit(big, crit);
+  if (!o.quiet) { sfx.hit(big, crit); haptic(crit ? 'crit' : 'hit'); }
   floatText(e.x, e.y + e.h + 0.4, crit ? `${d}!` : String(d), { cls: crit ? 'crit' : '', color: crit ? '#ffd33d' : '#ffffff', size: crit ? 34 : big ? 26 : 20, dur: crit ? 1.1 : 0.8, vy: crit ? 3.4 : 2.6 });
   if (crit) { ring(e.x, e.y + e.h * 0.5, 0.6, 0xffd33d, { r0: 0.2, r1: 1.8, dur: 0.3 }); punchFov(1.5); }
   if (!o.noCombo) comboAdd(1);
@@ -99,7 +100,7 @@ export function killEnemy(e, o = {}) {
   const p = G.player, big = e.heavy || e.boss;
   G.stats.kills++;
   const cy = e.y + e.h * 0.5;
-  sfx.kill(big);
+  sfx.kill(big); haptic(e.boss ? 'boss' : 'kill');
   hitstop(big ? 0.16 : 0.08); shake(big ? 0.7 : 0.3);
   ring(e.x, cy, 0.6, e.color, { r0: 0.3, r1: big ? 7 : 3.2, dur: 0.5 });
   ring(e.x, cy, 0.6, 0xffffff, { r0: 0.2, r1: big ? 4 : 1.8, dur: 0.3 });
@@ -172,7 +173,7 @@ export function spawnProj(o) {
 }
 export function endProj(pr, hitSomething = true) {
   if (pr.dead) return;
-  pr.dead = true; scene.remove(pr.mesh); pr.mesh.material.dispose();
+  pr.dead = true; scene.remove(pr.mesh);
   pr.onEnd?.(pr, hitSomething);
 }
 export function reflectProj(pr, mult = 2.5, pierce = false) {
@@ -251,7 +252,7 @@ export function damagePlayer(amount, src = {}) {
     // normal block
     const red = g.reduction + p.mods.dr;
     const taken = Math.max(0, Math.round(amount * (1 - Math.min(0.95, red))));
-    sfx.block(); shake(0.22); hitstop(0.05);
+    sfx.block(); haptic('block'); shake(0.22); hitstop(0.05);
     sparks(p.x + p.facing * 0.7, p.y + 1.1, el.color2, 14, 8, 0.25, 0.4, p.facing);
     ring(p.x + p.facing * 0.7, p.y + 1.1, 0.6, el.color2, { r0: 0.2, r1: 1.6, dur: 0.25 });
     p.vx -= Math.sign(src.x - p.x) * (g.knockback ?? 5);
@@ -271,7 +272,7 @@ export function damagePlayer(amount, src = {}) {
   p.vx = Math.sign(p.x - src.x || 1) * 7; p.vy = Math.max(p.vy, 6);
   p.squash = 0.55;
   comboBreak();
-  sfx.hurt(); hitstop(0.1); shake(0.55); punchFov(-2);
+  sfx.hurt(); haptic('hurt'); hitstop(0.1); shake(0.55); punchFov(-2);
   post.aberr = 0.014; screenFlash(0xf85149, 0.4); UI.damageVignette();
   sparks(p.x, p.y + 1, 0xff4d4d, 16, 9, 0.28, 0.5);
   floatText(p.x, p.y + 2.5, `-${dmg}`, { color: '#ff6b6b', size: 30, cls: 'hurt' });
@@ -297,7 +298,7 @@ function perfectParry(src) {
   const p = G.player, el = ELEMENTS[G.element];
   G.stats.parries++;
   p.hurtI = 0.5;
-  sfx.parry(); hitstop(0.16); slowmo(0.22, 0.5);
+  sfx.parry(); haptic('parry'); hitstop(0.16); slowmo(0.22, 0.5);
   shake(0.55); punchFov(5); post.aberr = 0.02; post.bloomBoost = 0.9; screenFlash(0xffffff, 0.35);
   const x = p.x + p.facing * 0.6, y = p.y + 1.1;
   ring(x, y, 0.8, 0xffffff, { r0: 0.2, r1: 6, dur: 0.5, intensity: 2.5 });

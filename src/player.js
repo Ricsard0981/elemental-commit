@@ -7,9 +7,11 @@ import { ELEMENTS } from './elements.js';
 import { computeMods, prog } from './skills.js';
 import * as In from './input.js';
 import * as UI from './ui.js';
+import { haptic, S } from './settings.js';
 import { clamp, damp, lerp, rand, easeOut, sign } from './util.js';
 
 const tmp = [];
+const _hv = new THREE.Vector3();
 const capsule = new THREE.CapsuleGeometry(1, 1, 4, 10), sph = new THREE.SphereGeometry(1, 16, 12), box = new THREE.BoxGeometry(1, 1, 1);
 
 export class Player {
@@ -111,6 +113,7 @@ export class Player {
   // ------------------------------------------------------------ input helpers
   aim(forRanged) {
     const cy = this.y + 1.2;
+    if (In.touch.aim) { const a = In.touch.aim; if (Math.abs(a.x) > 0.15) this.facing = sign(a.x); return { x: a.x, y: a.y }; }
     if (In.mouse.active > 0) {
       let dx = In.mouse.wx - this.x, dy = In.mouse.wy - cy; const l = Math.hypot(dx, dy) || 1;
       if (l < 0.6) return { x: this.facing, y: 0 };
@@ -118,9 +121,9 @@ export class Player {
       if (Math.abs(In.mouse.wx - this.x) > 0.4) this.facing = sign(dx);
       return { x: dx, y: dy };
     }
-    // keyboard aim-assist: nearest enemy in a forward cone
+    // keyboard / touch aim-assist: nearest enemy in a forward cone
     let best = null, bs = 99;
-    for (const e of G.enemies) {
+    if (S.aimAssist) for (const e of G.enemies) {
       if (e.dead || e.spawnT > 0) continue;
       const dx = e.x - this.x, dy = e.y + e.h / 2 - cy;
       if (dx * this.facing < 0.5 || Math.hypot(dx, dy) > 15) continue;
@@ -146,11 +149,11 @@ export class Player {
   }
   tryDash() {
     if (this.cd.dash > 0 || (!this.onGround && !this.airDash)) return false;
-    const ax = In.axis(), dir = ax || this.facing;
+    const ax = In.axis(), dir = ax ? sign(ax) : this.facing;
     if (!this.onGround) this.airDash = false;
     const cd = 0.85 * (1 - this.mods.dashCd);
     this.cd.dash = cd; this.cdMax.dash = cd;
-    sfx.dash();
+    sfx.dash(); haptic('dash');
     this.startDash({ dir, speed: 25, dur: 0.17, inv: 0.26, tint: this.el.color });
     punchFov(2); ring(this.x, this.y + 0.9, 0.5, this.el.color2, { r0: 0.2, r1: 1.6, dur: 0.25 });
     puff(this.x, this.y + 0.1, 5, 0x8b949e, 0.8, 0.4);
@@ -161,7 +164,7 @@ export class Player {
     if (this.comboT <= 0) this.combo = 0; else this.combo = (this.combo + 1) % cfgs.length;
     const cfg = cfgs[this.combo];
     const toward = this.nearestDir(4.5), ax = In.axis();
-    if (ax) this.facing = ax; else if (toward) this.facing = toward;
+    if (ax) this.facing = sign(ax); else if (toward) this.facing = toward;
     const sp = this.mods.hurricane ? 0.8 : 1, hs = this.haste > 0 ? 0.78 : 1, k = sp * hs;
     this.atk = { cfg, i: this.combo, t: 0, dur: cfg.dur * k, hitAt: cfg.hitAt * k, cancelAt: cfg.cancelAt * k, struck: false };
     this.state = 'attack'; this.guarding = false;
@@ -180,12 +183,12 @@ export class Player {
     this.atk = null; this.guarding = false;
     const ax = In.axis();
     let aim;
-    if (slot === 'ranged' || slot === 's2') aim = this.aim(true); else { aim = { x: this.facing, y: 0 }; if (ax) this.facing = ax; }
+    if (slot === 'ranged' || slot === 's2') aim = this.aim(true); else { aim = { x: this.facing, y: 0 }; if (ax) this.facing = sign(ax); }
     this.facing = aim.x >= 0 && Math.abs(aim.x) > 0.05 ? 1 : Math.abs(aim.x) > 0.05 ? -1 : this.facing;
-    if (slot === 's1' && ax) this.facing = ax;
+    if (slot === 's1' && ax) this.facing = sign(ax);
     this.state = slot === 's1' && this.el.key === 'fire' ? this.state : 'cast';
     this.lockT = a.lock * (this.haste > 0 ? 0.7 : 1); this.castT = 0; this.castSlot = slot;
-    if (slot === 's1' || slot === 's2') { sfx.cast(this.key); }
+    if (slot === 's1' || slot === 's2') { sfx.cast(this.key); haptic('cast'); }
     a.cast(this, aim, In.mouse.active > 0 ? In.mouse : null);
     UI.castFlash(slot);
     return true;
@@ -252,7 +255,7 @@ export class Player {
       if (this.guarding) sm = { fire: 0.45, water: 0.6, earth: m.immovable ? 0.45 : 0, air: 0.85 }[this.key];
       const target = ax * 8.2 * this.speedMul() * sm;
       const acc = Math.abs(target) > Math.abs(this.vx) || sign(target) !== sign(this.vx) ? (this.onGround ? 70 : 38) : (this.onGround ? 55 : 10);
-      if (ax) { this.vx += clamp(target - this.vx, -acc * dt, acc * dt); if (!this.guarding) this.facing = ax; } else this.vx = damp(this.vx, 0, this.onGround ? 16 : 3, dt);
+      if (ax) { this.vx += clamp(target - this.vx, -acc * dt, acc * dt); if (!this.guarding) this.facing = sign(ax); } else this.vx = damp(this.vx, 0, this.onGround ? 16 : 3, dt);
       if (this.guarding && ax) this.facing = this.facing; // facing locked while guarding
       // jump
       const flying = this.fly > 0;
@@ -287,6 +290,11 @@ export class Player {
     // pits
     if (this.y < -14) this.fellInPit();
 
+    // touch aim guide: a dotted line in the aim direction while dragging the ranged button
+    if (In.touch.aim) {
+      const t = (G.time * 3) % 1, c = rgb(el.color2, 1.6);
+      for (let i = 0; i < 7; i++) { const d = 1 + (i + t) * 1.15; glow.emit(this.x + In.touch.aim.x * d, this.y + 1.2 + In.touch.aim.y * d, 0.3, 0, 0, 0, c, 0.22 - i * 0.02, 0.1, 0.05); }
+    }
     // ---- visuals
     this.animate(dt);
     // ambient aura + hands
@@ -435,7 +443,7 @@ export class Player {
 
   fxTick(dt) {
     const c = this.el.color, c2 = this.el.color2, t = G.time;
-    const hand = (i) => { const h = this.hands[i]; return h.getWorldPosition(new THREE.Vector3()); };
+    const hand = (i) => this.hands[i].getWorldPosition(_hv);
     const rate = this.state === 'cast' || this.guarding ? 0.9 : 0.25;
     if (Math.random() < rate) { const p = hand(Math.random() < 0.5 ? 0 : 1); glow.emit(p.x, p.y, p.z, rand(-0.5, 0.5), rand(0.5, 1.5), 0, rgb(c2, 1.8), 0.2, 0, 0.4); }
     // ambient aura per element

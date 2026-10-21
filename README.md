@@ -29,6 +29,22 @@ One complete level ("`main` branch"), start to finish, ~8–12 minutes:
 | **Legacy Bot** | Heavy brute, overhead smash + ground shockwave | Parry the smash to *break* it, jump the wave |
 | **The Legacy Monolith** | Boss: slam, stack-trace barrage, summons, falling code blocks | Parry the slam for a huge stagger window |
 
+## Phones & tablets
+
+Touch controls switch on automatically on touch screens (or force them in **Settings**). The game plays in landscape and asks you to rotate if you're in portrait.
+
+- **Floating analog stick** on the left half. It appears under your thumb, follows you past the rim, and has walk/run zones. Push down to drop through slabs, or flick up to jump.
+- **Thumb-arc action cluster** on the right. Attack (with combo pips), Jump, Dash, Defend (glows gold during the perfect-parry window), Ranged, and both specials. Each button shows a cooldown pie, an energy-starved state, and a "ready" pulse.
+- **Drag to aim**: hold *Ranged* to fire with aim assist, or drag off it to aim manually. A dotted guide line shows the direction in the world.
+- **Slide between buttons** without lifting your thumb (attack → jump → dash).
+- **Haptics** for hits, crits, kills, blocks, parries, damage and level-ups (Android; iOS Safari doesn't expose vibration).
+- **Settings**: button size and opacity, left-handed mirror layout, vibration, fullscreen + landscape lock, quality preset, FPS counter, screen-shake amount, reduced flashing, aim assist, and volumes.
+- **Installable**: add it to your home screen (web manifest, fullscreen, landscape).
+- Auto-pauses when the app is backgrounded or the phone is rotated.
+
+### Performance
+Quality presets (Low / Medium / High) scale pixel ratio, shadows, bloom, particle budget, the number of animated skyline rows and the flash-light count. **Auto** (the default) picks Medium on phones and High on desktops. It then runs **dynamic resolution**: when frames run long it lowers the render scale to 55%, and if that's still not enough it drops bloom, then shadows, then particles. Benchmarks are in [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md).
+
 ## Elements
 
 Each element has **1 main attack, 1 ranged attack, 1 defence, 2 specials**, and a **9-node skill tree** (3 branches × 3 tiers).
@@ -71,6 +87,9 @@ src/combat.js                damage, parry, projectiles, pickups, combo, XP
 src/skills.js                skill trees, progression, localStorage save
 src/ui.js                    HUD + skill tree UI
 src/audio.js                 synthesized SFX + generative music
+src/touch.js                 touch controls (stick, button cluster, aim, haptics)
+src/settings.js              persisted settings, quality presets, device detection
+src/settingsUI.js            settings screen
 vendor/                      three.js r170 (MIT) + postprocessing addons
 ```
 
@@ -78,7 +97,8 @@ vendor/                      three.js r170 (MIT) + postprocessing addons
 
 - More levels / biomes (`feature/*` branches), second boss, element-specific mini-bosses
 - Elemental reactions (steam, mud, firestorm…) between elements
-- Gamepad support, accessibility options (reduced flashing / shake)
+- Gamepad support
+- Drag-to-rearrange touch layout editor
 - More skill nodes + a shared "meta" tree, gear drops ("stashes")
 - Co-op: two elements at once
 

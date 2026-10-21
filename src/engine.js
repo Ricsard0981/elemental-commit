@@ -6,6 +6,10 @@ import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { G } from './state.js';
 import { clamp, damp, lerp, rand, easeOut } from './util.js';
+import { S, QUALITY, qualityLevel } from './settings.js';
+
+// active quality preset + dynamic-resolution state
+export const Q = { level: 'high', ...QUALITY.high, scale: 1, budget: 1 };
 
 export const scene = new THREE.Scene();
 export const camera = new THREE.PerspectiveCamera(38, 16 / 9, 0.1, 500);
@@ -16,25 +20,29 @@ export const player_light = new THREE.PointLight(0xffffff, 0, 16, 1.6);
 
 // ---------------------------------------------------------------- init
 export function initEngine(canvas) {
-  renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
-  renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
+  renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance', stencil: false });
+  Object.assign(Q, QUALITY[qualityLevel()], { level: qualityLevel() });
+  Q.budget = Q.particles;
+  renderer.setPixelRatio(basePR());
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.05;
+  // shader error checks call getProgramInfoLog (a synchronous GPU stall) per compile — debug only
+  renderer.debug.checkShaderErrors = /[?&]debug/.test(location.search);
 
   scene.fog = new THREE.Fog(0x0b1a22, 26, 85);
   scene.add(hemi);
   sun.position.set(-14, 26, 18);
-  sun.castShadow = true;
-  sun.shadow.mapSize.set(2048, 2048);
+  sun.castShadow = Q.shadows;
+  sun.shadow.mapSize.set(Q.shadowMap, Q.shadowMap);
   const sc = sun.shadow.camera;
   sc.left = -26; sc.right = 26; sc.top = 20; sc.bottom = -16; sc.near = 1; sc.far = 80;
   sun.shadow.bias = -0.0006; sun.shadow.normalBias = 0.04;
   scene.add(sun, sun.target);
   scene.add(player_light);
 
-  for (let i = 0; i < 5; i++) {
+  for (let i = 0; i < Q.lights; i++) {
     const l = new THREE.PointLight(0xffffff, 0, 18, 1.8);
     scene.add(l);
     flashPool.push({ l, t: 0, dur: 1, i0: 0 });
@@ -44,25 +52,28 @@ export function initEngine(canvas) {
   composer.addPass(new RenderPass(scene, camera));
   bloom = new UnrealBloomPass(new THREE.Vector2(512, 512), 0.55, 0.7, 0.82);
   composer.addPass(bloom);
+  bloom.enabled = Q.bloom;
   fxPass = new ShaderPass(FXShader);
   composer.addPass(fxPass);
   composer.addPass(new OutputPass());
 
-  glow = new Particles(7000, true);
-  dust = new Particles(1200, false);
-  debrisLit = new Debris(700, false);
-  debrisGlow = new Debris(900, true);
+  glow = new Particles(Q.glowMax, true);
+  dust = new Particles(Q.dustMax, false);
+  debrisLit = new Debris(Math.round(Q.debris * 0.45), false);
+  debrisGlow = new Debris(Math.round(Q.debris * 0.55), true);
   resize();
   addEventListener('resize', resize);
 }
 
+function basePR() { return Math.min(devicePixelRatio || 1, Q.prMax) * Q.scale; }
 export function resize() {
   const w = innerWidth, h = innerHeight;
+  const pr = Math.max(0.5, basePR());
+  if (Math.abs(renderer.getPixelRatio() - pr) > 0.001) { renderer.setPixelRatio(pr); composer.setPixelRatio(pr); }
   renderer.setSize(w, h, false);
   composer.setSize(w, h);
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
-  const pr = renderer.getPixelRatio();
   const s = (h * pr) / (2 * Math.tan((camera.fov * Math.PI) / 360));
   for (const p of [glow, dust]) if (p) p.mat.uniforms.uScale.value = s;
 }
@@ -126,6 +137,7 @@ class Particles {
     scene.add(this.points);
   }
   emit(x, y, z, vx, vy, vz, c, s0, s1, life, grav = 0, drag = 0) {
+    if (Q.budget < 1 && Math.random() > Q.budget) return;
     const i = this.i; this.i = (i + 1) % this.max;
     const k = i * 3;
     this.pos[k] = x; this.pos[k + 1] = y; this.pos[k + 2] = z;
@@ -171,6 +183,7 @@ class Debris {
     scene.add(this.mesh);
   }
   emit(x, y, z, vx, vy, vz, size, color, life = 1.5, mult = 1) {
+    if (Q.budget < 1 && Math.random() > Q.budget + 0.15) return;
     const i = this.i; this.i = (i + 1) % this.max;
     const d = this.d[i];
     d.life = life; d.ml = life; d.x = x; d.y = y; d.z = z; d.vx = vx; d.vy = vy; d.vz = vz;
@@ -240,7 +253,7 @@ export function ring(x, y, z, color, { r0 = 0.3, r1 = 4, dur = 0.5, flat = false
   addFx((dt) => {
     t += dt; const k = Math.min(1, t / dur), e = easeOut(k);
     m.scale.setScalar(lerp(r0, r1, e)); m.material.opacity = (1 - k) * (1 - k);
-    if (k >= 1) { scene.remove(m); m.material.dispose(); return false; }
+    if (k >= 1) { scene.remove(m); return false; }
     return true;
   });
 }
@@ -276,7 +289,7 @@ export function slash(x, y, dir, color, { radius = 2, angle = 2.2, dur = 0.22, r
     m.rotation.z = rot * dir + (e - 0.5) * sweep * dir * flip;
     m.scale.set(radius * dir * (0.85 + e * 0.25), radius * flip * (0.85 + e * 0.25), 1);
     m.material.opacity = 1 - k * k;
-    if (k >= 1) { scene.remove(m); m.material.dispose(); return false; }
+    if (k >= 1) { scene.remove(m); return false; }
     return true;
   });
 }
@@ -299,6 +312,7 @@ const floatRoot = () => document.getElementById('floaters');
 const floaters = [];
 const _v = new THREE.Vector3();
 export function floatText(x, y, text, { cls = '', color = '#fff', size = 22, dur = 0.9, vy = 2.6, vx = 0 } = {}) {
+  if (floaters.length > (Q.level === 'high' ? 60 : 32)) { const old = floaters.shift(); old.el.remove(); }
   const el = document.createElement('div');
   el.className = 'floater ' + cls;
   el.textContent = text; el.style.color = color; el.style.fontSize = size + 'px';
@@ -320,7 +334,7 @@ function updateFloaters(dt) {
 
 // ---------------------------------------------------------------- camera
 export const cam = { x: 0, y: 3, trauma: 0, fovKick: 0, zoom: 1, zoomT: 1, look: 0, roll: 0, bx0: 12, bx1: 250, free: false, tx: 0, ty: 0 };
-export function shake(a) { cam.trauma = Math.min(1, cam.trauma + a); }
+export function shake(a) { cam.trauma = Math.min(1, cam.trauma + a * S.shake); }
 export function punchFov(v) { cam.fovKick = Math.max(cam.fovKick, v); }
 export function updateCamera(dt, tx, ty, facing, t) {
   cam.look = damp(cam.look, facing * 3.2, 2.2, dt);
@@ -358,11 +372,61 @@ export function stepEngine(dt, rdt, groundAt) {
   post.bloomBoost = damp(post.bloomBoost, 0, 4, rdt);
   post.desat = damp(post.desat, G.mode === 'dead' ? 0.85 : 0, 3, rdt);
   const u = fxPass.uniforms;
-  u.aberr.value = post.aberr; u.flash.value.set(post.flash[0], post.flash[1], post.flash[2], post.flashA);
+  u.aberr.value = post.aberr * (S.flashes ? 1 : 0.2); u.flash.value.set(post.flash[0], post.flash[1], post.flash[2], post.flashA);
   u.desat.value = post.desat; u.vig.value = post.vig;
   bloom.strength = 0.55 + post.bloomBoost;
 }
 export function screenFlash(color, a = 0.35) {
-  post.flash = rgb(color).map((v) => Math.min(1, v)); post.flashA = Math.max(post.flashA, a);
+  post.flash = rgb(color).map((v) => Math.min(1, v)); post.flashA = Math.max(post.flashA, S.flashes ? a : a * 0.25);
 }
 export function render() { composer.render(); }
+
+// Shader warm-up: transient effects create materials on the fly. Keep one hidden mesh per
+// material variant alive so their programs are compiled once at boot and never released
+// (otherwise three.js frees a program when its last material goes away and recompiles it,
+// a GPU stall, the next time an effect fires).
+export function warmup() {
+  const keep = new THREE.Group(); keep.position.set(0, -5000, 0); scene.add(keep);
+  const g = new THREE.BoxGeometry(0.01, 0.01, 0.01);
+  const add = (m) => { const o = new THREE.Mesh(m.vertexColors ? crescent(2.2) : g, m); o.castShadow = false; keep.add(o); };
+  const A = { transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false };
+  add(new THREE.MeshBasicMaterial({ ...A, side: THREE.DoubleSide }));                 // rings
+  add(new THREE.MeshBasicMaterial({ ...A, side: THREE.DoubleSide, vertexColors: true })); // slashes
+  add(new THREE.MeshBasicMaterial(A));                                                  // waves, tornado
+  add(new THREE.MeshBasicMaterial({ toneMapped: false }));                               // orbs, pickups, meteors
+  add(new THREE.MeshBasicMaterial({ transparent: true, depthTest: false }));             // hp bar bg
+  add(new THREE.MeshBasicMaterial({ transparent: true, depthTest: false, toneMapped: false })); // hp bar fill
+  add(new THREE.MeshStandardMaterial({ flatShading: true }));                            // rocks, pillars
+  add(new THREE.MeshStandardMaterial({ emissive: 0x111111 }));                           // enemies
+  renderer.compile(scene, camera);
+}
+
+// Switch preset at runtime (from the settings screen). Particle pool sizes stay as created.
+export function applyQuality(level) {
+  Object.assign(Q, QUALITY[level], { level });
+  Q.budget = Q.particles; Q.scale = 1;
+  bloom.enabled = Q.bloom;
+  if (sun.castShadow !== Q.shadows || sun.shadow.mapSize.x !== Q.shadowMap) {
+    sun.castShadow = Q.shadows; sun.shadow.mapSize.set(Q.shadowMap, Q.shadowMap);
+    sun.shadow.map?.dispose(); sun.shadow.map = null;
+  }
+  resize();
+}
+
+// Dynamic resolution: watch smoothed frame time; trade pixels for frames (only in 'auto').
+const perf = { ema: 16.7, t: 0, frames: 0, fps: 60, acc: 0 };
+export const perfStats = perf;
+export function adaptResolution(rdtMs) {
+  perf.ema += (rdtMs - perf.ema) * 0.05;
+  perf.acc += rdtMs; perf.frames++;
+  if (perf.acc >= 500) { perf.fps = Math.round((perf.frames * 1000) / perf.acc); perf.acc = 0; perf.frames = 0; }
+  perf.t += rdtMs;
+  if (S.quality !== 'auto' || perf.t < 1500) return;
+  perf.t = 0;
+  let s = Q.scale;
+  if (perf.ema > 22 && s > 0.55) s = Math.max(0.55, s - 0.1);        // < ~45 fps: drop resolution
+  else if (perf.ema < 14.5 && s < 1) s = Math.min(1, s + 0.05);       // headroom: creep back up
+  if (s !== Q.scale) { Q.scale = s; resize(); }
+  // still struggling at minimum resolution → shed the expensive passes
+  if (s <= 0.55 && perf.ema > 26) { if (bloom.enabled) bloom.enabled = false; else if (sun.castShadow) { sun.castShadow = false; } Q.budget = Math.max(0.35, Q.budget - 0.15); }
+}

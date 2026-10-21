@@ -1,4 +1,5 @@
 // Fully synthesized audio — no asset files. Everything is built from oscillators + filtered noise.
+import { S } from './settings.js';
 let ctx, master, comp, noiseBuf, musicGain, sfxGain;
 let muted = false;
 export const audio = { combat: 0 };
@@ -9,13 +10,18 @@ export function initAudio() {
   comp = ctx.createDynamicsCompressor();
   comp.threshold.value = -14; comp.ratio.value = 5;
   master = ctx.createGain(); master.gain.value = 0.8;
-  sfxGain = ctx.createGain(); sfxGain.gain.value = 0.9;
-  musicGain = ctx.createGain(); musicGain.gain.value = 0.32;
+  sfxGain = ctx.createGain(); musicGain = ctx.createGain();
+  setVolumes();
   sfxGain.connect(comp); musicGain.connect(comp); comp.connect(master); master.connect(ctx.destination);
   noiseBuf = ctx.createBuffer(1, ctx.sampleRate * 1.5, ctx.sampleRate);
   const d = noiseBuf.getChannelData(0);
   for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
   startMusic();
+}
+export function setVolumes() {
+  if (!ctx) return;
+  sfxGain.gain.value = S.sfx;
+  musicGain.gain.value = 0.5 * S.music;
 }
 export function toggleMute() { muted = !muted; if (master) master.gain.value = muted ? 0 : 0.8; return muted; }
 

@@ -53,6 +53,7 @@ export function initUI(handlers) {
     ab.appendChild(d);
   });
   $('btn-skills').onclick = () => H.openSkills();
+  $('skillhint').onclick = () => H.openSkills();
   $('btn-resume').onclick = () => H.resume();
   $('btn-pause-skills').onclick = () => H.openSkills();
   $('btn-pause-menu').onclick = () => H.toMenu();
@@ -93,38 +94,48 @@ export function startRunHUD() {
   }
   lagHp = 100; hideBoss();
 }
+// cached DOM writes — the HUD updates every frame, so only touch the DOM when a value changes
+const _w = new Map();
+function put(id, prop, val) {
+  const key = id + '|' + prop;
+  if (_w.get(key) === val) return;
+  _w.set(key, val);
+  const el = typeof id === 'string' ? $(id) : id;
+  if (prop === 'text') el.textContent = val; else el.style[prop] = val;
+}
 export function updateHUD(dt) {
   const p = G.player; if (!p) return;
   const hpK = clamp(p.hp / p.hpMax, 0, 1);
   lagHp = lagHp > hpK * 100 ? Math.max(hpK * 100, lagHp - 28 * dt) : hpK * 100;
-  $('hp-fill').style.width = hpK * 100 + '%'; $('hp-lag').style.width = lagHp + '%';
-  $('hp-txt').textContent = `${Math.ceil(p.hp)} / ${p.hpMax}`;
-  $('hpbar').classList.toggle('low', hpK < 0.3);
+  put('hp-fill', 'width', (hpK * 100).toFixed(1) + '%'); put('hp-lag', 'width', lagHp.toFixed(1) + '%');
+  put('hp-txt', 'text', `${Math.ceil(p.hp)} / ${p.hpMax}`);
+  const low = hpK < 0.3; if (_w.get('low') !== low) { _w.set('low', low); $('hpbar').classList.toggle('low', low); }
   const enK = clamp(p.energy / p.energyMax, 0, 1);
-  $('en-fill').style.width = enK * 100 + '%'; $('en-txt').textContent = Math.floor(p.energy);
+  put('en-fill', 'width', (enK * 100).toFixed(1) + '%'); put('en-txt', 'text', String(Math.floor(p.energy)));
   // xp
   const pr = prog(G.element);
   const need = xpNeed(pr.level);
-  $('xp-fill').style.width = (pr.level >= MAX_LEVEL ? 100 : (pr.xp / need) * 100) + '%';
+  put('xp-fill', 'width', (pr.level >= MAX_LEVEL ? 100 : (pr.xp / need) * 100).toFixed(1) + '%');
   const lk = pr.level + ':' + pointsLeft(G.element);
-  if (lk !== lastLvlKey) { lastLvlKey = lk; $('ellvl').textContent = 'Lv ' + pr.level; const pts = pointsLeft(G.element); $('skillhint').classList.toggle('show', pts > 0); $('skillhint').textContent = `Tab · ${pts} skill point${pts > 1 ? 's' : ''}`; }
-  // abilities
-  const set = (id, cd, max, cost) => {
-    const s = $('slot-' + id);
-    const f = cd > 0 ? cd / max : 0;
-    s.querySelector('.cdfill').style.transform = `scaleY(${f})`;
-    s.querySelector('.cdnum').textContent = cd > 0.05 ? (cd >= 1 ? Math.ceil(cd) : cd.toFixed(1)) : '';
-    s.classList.toggle('cd', cd > 0.05);
-    s.classList.toggle('poor', cost && p.energy < cost);
-    s.classList.toggle('active', (id === 'guard' && p.guarding) || (id === 'main' && p.state === 'attack'));
-  };
-  const e = ELEMENTS[G.element];
-  set('main', 0, 1, 0); set('ranged', p.cd.ranged, p.cdMax.ranged, e.ranged.cost); set('guard', p.cd.guard, 0.35, 0);
-  set('s1', p.cd.s1, p.cdMax.s1, e.s1.cost); set('s2', p.cd.s2, p.cdMax.s2, e.s2.cost); set('dash', p.cd.dash, p.cdMax.dash, 0);
+  if (lk !== lastLvlKey) { lastLvlKey = lk; $('ellvl').textContent = 'Lv ' + pr.level; const pts = pointsLeft(G.element); $('skillhint').classList.toggle('show', pts > 0); $('skillhint').textContent = `${document.body.classList.contains('touch') ? '' : 'Tab · '}${pts} skill point${pts > 1 ? 's' : ''}`; }
+  // abilities (desktop bar — the touch layer draws its own)
+  if (!document.body.classList.contains('touch')) {
+    const set = (id, cd, max, cost) => {
+      const s = $('slot-' + id);
+      const f = cd > 0 ? cd / max : 0;
+      put(s.querySelector('.cdfill'), 'transform', `scaleY(${f.toFixed(3)})`);
+      put(s.querySelector('.cdnum'), 'text', cd > 0.05 ? (cd >= 1 ? String(Math.ceil(cd)) : cd.toFixed(1)) : '');
+      s.classList.toggle('cd', cd > 0.05);
+      s.classList.toggle('poor', !!cost && p.energy < cost);
+      s.classList.toggle('active', (id === 'guard' && p.guarding) || (id === 'main' && p.state === 'attack'));
+    };
+    const e = ELEMENTS[G.element];
+    set('main', 0, 1, 0); set('ranged', p.cd.ranged, p.cdMax.ranged, e.ranged.cost); set('guard', p.cd.guard, 0.35, 0);
+    set('s1', p.cd.s1, p.cdMax.s1, e.s1.cost); set('s2', p.cd.s2, p.cdMax.s2, e.s2.cost); set('dash', p.cd.dash, p.cdMax.dash, 0);
+  }
   // combo
   const c = G.combo;
-  const cb = $('combo');
-  cb.classList.toggle('show', c.n >= 2);
+  const showC = c.n >= 2; if (_w.get('cshow') !== showC) { _w.set('cshow', showC); $('combo').classList.toggle('show', showC); }
   if (c.n !== lastCombo) {
     if (c.n > lastCombo) restart($('combo-n'), 'bump');
     lastCombo = c.n;
@@ -132,8 +143,8 @@ export function updateHUD(dt) {
     const col = RANK_COL[Math.min(c.rank, RANK_COL.length - 1)];
     $('combo-n').style.color = col; $('combo-rank').style.color = col; $('combo-rank').textContent = RANKS[Math.min(c.rank, RANKS.length - 1)];
   }
-  $('combo-bar').style.transform = `scaleX(${clamp(c.t / 3.4, 0, 1)})`;
-  $('commit-n').textContent = G.stats.commits;
+  put('combo-bar', 'transform', `scaleX(${clamp(c.t / 3.4, 0, 1).toFixed(3)})`);
+  put('commit-n', 'text', String(G.stats.commits));
   // level progress strip
   const pgs = $('progress').children, prog_ = clamp(p.x / 268, 0, 1);
   for (let i = 0; i < pgs.length; i++) { const on = i / pgs.length < prog_; if (pgs[i].dataset.on !== String(on)) { pgs[i].dataset.on = String(on); pgs[i].className = on ? 'on l' + (1 + (i % 4)) : ''; } }

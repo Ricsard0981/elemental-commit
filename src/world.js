@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { scene, sun, hemi } from './engine.js';
+import { scene, sun, hemi, Q } from './engine.js';
 import { rand, clamp, hex, lerp } from './util.js';
 
 // The level IS a GitHub contribution graph: every bar is a day, taller = more commits.
@@ -48,11 +48,11 @@ export const commitTrail = [];
   arc(225, 232, 5, 1, 4); arc(236, 242, 7.6, 1, 4);
 })();
 export const hints = [
-  { x: 2, text: '<b>A / D</b> move &nbsp; <b>Space</b> jump (twice!) &nbsp; <b>Shift</b> dash' },
-  { x: 14, text: '<b>J</b> / <b>Left click</b> — main attack. Chain 3 hits for a finisher' },
-  { x: 25, text: '<b>K</b> / <b>Right click</b> — ranged attack (aim with the mouse) · <b>Q</b> / <b>E</b> — specials' },
-  { x: 44, text: 'Hold <b>L</b> to defend. Tap it <i>just before</i> a hit lands for a <b>PERFECT PARRY</b>' },
-  { x: 56, text: 'Press <b>Tab</b> to open your skill tree and spend skill points' },
+  { x: 2, text: '<b>A / D</b> move &nbsp; <b>Space</b> jump (twice!) &nbsp; <b>Shift</b> dash', touch: 'Drag anywhere on the <b>left</b> to move · <b>Jump</b> twice for a double jump · flick the stick up to jump too' },
+  { x: 14, text: '<b>J</b> / <b>Left click</b> — main attack. Chain 3 hits for a finisher', touch: 'Tap <b>Attack</b> in rhythm — the 3rd hit is a finisher. Slide your thumb to <b>Jump</b> without lifting' },
+  { x: 25, text: '<b>K</b> / <b>Right click</b> — ranged attack (aim with the mouse) · <b>Q</b> / <b>E</b> — specials', touch: 'Hold <b>Ranged</b> to fire (auto-aims) — <i>drag</i> from it to aim manually · the two outer buttons are your specials' },
+  { x: 44, text: 'Hold <b>L</b> to defend. Tap it <i>just before</i> a hit lands for a <b>PERFECT PARRY</b>', touch: 'Hold <b>Defend</b> to block. Tap it <i>just before</i> a hit lands for a <b>PERFECT PARRY</b>' },
+  { x: 56, text: 'Press <b>Tab</b> to open your skill tree and spend skill points', touch: 'Tap <b>Skills</b> (top-left) to spend skill points' },
 ];
 export const BOSS_X0 = 218, BOSS_X1 = 264;
 
@@ -163,7 +163,7 @@ export function buildWorld() {
     m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     m.receiveShadow = r < 6; m.castShadow = false; m.frustumCulled = false;
     items.forEach((it, k) => {
-      dummy.position.set(it.i + step * 0.5, (it.h - 40) / 2, -r); dummy.scale.set(step * 0.985, it.h + 40, 0.985); dummy.updateMatrix();
+      dummy.position.set(it.i + step * 0.5, (it.h - 40) / 2, -r); dummy.scale.set(step, it.h + 40, 1); dummy.updateMatrix();
       m.setMatrixAt(k, dummy.matrix);
       col.setHex(GH[it.lvl]); if (it.lvl === 0) col.multiplyScalar(1.4); col.multiplyScalar(r < 5 ? 0.5 : r < 12 ? 0.38 : 0.28); m.setColorAt(k, col);
     });
@@ -331,6 +331,7 @@ export function updateWorld(dt, camX, playerX, time) {
   // skyline rows
   for (const row of bars.rows) {
     const { m, items, r, step } = row;
+    if (r > Q.rows) continue; // far rows stay static on lower presets
     let any = false;
     for (let k = 0; k < items.length; k++) {
       const it = items[k];
@@ -340,7 +341,7 @@ export function updateWorld(dt, camX, playerX, time) {
         const dx = it.i - rp.x, d = Math.sqrt(dx * dx + r * r), w = Math.abs(d - rp.t * rp.speed);
         if (w < 3) h += (1 - w / 3) * (1 - rp.t / rp.dur) * rp.amp * (r < 12 ? 1.5 : 3);
       }
-      dummy.position.set(it.i + step * 0.5, (h - 40) / 2, -r); dummy.scale.set(step * 0.985, h + 40, 0.985); dummy.updateMatrix();
+      dummy.position.set(it.i + step * 0.5, (h - 40) / 2, -r); dummy.scale.set(step, h + 40, 1); dummy.updateMatrix();
       m.setMatrixAt(k, dummy.matrix); any = true;
     }
     if (any) m.instanceMatrix.needsUpdate = true;

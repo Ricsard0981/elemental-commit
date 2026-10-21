@@ -155,7 +155,7 @@ const fire = {
             x = lerp(tx - 7, tx, k); y = lerp(gy + 26, gy, k * k);
             m.position.set(x, y, 0); m.rotation.x += dt * 8; m.scale.setScalar(1 + (arm ? 0.5 : 0));
             for (let j = 0; j < 4; j++) glow.emit(x + rand(-0.4, 0.4), y + rand(-0.4, 0.4), 0, rand(-2, 2) - 4, rand(2, 6), 0, rgb(Math.random() < 0.5 ? 0xff6a2b : 0xffc233, 1.8), rand(0.6, 1.1), 0, 0.5, 0, 1);
-            if (k >= 1) { scene.remove(m); m.geometry.dispose(); m.material.dispose();
+            if (k >= 1) { scene.remove(m); m.geometry.dispose();
               explode(tx, gy + 0.6, rad, 38, { color: 0xff6a2b, burn: 3, burnDps: 9, kx: 9, ky: 9, shake: arm ? 0.7 : 0.5, hitstop: 0.06 });
               if (arm) punchFov(2);
               return false; }
@@ -244,7 +244,7 @@ const water = {
         }
         if (d >= len) {
           if (ret && !backwards) { backwards = true; hit = new Set(); d = 0; sfx.wave(); ring(x, Math.max(gy, 0) + 1, 0.5, 0x9fe8ff, { r0: 0.3, r1: 4, dur: 0.4 }); }
-          else { scene.remove(mesh); mesh.geometry.dispose(); mesh.material.dispose(); return false; }
+          else { scene.remove(mesh); mesh.geometry.dispose(); return false; }
         }
         return true;
       });
@@ -365,7 +365,7 @@ const earth = {
             if (t < life - 1) { if (t < 0.3 && k < 1) for (let j = 0; j < 3; j++) dust.emit(px + rand(-0.7, 0.7), gy + rand(0, h), 0.8, 0, rand(0, 2), 0, rgb(0x8b949e, 0.7), 0.5, 1.3, 0.5); }
             else mesh.position.x = px + Math.sin(t * 60) * 0.05;
             if (t >= life || solid.dead) {
-              scene.remove(mesh); mesh.geometry.dispose(); mesh.material.dispose();
+              scene.remove(mesh); mesh.geometry.dispose();
               const j = dyn.indexOf(solid); if (j >= 0) dyn.splice(j, 1);
               cubes(px, gy + h / 2, 0x9a7448, 12, 7, 0.35, false, 1.4); puff(px, gy + 1, 6, 0x8b949e, 1.2, 0.6); sfx.land(0.6);
               return false;
@@ -452,7 +452,7 @@ const air = {
         }
         if (tk >= 0.3) { tk = 0; for (const e of G.enemies) if (!e.dead && e.spawnT <= 0 && Math.abs(e.x - cx) < R) hitEnemy(e, eye ? 11 : 9, { kind: 'special', kx: 0, ky: 0, color: 0xcfe9ff, quiet: false, hitstop: 0.015, shake: 0.08, poise: 6, noCrit: false }); }
         if (bolts && bk >= 0.7) { bk = 0; const e = nearest(cx, gy + 2, R + 4); if (e) { bolt(cx, gy + 10, e.x, e.y + e.h / 2, 0xe8f6ff); hitEnemy(e, 24, { kind: 'special', color: 0xffffff, stun: 0.5, big: true }); shake(0.2); } }
-        if (t >= dur) { scene.remove(g); g.children.forEach((m) => { m.geometry.dispose(); m.material.dispose(); }); return false; }
+        if (t >= dur) { scene.remove(g); g.children.forEach((m) => { m.geometry.dispose(); }); return false; }
         return true;
       });
     },
