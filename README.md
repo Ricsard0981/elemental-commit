@@ -5,7 +5,7 @@
 
 **Play:** `https://<your-user>.github.io/elemental-commit/` — deployed by the GitHub Actions workflow in `.github/workflows/pages.yml` (enable it once under *Settings → Pages → Source: GitHub Actions*).
 
-Zero build step. Zero asset files — all models are procedural, all audio is synthesized with WebAudio. Just open `index.html` through any static server:
+Zero build step. The four heroes are built on two CC0 base bodies + a CC0 animation library (about 1.3 MB in `assets/hero/`, credits in `vendor/CREDITS.md`) and dressed in code — costumes, masks, hair, capes, VFX and shaders are original; all audio is synthesized with WebAudio. Just open `index.html` through any static server:
 
 ```bash
 npx http-server -p 8080 .   # or: python3 -m http.server 8080
@@ -49,7 +49,7 @@ Quality presets (Low / Medium / High) scale pixel ratio, shadows, bloom, particl
 
 Each element has **1 main attack, 1 ranged attack, 1 defence, 2 specials**, and a **9-node skill tree** (3 branches × 3 tiers).
 
-| | Main (`J`) | Ranged (`K`) | Defend (`L`) | Special 1 (`Q`) | Special 2 (`E`) |
+| | Main (`J`) | Ranged (`K`) | Defend (`F`) | Special 1 (`Q`) | Special 2 (`E`) |
 |---|---|---|---|---|---|
 | 🔥 **Fire** | Flame Blade — fast 3-hit combo, burning finisher | Fireball — exploding projectile | Flame Ward — parry → fire nova | Phoenix Dash — invulnerable fire dash + firetrail | Meteor Storm — rain of meteors |
 | 💧 **Water** | Tide Whip — wide chilling sweeps, wave finisher | Water Bolt — rapid homing bolts | Bubble Shield — block, perfect → heal + pop wave | Tidal Wave — screen-crossing crash | Healing Rain — heal zone that hurts enemies |
@@ -59,13 +59,25 @@ Each element has **1 main attack, 1 ranged attack, 1 defence, 2 specials**, and 
 ### Controls
 | Action | Keyboard | Mouse |
 |---|---|---|
-| Move / Jump (×2) / Dash | `A` `D` / `Space` `W` / `Shift` | |
+| Move / Jump (×2) / Dash | `A` `D` / `Space` / `Shift` | |
+| Up / Down (launcher, slam) | `W` `↑` / `S` `↓` | |
 | Main attack | `J` | Left click |
 | Ranged attack | `K` (aim-assist) | Right click (aims at cursor) |
-| Defend (hold) | `L` or `F` | |
+| Defend (hold) | `F` (or `L`) | |
 | Specials | `Q` / `E` | |
 | Skill tree | `Tab` | |
 | Pause / Mute | `Esc` / `M` | |
+
+### Combat depth (Milestone 2)
+- **Launcher** — hold **Up** (`W`/`↑`) and press **Attack** on the ground: the enemy is thrown into the air. Press **Space** straight after to follow it up.
+- **Air chain** — **Attack in the air**: a 3-hit chain with an *air stall* (you hang while hitting). Every air hit lifts the enemy a little less (**juggle decay**), so a juggle always ends. The 3rd air hit **spikes** the enemy into the ground for a **ground bounce**.
+- **Slam** — hold **Down** + **Attack** in the air: dive, shockwave, and everything nearby bounces off the ground.
+- Brutes resist launching until their poise breaks; the boss can't be launched.
+- **Resonance** — the 4th skill-tree branch. Its first node lets you choose a **secondary element** that imbues all your main attacks (burn, chill, stun build-up or pull/lift); Harmony strengthens it and Convergence makes finishers detonate it.
+- **Touch:** hold the stick **up** + Attack to launch, stick **down** + Attack in the air to slam. "Flick stick up to jump" is a setting (off by default).
+
+### Training Grounds
+A separate arena (menu → **Training Grounds**): **Sandbox** (dummies, DPS meter with juggle height/time, spawn any enemy or the boss, infinite energy / no cooldowns / enemies-attack toggles, element + Resonance switcher), **Endless Waves** (escalating mixed waves, saved best score) and **Combo Trials** (8 guided trials: launch, juggle, spike, slam, full course, Resonance). The Lab panel on the right is collapsible (collapsed by default on phones).
 
 **Defending is the heart of the game.** Hold *Defend* to block — but press it *just before* a hit lands for a **PERFECT PARRY**: the world freezes, time slows, the attacker is staggered, projectiles are reflected, and an element-specific counter fires.
 
@@ -80,7 +92,15 @@ index.html / style.css       UI shell (HUD, menus, skill tree)
 src/main.js                  game loop, run lifecycle, arenas, checkpoints, finish
 src/engine.js                renderer, bloom + FX pass, particles, debris, rings, camera
 src/world.js                 level layout (contribution graph), collision, backdrop
-src/player.js                controller, procedural character animation, guard & dash
+src/player.js                controller, attack kinds (ground / launcher / air / slam), guard & dash
+src/hero.js                  the four warriors: body + costume + mask + hair/cape + combat pose layer
+src/animator.js              AnimationMixer state machine (crossfades, speed-matched attacks)
+src/assets.js                preloader for the bodies + animation library
+src/toon.js                  toon / costume / outline materials (stepped light, rim light, inverted hull)
+src/ribbons.js               shader ribbons: hair, capes, hand trails
+src/events.js                combat event bus (hit, launch, airHit, spike, bounce, slam, parry, kill)
+src/arena.js                 Training Grounds scenery + terrain
+src/training.js              sandbox, DPS meter, endless waves, combo trials
 src/elements.js              all 4 elements: main/ranged/guard/2 specials
 src/enemies.js               Bug, Null Pointer, Legacy Bot, THE LEGACY MONOLITH
 src/combat.js                damage, parry, projectiles, pickups, combo, XP
@@ -90,7 +110,8 @@ src/audio.js                 synthesized SFX + generative music
 src/touch.js                 touch controls (stick, button cluster, aim, haptics)
 src/settings.js              persisted settings, quality presets, device detection
 src/settingsUI.js            settings screen
-vendor/                      three.js r170 (MIT) + postprocessing addons
+assets/hero/                  body_m.glb, body_f.glb, anims.glb (CC0, see vendor/CREDITS.md)
+vendor/                      three.js r170 (MIT) + loaders/postprocessing addons
 ```
 
 ## Roadmap (next slices)
@@ -104,5 +125,5 @@ vendor/                      three.js r170 (MIT) + postprocessing addons
 
 ## License
 
-Code: MIT. three.js © three.js authors (MIT, see `vendor/THREE_LICENSE`).
+Code: MIT. three.js © three.js authors (MIT, see `vendor/THREE_LICENSE`). Base bodies and animations: Quaternius, CC0 (see `vendor/CREDITS.md`).
 "Octocat"/GitHub marks are intentionally *not* used — this is a fan-made game and is not affiliated with GitHub.

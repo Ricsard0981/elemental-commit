@@ -1,11 +1,11 @@
-// Skill trees (3 branches × 3 tiers per element), progression and persistence.
+// Skill trees (3 element branches + the Resonance branch, 3 tiers each), progression and persistence.
 // A node's `fx` is merged into player.mods: numbers add up, booleans OR.
 
 export const TREE_BRANCHES = {
-  fire: ['Blaze', 'Inferno', 'Ember'],
-  water: ['Tide', 'Flow', 'Ebb'],
-  earth: ['Stone', 'Tectonic', 'Bedrock'],
-  air: ['Gale', 'Sky', 'Zephyr'],
+  fire: ['Blaze', 'Inferno', 'Ember', 'Resonance'],
+  water: ['Tide', 'Flow', 'Ebb', 'Resonance'],
+  earth: ['Stone', 'Tectonic', 'Bedrock', 'Resonance'],
+  air: ['Gale', 'Sky', 'Zephyr', 'Resonance'],
 };
 const n = (id, branch, tier, name, desc, fx, icon) => ({ id, branch, tier, name, desc, fx, icon, cost: tier === 2 ? 2 : 1 });
 
@@ -56,30 +56,41 @@ export const SKILLS = {
   ],
 };
 
-export const BASE_MODS = { allDmg: 0, hp: 0, energy: 0, cdr: 0, speed: 0, dr: 0, parry: 0, regen: 0, jumps: 0, dashCd: 0 };
+// Resonance: a secondary element that imbues every main attack (no new buttons)
+for (const el of Object.keys(SKILLS)) {
+  const k = el[0];
+  SKILLS[el].push(
+    n(k + 'r1', 3, 0, 'Attunement', 'Awaken a second element: choose one. Your main attacks (ground, launcher, air, slam) carry its status.', { resonance: true }, '☯'),
+    n(k + 'r2', 3, 1, 'Harmony', 'The imbue is stronger: longer statuses, harder hits, more of its flavour.', { resPower: 1 }, '❖'),
+    n(k + 'r3', 3, 2, 'Convergence', 'Your finishers (3rd hit, launcher, spike, slam) also detonate the secondary element.', { resPower: 1, resFinisher: true }, '✺'),
+  );
+}
 
-export function computeMods(el, owned) {
+export const BASE_MODS = { allDmg: 0, hp: 0, energy: 0, cdr: 0, speed: 0, dr: 0, parry: 0, regen: 0, jumps: 0, dashCd: 0, resPower: 0 };
+
+export function computeMods(el, owned, res) {
   const m = { ...BASE_MODS };
   for (const s of SKILLS[el]) if (owned.includes(s.id)) {
     for (const [k, v] of Object.entries(s.fx)) m[k] = typeof v === 'boolean' ? m[k] || v : (m[k] || 0) + v;
   }
+  m.resKey = m.resonance && res && res !== el ? res : null;
   return m;
 }
 
 // ----------------------------------------------------------------- progress / save
 const KEY = 'elemental-commit-save-v1';
-let save = { prog: {}, best: {} };
+let save = { prog: {}, best: {}, train: {} };
 try { save = { ...save, ...JSON.parse(localStorage.getItem(KEY) || '{}') }; } catch { /* ignore */ }
 function persist() { try { localStorage.setItem(KEY, JSON.stringify(save)); } catch { /* ignore */ } }
 
 export function prog(el) {
-  if (!save.prog[el]) save.prog[el] = { level: 1, xp: 0, owned: [] };
+  if (!save.prog[el]) save.prog[el] = { level: 1, xp: 0, owned: [], res: null };
   return save.prog[el];
 }
 export const xpNeed = (lvl) => 60 + lvl * 35;
 export function spent(el) { return SKILLS[el].filter((s) => prog(el).owned.includes(s.id)).reduce((a, s) => a + s.cost, 0); }
 export function pointsLeft(el) { return prog(el).level - spent(el); }
-export const MAX_LEVEL = 14;
+export const MAX_LEVEL = 16;
 
 export function addXP(el, amount) {
   const p = prog(el); let ups = 0;
@@ -98,7 +109,16 @@ export function isUnlocked(el, s) {
   return s.tier === 0 || prog(el).owned.includes(SKILLS[el].find((x) => x.branch === s.branch && x.tier === s.tier - 1).id);
 }
 export function buy(el, s) { if (!canBuy(el, s)) return false; prog(el).owned.push(s.id); persist(); return true; }
-export function respec(el) { prog(el).owned = []; persist(); }
+export function respec(el) { prog(el).owned = []; prog(el).res = null; persist(); }
+export function setResonance(el, key) { prog(el).res = key; persist(); }
 export function bestRun(el) { return save.best[el]; }
 export function recordRun(el, r) { const b = save.best[el]; if (!b || r.score > b.score) { save.best[el] = r; persist(); return true; } return false; }
-export function wipeSave() { save = { prog: {}, best: {} }; persist(); }
+export function wipeSave() { save = { prog: {}, best: {}, train: {} }; persist(); }
+// Training Grounds records (endless score, completed combo trials)
+export function trainRecord(id) { return save.train?.[id]; }
+export function trainSet(id, value, higherIsBetter = true) {
+  save.train ||= {};
+  const old = save.train[id];
+  if (old === undefined || (higherIsBetter ? value > old : value < old)) { save.train[id] = value; persist(); return true; }
+  return false;
+}

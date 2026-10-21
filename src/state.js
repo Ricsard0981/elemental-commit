@@ -10,4 +10,5 @@ export const G = {
   stats: { kills: 0, commits: 0, time: 0, parries: 0, damageTaken: 0 },
   element: 'fire',
   boss: null,
+  training: null, trainAttack: true, trainRes: null, // Training Grounds
 };

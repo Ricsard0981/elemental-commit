@@ -3,8 +3,8 @@ import * as THREE from 'three';
 
 const MAP = {
   left: ['KeyA', 'ArrowLeft'], right: ['KeyD', 'ArrowRight'],
-  jump: ['Space', 'KeyW', 'ArrowUp'], down: ['KeyS', 'ArrowDown'],
-  main: ['KeyJ', 'Mouse0'], ranged: ['KeyK', 'Mouse2'], guard: ['KeyL', 'KeyF'],
+  jump: ['Space'], up: ['KeyW', 'ArrowUp'], down: ['KeyS', 'ArrowDown'],
+  main: ['KeyJ', 'Mouse0'], ranged: ['KeyK', 'Mouse2'], guard: ['KeyF', 'KeyL'],
   s1: ['KeyQ', 'KeyU'], s2: ['KeyE', 'KeyI'], dash: ['ShiftLeft', 'ShiftRight'],
   skills: ['Tab', 'KeyT'], pause: ['Escape', 'KeyP'],
 };

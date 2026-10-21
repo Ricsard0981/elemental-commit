@@ -167,7 +167,7 @@ function onUp(e) {
   const p = ptr.get(e.pointerId); if (!p) return;
   ptr.delete(e.pointerId);
   if (p.kind === 'stick') {
-    stick.id = null; In.touch.ax = 0; In.touch.ay = 0; In.vUp('down');
+    stick.id = null; In.touch.ax = 0; In.touch.ay = 0; In.vUp('down'); In.vUp('up');
     root.classList.remove('sticking');
     stickKnob.style.transform = 'translate(-50%,-50%)';
   } else release(btns[p.id]);
@@ -186,9 +186,10 @@ function updateStick() {
   In.touch.ax = ax < 0.2 ? 0 : Math.sign(nx) * (ax > 0.55 ? 1 : 0.45 + ((ax - 0.2) / 0.35) * 0.45);
   In.touch.ay = ny;
   if (ny > 0.62 && ax < 0.75) In.vDown('down'); else In.vUp('down');
+  if (ny < -0.55 && ax < 0.8) In.vDown('up'); else In.vUp('up');
   // flick up = jump
   const now = performance.now();
-  if (ny < -0.72 && stick.lastAy > -0.45 && now - stick.lastT < 180) { In.vDown('jump'); setTimeout(() => In.vUp('jump'), 120); haptic('tap'); }
+  if (S.flickJump && ny < -0.72 && stick.lastAy > -0.45 && now - stick.lastT < 180) { In.vDown('jump'); setTimeout(() => In.vUp('jump'), 120); haptic('tap'); }
   if (ny > -0.45) stick.lastT = now;
   stick.lastAy = ny;
 }

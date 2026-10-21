@@ -1,4 +1,4 @@
-import { S, DEFAULTS, setSetting, isTouchDevice, qualityLevel } from './settings.js';
+import { S, DEFAULTS, setSetting, isTouchDevice, qualityLevel, GFX_OPTS, FPS_CAPS, gfxTiers, isCustom } from './settings.js';
 import { sfx } from './audio.js';
 import { wipeSave } from './skills.js';
 
@@ -11,9 +11,10 @@ const SCHEMA = [
     { k: 'lefty', type: 'toggle', label: 'Left-handed layout', hint: () => 'Stick on the right, buttons on the left' },
     { k: 'haptics', type: 'toggle', label: 'Vibration', hint: () => ('vibrate' in navigator ? 'Hits, parries, level-ups' : 'Not supported on this browser') },
     { k: 'fullscreen', type: 'toggle', label: 'Fullscreen + landscape on start' },
+    { k: 'flickJump', type: 'toggle', label: 'Flick stick up to jump', hint: () => 'Off: hold the stick up + Attack to launch enemies' },
   ] },
   { section: 'Graphics', items: [
-    { k: 'quality', type: 'seg', label: 'Quality', opts: [['auto', 'Auto'], ['low', 'Low'], ['medium', 'Med'], ['high', 'High']], hint: () => (S.quality === 'auto' ? `Auto → ${qualityLevel()} + dynamic resolution` : 'Fixed preset') },
+    { type: 'custom', render: () => graphicsRows() },
     { k: 'fps', type: 'toggle', label: 'Show FPS' },
   ] },
   { section: 'Comfort', items: [
@@ -26,6 +27,34 @@ const SCHEMA = [
     { k: 'music', type: 'range', label: 'Music volume', min: 0, max: 1, step: 0.05, fmt: (v) => Math.round(v * 100) + '%' },
   ] },
 ];
+
+// ---- graphics: preset tiers + frame cap + advanced per-option overrides
+const PRESET_OPTS = [['auto', 'Auto'], ['potato', 'Potato'], ['low', 'Low'], ['medium', 'Med'], ['high', 'High'], ['ultra', 'Ultra']];
+let advOpen = false;
+function graphicsRows() {
+  const frag = document.createDocumentFragment();
+  const seg = (label, hint, opts, cur, onPick) => {
+    const r = document.createElement('div'); r.className = 'set-row';
+    r.innerHTML = `<label><span>${label}${hint ? `<small>${hint}</small>` : ''}</span><div class="seg wrap">${opts.map(([v, l], i) => `<button data-i="${i}" class="${cur === v ? 'on' : ''}">${l}</button>`).join('')}</div></label>`;
+    r.querySelectorAll('.seg button').forEach((b) => (b.onclick = () => { onPick(opts[+b.dataset.i][0]); sfx.click(); renderSettings(); }));
+    return r;
+  };
+  const presetHint = isCustom() ? `Custom — based on ${qualityLevel()}` : S.quality === 'auto' ? `Auto → ${qualityLevel()} (picked for this device) + dynamic resolution` : 'Fixed preset';
+  frag.appendChild(seg('Quality preset', presetHint, PRESET_OPTS, isCustom() ? null : S.quality, (v) => { S.gfx = {}; setSetting('quality', v); }));
+  frag.appendChild(seg('Frame cap', S.fpsCap ? `Limited to ${S.fpsCap} fps (saves power / heat)` : 'Follows your display', FPS_CAPS, S.fpsCap, (v) => setSetting('fpsCap', v)));
+  const adv = document.createElement('div'); adv.className = 'set-row';
+  adv.innerHTML = `<label><span>Advanced graphics<small>Fine-tune every option; changing one makes the preset Custom</small></span><div class="adv-btns">${isCustom() ? '<button class="mini" data-r>Reset to preset</button>' : ''}<button class="mini" data-a>${advOpen ? 'Hide' : 'Show'}</button></div></label>`;
+  adv.querySelector('[data-a]').onclick = () => { advOpen = !advOpen; sfx.click(); renderSettings(); };
+  adv.querySelector('[data-r]')?.addEventListener('click', () => { setSetting('gfx', {}); sfx.click(); renderSettings(); });
+  frag.appendChild(adv);
+  if (advOpen) {
+    const t = gfxTiers();
+    const box = document.createElement('div'); box.className = 'adv-box';
+    for (const o of GFX_OPTS) box.appendChild(seg(o.label, o.hint || '', o.opts, t[o.k], (v) => setSetting('gfx', { ...(S.gfx || {}), [o.k]: v })));
+    frag.appendChild(box);
+  }
+  return frag;
+}
 
 export function renderSettings() {
   const body = $('settings-body');
@@ -51,6 +80,7 @@ export function renderSettings() {
 }
 
 function row(it) {
+  if (it.type === 'custom') return it.render();
   const r = document.createElement('div'); r.className = 'set-row';
   const hint = it.hint ? `<small>${it.hint()}</small>` : '';
   if (it.type === 'toggle') {

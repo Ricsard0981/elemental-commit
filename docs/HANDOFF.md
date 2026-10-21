@@ -45,3 +45,39 @@ Main-level reskin and world overhaul, new levels and bosses, perfect dodge, ulti
 - They answer multiple-choice questions well. Offer a recommended option first.
 - They test on their phone after pushes, so describe exactly what to try.
 - They want honest reporting: say what was and wasn't verified.
+
+
+---
+
+# Update after Milestone 2 (implemented locally on the owner's PC)
+
+## Owner feedback that shaped this drop
+- PC playtest of Milestone 1: smooth, satisfying, responsive, key layout good. Only the **map/world design** (contribution-graph world) is disliked → that is the *next* milestone's world overhaul. **The old level was not touched.**
+- **Defend is now `F`** (HUD slot label, tutorial hint, element cards, menu footer, README). `L` still works as a secondary key.
+- After seeing the first chibi (KayKit) hero the owner said it looked "goofy, like a little gnome". New direction: **tall, heroic, human-proportioned, memorable characters; custom identity; everything more visible/satisfying/chaotic-but-smooth; insanely good animation and SFX; keep everything that exists.**
+
+## Decisions made in this session (they replace the earlier hero plan)
+| Topic | Decision |
+|---|---|
+| Hero base | **Quaternius Universal Base Characters** (male + female, CC0) + **Universal Animation Library (Standard, CC0)**. KayKit was tried first and dropped (proportions). Sources are in `vendor/CREDITS.md`. Downloaded through itch.io's free flow with Playwright; the originals are not in the repo, only the optimised `assets/hero/*.glb` (1.3 MB). |
+| Characters | 4 distinct warriors: **Fire** (male, bare-chested ember warlord), **Water** (female, tide dancer), **Earth** (male, bulky stone breaker), **Air** (female, gale runner). Each has a zone-painted costume (cloth, trim, glowing runes), bone-attached armour, carved mask, hair cap + crown, elemental hair ribbons, cape ribbon, hand trails. All custom, in `src/hero.js` + `src/toon.js`. Armour pieces are authored in T-pose model space and baked into 4 skinned meshes (one per material) to save draw calls. |
+| Animation | Locomotion/jump/roll/hit/death/dance/punches/sword/spells come from the library. Launcher, air chain, slam, guard, casts and dash poses are a **procedural layer** (`Hero.pose` / `applyOverlay`) that rotates bones in the model frame on top of the clips; clip speed is matched to each attack's `hitAt` (`CLIP_PEAK`). |
+| Camera | `ZOOM_K = 0.68` in `engine.js`: the camera sits much closer so the characters are big. Camera x bounds were relaxed (`bx0 = 6`). |
+| Controls | W/↑ = up (launcher), **Space = jump** (W no longer jumps), S/↓ = down (slam). Touch: stick up + Attack = launcher; flick-up-to-jump is a setting, off by default. |
+| Resonance | 4th skill-tree branch for every element (T1 opens the pick-1-of-3 secondary modal; T2/T3 strengthen; T3 makes finishers detonate). `MAX_LEVEL` raised 14 → 16 so all 12 nodes are affordable. |
+| Training Grounds | Separate arena (`src/arena.js`, `src/training.js`): sandbox (3 dummies, DPS meter incl. juggle hits/height/time, spawner for every enemy + boss, toggles, element + Resonance switcher), endless waves (best score saved), 8 combo trials (first clears give XP). Collision/terrain is swapped through `terrain.active` in `world.js`; the level meshes are hidden while it is active. |
+| Audio | `src/audio.js` rewritten: layered hits (transient + body + sub + tail), reverb bus, element voices, launcher/air/spike/bounce/slam sounds, slow-motion low-pass, ambience, driving combat groove. **Not listened to on the dev machine** (no audio device in the automated runs) — tune by ear. |
+| VFX | Sprite atlas for particles (streaks stretch with velocity, droplets, chips, leaves, stars), shader slash trails per element with Resonance tint, ground decals, impact flashes, screen-space shockwave on High, shader ribbons. All shader variants are created at boot / in `warmup()`. |
+| Stylised look | `MeshToonMaterial` with a 4-step ramp + fresnel rim + cheap inverted-hull outlines (off on Low). Enemies were moved to the same toon materials. |
+
+## Things still open / honest gaps
+- Animation polish is not finished: the pose layer was tuned from screenshots on a software renderer; expect to tweak amplitudes after seeing it at 60 fps on real hardware.
+- Fingers are not animated (finger tracks were dropped to save size) – hands are open palms.
+- iPhone 13 performance was **not measured on device**; headless numbers (draw calls, triangles, JS ms, shader-program count) are in `docs/MILESTONE_2.md`.
+- Sound was never heard by the author; mixing is by design only.
+- World overhaul, new levels/bosses, perfect dodge, ultimate meter, elemental reactions, desktop packaging are still not done.
+
+## Working notes
+- `window.__game` now also exposes `startTraining`, `TR`, `EV` (event bus), `In`.
+- Debug camera hooks: `cam.fovLock` and `cam.zoomLock` (used by the screenshot scripts).
+- Test scripts used this session are kept outside the repo; the flows covered are listed in `docs/MILESTONE_2.md`.

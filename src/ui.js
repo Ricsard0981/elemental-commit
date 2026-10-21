@@ -1,6 +1,6 @@
 import { G } from './state.js';
 import { ELEMENTS, KEYS } from './elements.js';
-import { SKILLS, TREE_BRANCHES, prog, pointsLeft, spent, xpNeed, canBuy, isUnlocked, buy, respec, MAX_LEVEL, bestRun } from './skills.js';
+import { SKILLS, TREE_BRANCHES, prog, pointsLeft, spent, xpNeed, canBuy, isUnlocked, buy, respec, MAX_LEVEL, bestRun, setResonance } from './skills.js';
 import { sfx } from './audio.js';
 import { css, clamp } from './util.js';
 
@@ -15,7 +15,7 @@ const SVG = {
   air: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.200" stroke-linecap="round"><path d="M3 8.500h11a3 3 0 1 0-3-3"/><path d="M3 13h15.500a3 3 0 1 1-3 3"/><path d="M3 17.500h7"/></svg>',
 };
 export const ICON = SVG;
-const SLOTS = [['main', 'J', 'Main'], ['ranged', 'K', 'Ranged'], ['guard', 'L', 'Defend'], ['s1', 'Q', 'Special'], ['s2', 'E', 'Special'], ['dash', '⇧', 'Dash']];
+const SLOTS = [['main', 'J', 'Main'], ['ranged', 'K', 'Ranged'], ['guard', 'F', 'Defend'], ['s1', 'Q', 'Special'], ['s2', 'E', 'Special'], ['dash', '⇧', 'Dash']];
 const RANKS = ['', 'NICE', 'GREAT', 'EXCELLENT', 'BRILLIANT', 'LEGENDARY', 'GODLIKE', 'MERGE MASTER', 'FULL STACK'];
 const RANK_COL = ['#fff', '#7ee787', '#58a6ff', '#d2a8ff', '#ffd33d', '#ff9a4d', '#ff6b6b', '#ff6bd6', '#ffffff'];
 
@@ -35,7 +35,7 @@ export function initUI(handlers) {
       <h3>${e.name}</h3><p class="blurb">${e.blurb}</p>
       <div class="stats">${stat(e.stats[0], 'Power')}${stat(e.stats[1], 'Sustain')}${stat(e.stats[2], 'Defense')}${stat(e.stats[3], 'Speed')}</div>
       <ul class="abil">
-        <li><kbd>J</kbd> <b>${e.main.name}</b></li><li><kbd>K</kbd> <b>${e.ranged.name}</b></li><li><kbd>L</kbd> <b>${e.guard.name}</b></li>
+        <li><kbd>J</kbd> <b>${e.main.name}</b></li><li><kbd>K</kbd> <b>${e.ranged.name}</b></li><li><kbd>F</kbd> <b>${e.guard.name}</b></li>
         <li><kbd>Q</kbd> <b>${e.s1.name}</b></li><li><kbd>E</kbd> <b>${e.s2.name}</b></li></ul>
       <div class="lvl" data-lvl="${k}"></div>`;
     card.onclick = () => { sfx.click(); H.onPick(k); };
@@ -179,6 +179,7 @@ export function noEnergy(slot) { const s = $('slot-' + slot); if (s) restart(s, 
 export function castFlash(slot) { const s = $('slot-' + slot); if (s) restart(s, 'cast'); }
 export function ready(slot) { const s = $('slot-' + slot); if (s) restart(s, 'ready'); }
 export function showDeath() {
+  if (G.training) return;
   setTimeout(() => { if (G.mode === 'dead') { show('death', true); refreshDeath(); } }, 1400);
 }
 function refreshDeath() {
@@ -214,9 +215,10 @@ export function renderTree() {
   const root = document.createElement('div'); root.className = 'node root'; root.innerHTML = `<div class="ico">${SVG[el]}</div><b>${e.name}</b>`; root.id = 'node-root';
   tree.appendChild(root);
   const cols = document.createElement('div'); cols.className = 'branches'; tree.appendChild(cols);
-  for (let b = 0; b < 3; b++) {
-    const col = document.createElement('div'); col.className = 'branch';
-    col.innerHTML = `<h4>${TREE_BRANCHES[el][b]}</h4>`;
+  for (let b = 0; b < 4; b++) {
+    const col = document.createElement('div'); col.className = 'branch' + (b === 3 ? ' reson' : '');
+    const sec = b === 3 && pr.res ? `<small class="sec" style="color:${ELEMENTS[pr.res].css}">${ELEMENTS[pr.res].name}</small>` : '';
+    col.innerHTML = `<h4>${TREE_BRANCHES[el][b]}${sec}</h4>`;
     for (let t = 0; t < 3; t++) {
       const s = SKILLS[el].find((x) => x.branch === b && x.tier === t);
       const owned = pr.owned.includes(s.id), unlocked = isUnlocked(el, s), buyable = canBuy(el, s);
@@ -229,6 +231,7 @@ export function renderTree() {
           sfx.buy(); H.skillsChanged(); renderTree();
           const nn = $('node-' + s.id); restart(nn, 'bought');
           const r = nn.getBoundingClientRect(); burst(r.left + r.width / 2, r.top + r.height / 2);
+          if (s.branch === 3 && s.tier === 0) openResPicker();
         } else { sfx.hover(); restart(n, 'shake'); }
       };
       n.onmouseenter = () => sfx.hover();
@@ -251,7 +254,7 @@ function drawLines() {
     p.setAttribute('d', `M${a.x} ${a.bot} C ${a.x} ${my}, ${b.x} ${my}, ${b.x} ${b.top}`);
     p.setAttribute('class', on ? 'on' : ''); svg.appendChild(p);
   };
-  for (let b = 0; b < 3; b++) {
+  for (let b = 0; b < 4; b++) {
     const ids = [0, 1, 2].map((t) => SKILLS[el].find((x) => x.branch === b && x.tier === t).id);
     line(c('node-root'), c('node-' + ids[0]), owned.includes(ids[0]));
     line(c('node-' + ids[0]), c('node-' + ids[1]), owned.includes(ids[1]));
@@ -259,6 +262,19 @@ function drawLines() {
   }
 }
 addEventListener('resize', () => requestAnimationFrame(drawLines));
+
+// ---- Resonance: pick the secondary element (T1 of the 4th branch)
+export function openResPicker() {
+  const el = G.element, pr = prog(el);
+  let m = $('resmodal');
+  if (!m) { m = document.createElement('section'); m.id = 'resmodal'; m.className = 'screen'; document.body.appendChild(m); }
+  const opts = KEYS.filter((k) => k !== el);
+  m.innerHTML = `<div class="panel wide"><h2>Choose your Resonance</h2><p class="muted">A second element flows through every main attack: ground combo, launcher, air chain and slam. Upgrade it with Harmony and Convergence. You can change it any time while the node is owned.</p>
+    <div class="res-cards">${opts.map((k) => { const e = ELEMENTS[k]; return `<button class="res-card ${pr.res === k ? 'on' : ''}" data-k="${k}" style="--c:${e.css};--c2:${e.css2}"><span class="ri">${SVG[k]}</span><b>${e.name}</b><small>${RES_TXT[k]}</small></button>`; }).join('')}</div></div>`;
+  m.classList.add('show');
+  m.querySelectorAll('.res-card').forEach((b) => (b.onclick = () => { setResonance(el, b.dataset.k); sfx.buy(); m.classList.remove('show'); H.skillsChanged(); renderTree(); toast(`Resonance: <b>${ELEMENTS[b.dataset.k].name}</b>`, ELEMENTS[b.dataset.k].css); }));
+}
+const RES_TXT = { fire: 'Main hits ignite enemies — burn damage over time.', water: 'Main hits chill and slow enemies.', earth: 'Main hits build stun and break poise.', air: 'Main hits pull enemies in and add extra lift.' };
 function burst(x, y) {
   const c = getComputedStyle(document.documentElement).getPropertyValue('--c2') || '#fff';
   for (let i = 0; i < 26; i++) {

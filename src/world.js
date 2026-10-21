@@ -48,17 +48,21 @@ export const commitTrail = [];
   arc(225, 232, 5, 1, 4); arc(236, 242, 7.6, 1, 4);
 })();
 export const hints = [
-  { x: 2, text: '<b>A / D</b> move &nbsp; <b>Space</b> jump (twice!) &nbsp; <b>Shift</b> dash', touch: 'Drag anywhere on the <b>left</b> to move · <b>Jump</b> twice for a double jump · flick the stick up to jump too' },
+  { x: 2, text: '<b>A / D</b> move &nbsp; <b>Space</b> jump (twice!) &nbsp; <b>Shift</b> dash &nbsp; <b>W</b> / <b>↑</b> = up (launcher)', touch: 'Drag anywhere on the <b>left</b> to move · <b>Jump</b> twice for a double jump · hold the stick <b>up</b> + Attack to launch enemies' },
   { x: 14, text: '<b>J</b> / <b>Left click</b> — main attack. Chain 3 hits for a finisher', touch: 'Tap <b>Attack</b> in rhythm — the 3rd hit is a finisher. Slide your thumb to <b>Jump</b> without lifting' },
   { x: 25, text: '<b>K</b> / <b>Right click</b> — ranged attack (aim with the mouse) · <b>Q</b> / <b>E</b> — specials', touch: 'Hold <b>Ranged</b> to fire (auto-aims) — <i>drag</i> from it to aim manually · the two outer buttons are your specials' },
-  { x: 44, text: 'Hold <b>L</b> to defend. Tap it <i>just before</i> a hit lands for a <b>PERFECT PARRY</b>', touch: 'Hold <b>Defend</b> to block. Tap it <i>just before</i> a hit lands for a <b>PERFECT PARRY</b>' },
+  { x: 44, text: 'Hold <b>F</b> to defend. Tap it <i>just before</i> a hit lands for a <b>PERFECT PARRY</b>', touch: 'Hold <b>Defend</b> to block. Tap it <i>just before</i> a hit lands for a <b>PERFECT PARRY</b>' },
   { x: 56, text: 'Press <b>Tab</b> to open your skill tree and spend skill points', touch: 'Tap <b>Skills</b> (top-left) to spend skill points' },
 ];
 export const BOSS_X0 = 218, BOSS_X1 = 264;
 
 // ----------------------------------------------------------------- queries
 export function laneTop(i) { return i < 0 || i >= L ? 0 : laneH[i]; }
+// Another playfield (the Training Grounds) can take over collision queries: terrain.active = { L, ground(x), solids(x0, x1, out) }
+export const terrain = { active: null };
+export const worldLen = () => (terrain.active ? terrain.active.L : L);
 export function groundAt(x) { // top of the playable lane (null → pit)
+  if (terrain.active) return terrain.active.ground(x);
   const i = Math.floor(x);
   if (i < 0 || i >= L) return 0;
   const h = laneH[i];
@@ -68,6 +72,7 @@ export const dyn = []; // dynamic solids {x0,x1,y0,y1,owner}
 export const gates = [];
 
 export function solidsNear(x0, x1, out) {
+  if (terrain.active) return terrain.active.solids(x0, x1, out);
   out.length = 0;
   for (let i = Math.max(0, Math.floor(x0)); i <= Math.min(L - 1, Math.floor(x1)); i++) {
     const h = laneH[i];
@@ -106,9 +111,16 @@ function vnoise(x, y) {
   return lerp(lerp(hash(xi, yi), hash(xi + 1, yi), u), lerp(hash(xi, yi + 1), hash(xi + 1, yi + 1), u), v);
 }
 
+// everything buildWorld adds to the scene, so the level can be hidden while another playfield is active
 export function buildWorld() {
+  const before = new Set(scene.children);
+  buildWorldInner();
+  worldState.objects = scene.children.filter((c) => !before.has(c));
+}
+export function setLevelVisible(v) { for (const o of worldState.objects || []) o.visible = v; }
+function buildWorldInner() {
   // ---- sky dome
-  skyMat = new THREE.ShaderMaterial({
+  skyMat = new THREE.ShaderMaterial({ name: 'levelSky',
     side: THREE.BackSide, depthWrite: false, fog: false,
     uniforms: { top: { value: new THREE.Color(0x03060c) }, mid: { value: new THREE.Color(0x0b1a2a) }, hor: { value: new THREE.Color(0x0e4429) }, tint: { value: new THREE.Color(0x39d353) } },
     vertexShader: 'varying vec3 vP; void main(){ vP=normalize(position); gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }',

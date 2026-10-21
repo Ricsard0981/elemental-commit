@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { G } from './state.js';
-import { scene, glow, dust, sparks, puff, cubes, rgb, ring, slash, flashLight, floatText, shake, punchFov, screenFlash, post, addFx } from './engine.js';
+import { scene, glow, dust, sparks, puff, cubes, rgb, ring, slash, flashLight, floatText, shake, punchFov, screenFlash, post, addFx, impactFlash, decal, shockwave, SPRITE } from './engine.js';
+import { emit } from './events.js';
 import { groundAt, ripple } from './world.js';
 import { sfx } from './audio.js';
 import { ELEMENTS } from './elements.js';
@@ -52,6 +53,47 @@ function levelUp(n) {
 }
 
 // ----------------------------------------------------------------- enemy damage
+const HIT_SPRITE = { fire: SPRITE.streak, water: SPRITE.drop, earth: SPRITE.chip, air: SPRITE.streak };
+const LAUNCH_VY = 17;
+// ---- launch / juggle / spike (enemy airborne states live in enemies.js physics)
+export function launchEnemy(e, vy, dir = 1) {
+  if (e.boss || e.noLaunch || e.dead) return false;
+  if (e.heavy && e.stagger <= 0) { e.vx += dir * 1.5; return false; } // brutes resist until their poise breaks
+  if (e.flying) { e.vy = Math.max(e.vy, vy * 0.5); e.juggle = 0; return true; }
+  e.air = true; e.juggle = 0; e.bounced = false; e.spiked = false; e.downT = 0; e.getUp = 0;
+  e.vy = vy * (e.heavy ? 0.72 : 1); e.onGround = false; e.y += 0.06; e.airT = 0; e.maxH = 0; e.kdir = dir;
+  emit('launch', { e, vy });
+  return true;
+}
+export function juggleLift(e) {
+  if (e.flying) { e.vy = Math.max(e.vy, 2.5); return; }
+  e.juggle++; const n = e.juggle;
+  // juggle decay: every air hit lifts less and the fall gets faster, so a chain always ends
+  if (n <= 6) e.vy = Math.max(e.vy, 10 * Math.pow(0.76, n - 1) * (e.heavy ? 0.75 : 1)); else e.vy = Math.min(e.vy, 0.5);
+  e.vx *= 0.5;
+  emit('airHit', { e, n }); sfx.airhit(n);
+}
+export function spikeEnemy(e) {
+  if (e.flying || e.boss) { e.vy = -8; return; }
+  e.vy = -28; e.spiked = true; e.air = true;
+  emit('spike', { e }); sfx.spike();
+}
+function applyImbue(e, o, p, dir) {
+  const k = p.mods.resKey, pw = 1 + p.mods.resPower, col = ELEMENTS[k].color;
+  if (k === 'fire') { e.burn = Math.max(e.burn, 1.2 + 0.8 * pw); e.burnDps = Math.max(e.burnDps || 0, 4 + 3 * pw); }
+  else if (k === 'water') e.chill = Math.max(e.chill, 1 + 0.7 * pw);
+  else if (k === 'earth') { e.poise -= 5 * pw; e.stunBuild = (e.stunBuild || 0) + 0.28 + 0.1 * pw; if (e.stunBuild >= 1 && !e.boss) { e.stunBuild = 0; e.stun = Math.max(e.stun, 0.5 + 0.2 * pw); e.onStun?.(); floatText(e.x, e.y + e.h + 1.1, 'STUN', { color: '#e0b070', size: 15, dur: 0.7 }); } }
+  else if (k === 'air') { e.vx += Math.sign(p.x - e.x) * (1.2 + pw); if (!e.air) e.vy += 1.8 + pw; else e.vy += 1.2 * pw; }
+  sparks(e.x, e.y + e.h * 0.55, col, 5 + pw * 2, 7, 0.2, 0.4, dir, 1, HIT_SPRITE[k]); sfx.imbue(k);
+}
+// Resonance T3: finishers detonate the secondary element
+export function imbueBurst(p, x, y) {
+  const k = p.mods.resKey; if (!k || !p.mods.resFinisher) return;
+  const col = ELEMENTS[k].color;
+  const o = { fire: { burn: 3, burnDps: 9 }, water: { chill: 3.5, kx: 8 }, earth: { stun: 1.0, kx: 4 }, air: { kx: 12, ky: 8, launch: 14 } }[k];
+  explode(x, y, 2.6, 14, { color: col, shake: 0.2, noImbue: true, ...o });
+}
+
 export function hitEnemy(e, base, o = {}) {
   if (e.dead || e.spawnT > 0) return 0;
   const p = G.player, m = p.mods;
@@ -62,11 +104,11 @@ export function hitEnemy(e, base, o = {}) {
   if (e.stun > 0 && m.crushing) d *= 1.5;
   if (e.vulnerable > 0) d *= 1.25;
   d = Math.max(1, Math.round(d));
-  e.hp -= d; e.flash = 0.13; e.hurtT = 2.2;
-  // knockback
   const dir = o.dir ?? (Math.sign(e.x - p.x) || 1);
+  e.hp -= d; e.flash = 0.06; e.hurtT = 2.2; e.recoil = 1; e.kdir = dir;
+  // knockback
   if (!e.heavy || e.stagger > 0) {
-    e.vx += dir * (o.kx ?? 5) * (e.kbMul ?? 1); if (o.ky) e.vy += o.ky * (e.kbMul ?? 1);
+    e.vx += dir * (o.kx ?? 5) * (e.kbMul ?? 1); if (o.ky && !e.air) e.vy += o.ky * (e.kbMul ?? 1);
   } else e.vx += dir * (o.kx ?? 5) * 0.12;
   // poise / stagger
   e.poise -= o.poise ?? d * 0.9;
@@ -77,19 +119,34 @@ export function hitEnemy(e, base, o = {}) {
   if (o.chill) e.chill = Math.max(e.chill, o.chill);
   if (o.stun && !e.boss) { e.stun = Math.max(e.stun, o.stun); e.onStun?.(); }
   if (o.pull) e.vx += o.pull;
+  if (o.kind === 'main' && m.resKey && !o.noImbue) applyImbue(e, o, p, dir);
+  // launch / juggle
+  let launched = false;
+  if (o.launch) launched = launchEnemy(e, o.launch, dir);
+  else if (e.air && o.spike) spikeEnemy(e);
+  else if (e.air && o.lift) juggleLift(e);
+  else if (o.bounce && !e.air) { e.air = true; e.spiked = true; e.bounced = false; e.vy = -14; e.juggle = 0; e.downT = 0; e.airT = 0; e.maxH = 0; e.onGround = false; e.y += 0.04; }
   // feedback
   const col = o.color ?? ELEMENTS[G.element].color;
   const big = d > 30 || o.big;
   hitstop(o.hitstop ?? (crit ? 0.085 : big ? 0.07 : 0.045));
   shake(o.shake ?? (crit ? 0.3 : big ? 0.25 : 0.14));
-  sparks(e.x, e.y + e.h * 0.55, col, crit ? 16 : 9, crit ? 11 : 8, 0.26, 0.45, dir);
-  sparks(e.x, e.y + e.h * 0.55, 0xffffff, 4, 6, 0.18, 0.25, dir);
-  if (!o.quiet) { sfx.hit(big, crit); haptic(crit ? 'crit' : 'hit'); }
+  const hy = e.y + e.h * 0.55;
+  sparks(e.x, hy, col, crit ? 16 : 9, crit ? 11 : 8, 0.26, 0.45, dir, 1, HIT_SPRITE[G.element]);
+  sparks(e.x, hy, 0xffffff, 4, 6, 0.18, 0.25, dir);
+  if (!o.quiet) {
+    impactFlash(e.x - dir * 0.2, hy, col, big ? 3 : 2.1);
+    if (o.kind === 'main') punchFov(big ? 1.4 : 0.8);
+    sfx.hit(big, crit, G.combo.n, e.dummy ? 'wood' : 'flesh'); haptic(crit ? 'crit' : 'hit');
+  }
   floatText(e.x, e.y + e.h + 0.4, crit ? `${d}!` : String(d), { cls: crit ? 'crit' : '', color: crit ? '#ffd33d' : '#ffffff', size: crit ? 34 : big ? 26 : 20, dur: crit ? 1.1 : 0.8, vy: crit ? 3.4 : 2.6 });
   if (crit) { ring(e.x, e.y + e.h * 0.5, 0.6, 0xffd33d, { r0: 0.2, r1: 1.8, dur: 0.3 }); punchFov(1.5); }
   if (!o.noCombo) comboAdd(1);
-  if (!o.noEnergy) p.energy = Math.min(p.energyMax, p.energy + (o.kind === 'main' ? 4.5 : 1.5));
+  if (!o.noEnergy && !p.infEnergy) p.energy = Math.min(p.energyMax, p.energy + (o.kind === 'main' ? 4.5 : 1.5));
+  else if (p.infEnergy) p.energy = p.energyMax;
   e.onHurt?.(d, o);
+  emit('hit', { e, d, crit, o, dir, launched });
+  if (e.dummy) { e.hp = e.hpMax; return d; }
   if (e.hp <= 0) killEnemy(e, o);
   return d;
 }
@@ -121,6 +178,7 @@ export function killEnemy(e, o = {}) {
   // fire passive
   if (e.burn > 0 && p.mods.deathExplode) later(0.12, () => explode(e.x, cy, 3.6, 38, { color: 0xff6a2b, burn: 3, chain: true }));
   e.onDeath?.();
+  emit('kill', { e });
   p.energy = Math.min(p.energyMax, p.energy + 10);
 }
 
@@ -319,6 +377,8 @@ function perfectParry(src) {
     spawnCommits(e.x, e.y + e.h / 2, 4);
     floatText(e.x, e.y + e.h + 1, 'STAGGERED', { color: '#ffd33d', size: 20 });
   }
+  emit('parry', { src });
+  shockwave(p.x + p.facing * 0.6, p.y + 1.1, 0.045, 0.6);
   g_perfect(p, src);
 }
 function g_perfect(p, src) { ELEMENTS[G.element].guard.onPerfect(p, src); }

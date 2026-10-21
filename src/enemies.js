@@ -1,7 +1,10 @@
 import * as THREE from 'three';
 import { G } from './state.js';
 import { scene, glow, dust, sparks, puff, cubes, rgb, ring, flashLight, floatText, shake, punchFov, screenFlash, post, addFx } from './engine.js';
-import { groundAt, ripple, L } from './world.js';
+import { groundAt, ripple, worldLen } from './world.js';
+import { toonMaterial, addOutline, outlineHard } from './toon.js';
+import { Q, impactFlash, decal, shockwave } from './engine.js';
+import { emit } from './events.js';
 import { sfx } from './audio.js';
 import { damagePlayer, spawnProj, killEnemy, hitstop, slowmo, later } from './combat.js';
 import { groundWave } from './elements.js';
@@ -14,12 +17,13 @@ const box = new THREE.BoxGeometry(1, 1, 1), sph = new THREE.SphereGeometry(1, 16
 const barGeo = new THREE.PlaneGeometry(1, 1);
 
 function mk(e, geo, color, { em = 0, ei = 0, rough = 0.5, metal = 0.3, x = 0, y = 0, z = 0, sx = 1, sy = 1, sz = 1, parent } = {}) {
-  const mat = new THREE.MeshStandardMaterial({ color, roughness: Math.max(rough, 0.55), metalness: Math.min(metal, 0.1), emissive: em, emissiveIntensity: ei, flatShading: false });
+  const mat = toonMaterial({ color, emissive: em, emissiveIntensity: ei, rim: 0xff7b72, rimK: 0.3 });
   mat.userData.base = { em, ei };
   e.mats.push(mat);
   const m = new THREE.Mesh(geo, mat);
   m.position.set(x, y, z); m.scale.set(sx, sy, sz); m.castShadow = true;
   (parent || e.group).add(m);
+  if (Q.outlines && Math.min(sx, sy, sz) > 0.045 && geo !== cyl) addOutline(m, outlineHard);
   return m;
 }
 function pivot(parent, x, y, z) { const g = new THREE.Group(); g.position.set(x, y, z); parent.add(g); return g; }
@@ -28,9 +32,10 @@ function base(type, x, y, o) {
   const e = {
     type, x, y, vx: 0, vy: 0, w: 1, h: 1, hp: 30, hpMax: 30, poise: 20, poiseMax: 20, stagger: 0, staggerTime: 0.45, stun: 0, chill: 0, burn: 0, burnDps: 0, burnT: 0,
     vulnerable: 0, flash: 0, hurtT: 0, dead: false, spawnT: 0.7, facing: -1, state: 'idle', st: 0, cd: rand(0.3, 1), color: RED, xp: 10, commits: 3, heart: 0.1,
-    heavy: false, flying: false, boss: false, mats: [], group: new THREE.Group(), lift: 0, kbMul: 1, anim: rand(6), ...o,
+    heavy: false, flying: false, boss: false, mats: [], group: new THREE.Group(), lift: 0, kbMul: 1, anim: rand(6),
+    air: false, juggle: 0, bounced: false, spiked: false, downT: 0, getUp: 0, airT: 0, maxH: 0, recoil: 0, kdir: 1, tiltZ: 0, stunBuild: 0, ...o,
   };
-  e.group.position.set(x, y, 0); scene.add(e.group);
+  e.group.rotation.order = 'ZYX'; e.group.position.set(x, y, 0); scene.add(e.group);
   e.parried = () => {
     e.tele = 0;
     if (e.boss) { e.state = 'stunned'; e.st = 0; e.staggerTime = 3; e.vulnerable = 3.2; e.hitDone = false; floatText(e.x, e.y + 7, 'BROKEN!', { color: '#ffd33d', size: 40 }); }
@@ -93,6 +98,21 @@ function buildBrute(x, y, o) {
   for (const l of [e.legF, e.legB]) mk(e, box, 0x38414d, { sx: 0.6, sy: 1.1, sz: 0.55, y: -0.5, parent: l, metal: 0.6 });
   return e;
 }
+function buildDummy(x, y, o) {
+  const e = base('dummy', x, y, { name: 'Training Dummy', w: 1.1, h: 2.2, hp: 99999, hpMax: 99999, poise: 1e9, poiseMax: 1e9, xp: 0, commits: 0, heart: 0, dummy: true, color: 0xd9b36b, home: x, ...o });
+  const g = e.group;
+  e.torso = pivot(g, 0, 1.0, 0);
+  mk(e, cyl, 0x5a4630, { sx: 0.09, sy: 1.05, sz: 0.09, y: -0.5, parent: e.torso });
+  mk(e, new THREE.CylinderGeometry(0.5, 0.42, 1.0, 12), 0xd9b36b, { y: 0.45, parent: e.torso, em: 0x2a1c08, ei: 0.3 });
+  mk(e, new THREE.CylinderGeometry(0.52, 0.52, 0.06, 16), 0xb0392f, { y: 0.55, parent: e.torso, em: 0xb0392f, ei: 0.5 });
+  mk(e, new THREE.CylinderGeometry(0.52, 0.52, 0.06, 16), 0xb0392f, { y: 0.2, parent: e.torso, em: 0xb0392f, ei: 0.5 });
+  e.head = pivot(e.torso, 0, 1.2, 0);
+  mk(e, sph, 0xe6c88a, { sx: 0.33, sy: 0.33, sz: 0.33, parent: e.head, em: 0x2a1c08, ei: 0.3 });
+  mk(e, box, 0xb0392f, { x: 0.3, y: 0.02, sx: 0.04, sy: 0.12, sz: 0.4, parent: e.head, em: 0xb0392f, ei: 0.8 });
+  e.armF = pivot(e.torso, 0, 0.75, 0.55); e.armB = pivot(e.torso, 0, 0.75, -0.55);
+  for (const a of [e.armF, e.armB]) mk(e, cyl, 0x5a4630, { sx: 0.07, sy: 0.6, sz: 0.07, y: -0.2, parent: a });
+  return e;
+}
 function buildBoss(x, y) {
   const e = base('boss', x, y, { name: 'THE LEGACY MONOLITH', w: 3.6, h: 6.2, hp: 1500, hpMax: 1500, poise: 220, poiseMax: 220, xp: 450, commits: 60, heavy: true, boss: true, color: 0xff4d4d, spawnT: 1.9, heart: 0, staggerTime: 2.4 });
   const g = e.group;
@@ -126,7 +146,7 @@ function buildBoss(x, y) {
 export function spawnEnemy(type, x, yOff = 0, o = {}) {
   const gy = groundAt(x);
   const y = type === 'pointer' ? Math.max(gy, 0) + (yOff || 4) : gy;
-  const e = ({ bug: buildBug, pointer: buildPointer, brute: buildBrute, boss: buildBoss }[type])(x, type === 'boss' ? 28 : y, o);
+  const e = ({ bug: buildBug, pointer: buildPointer, brute: buildBrute, boss: buildBoss, dummy: buildDummy }[type])(x, type === 'boss' ? 28 : y, o);
   e.homeY = y;
   G.enemies.push(e);
   if (type === 'boss') { G.boss = e; e.spawnT = 2.2; return e; }
@@ -175,21 +195,40 @@ function physics(e, dt, tm) {
     e.vx = damp(e.vx, 0, 2.5, dt); e.vy = damp(e.vy, 0, 2.5, dt);
     return;
   }
-  e.vy -= (e.lift > 0 ? 8 : 40) * dt;
+  // airborne (launched / juggled / spiked): floaty on the way up, heavy when spiked
+  const g = e.air ? (e.spiked ? 70 : 26 + e.juggle * 4) : (e.lift > 0 ? 8 : 40);
+  e.vy -= g * dt;
+  if (e.air) { e.airT += dt; e.maxH = Math.max(e.maxH, e.y - groundAt(e.x)); }
   const nx = e.x + e.vx * dt;
   // walls: don't walk off pits / up big steps (but knockback can still fling them)
   const here = groundAt(e.x), ahead = groundAt(nx);
   if (ahead > e.y + 0.6 && e.y - here < 0.2 && ahead > -20) { e.vx = 0; if (e.onGround && e.canHop) { e.vy = 10.5; } }
-  else if (ahead < -20 && here > -20 && e.stagger <= 0 && Math.abs(e.vx) < 8) e.vx = 0;
-  e.x = clamp(e.x + e.vx * dt, 1.5, L - 1.5);
+  else if (ahead < -20 && here > -20 && e.stagger <= 0 && !e.air && Math.abs(e.vx) < 8) e.vx = 0;
+  e.x = clamp(e.x + e.vx * dt, 1.5, worldLen() - 1.5);
   e.y += e.vy * dt;
   const gy = groundAt(e.x);
   e.onGround = false;
   if (e.y <= gy) {
-    if (e.vy < -9 && gy > -20) { puff(e.x, gy + 0.1, 4, 0x8b949e, 0.7, 0.4); }
-    e.y = gy; if (e.vy < 0) e.vy = 0; e.onGround = true;
+    const hardHit = e.vy < -9 && gy > -20;
+    if (hardHit) { puff(e.x, gy + 0.1, 4, 0x8b949e, 0.7, 0.4); }
+    e.y = gy;
+    if (e.air && e.spiked && !e.bounced && hardHit) { // ground bounce, once
+      e.bounced = true; e.spiked = false; e.vy = 10.5; e.vx *= 0.4; e.juggle = Math.max(e.juggle, 2);
+      impactFlash(e.x, gy + 0.3, 0xffd9a0, 3.4); decal('crack', e.x, gy, 3.2, 4, 0xffffff);
+      ring(e.x, gy + 0.06, 0.45, 0xe8d2a0, { r0: 0.3, r1: 3.2, dur: 0.4, flat: true }); puff(e.x, gy + 0.2, 8, 0x8b949e, 1.3, 0.7); ripple(e.x, 1.6, 0xe8d2a0, 12, 0.8);
+      shake(0.3); hitstop(0.06); sfx.bounce(); punchFov(2); shockwave(e.x, gy + 0.3, 0.02, 0.4, 0.3);
+      emit('bounce', { e });
+      return;
+    }
+    if (e.vy < 0) e.vy = 0;
+    e.onGround = true;
+    if (e.air) { // touch down: knockdown, then get up
+      e.air = false; e.spiked = false; e.downT = e.heavy ? 0.6 : 0.8; e.getUp = 0; e.stagger = 0;
+      emit('land', { e, t: e.airT, h: e.maxH, juggle: e.juggle });
+      e.juggle = 0; puff(e.x, gy + 0.1, 5, 0x8b949e, 0.9, 0.5);
+    }
   }
-  if (e.onGround) e.vx = damp(e.vx, 0, e.stagger > 0 || e.stun > 0 ? 6 : 1.5, dt);
+  if (e.onGround) e.vx = damp(e.vx, 0, e.stagger > 0 || e.stun > 0 || e.downT > 0 ? 6 : 1.5, dt);
   if (e.y < -18) { e.hp = 0; e.dead = true; scene.remove(e.group); }
 }
 function steer(e, target, dt, tm) { e.vx = damp(e.vx, target * tm, 9, dt); }
@@ -223,7 +262,7 @@ function aiPointer(e, dt, tm) {
   e.st += dt;
   const side = e.side ?? (e.side = e.x < p.x ? -1 : 1);
   if (Math.abs(dx) < 4) e.side = -sign(dx) || 1;
-  const tx = p.x + (e.side ?? side) * 9.5, ty = Math.max(groundAt(clamp(e.x, 2, L - 2)), groundAt(p.x), 0) + (e.hoverY || 4) + Math.sin(G.time * 1.6 + e.anim) * 0.35;
+  const tx = p.x + (e.side ?? side) * 9.5, ty = Math.max(groundAt(clamp(e.x, 2, worldLen() - 2)), groundAt(p.x), 0) + (e.hoverY || 4) + Math.sin(G.time * 1.6 + e.anim) * 0.35;
   e.facing = sign(dx);
   if (e.state === 'idle' || e.state === 'chase') {
     e.state = 'chase';
@@ -267,6 +306,11 @@ function aiBrute(e, dt, tm) {
   } else if (e.state === 'recover') {
     if (e.st * tm > 1.3) { e.state = 'chase'; e.cd = rand(1, 2); }
   }
+}
+
+function aiDummy(e, dt, tm) {
+  const dx = e.home - e.x; e.idleT = (e.idleT || 0) + dt;
+  if (e.idleT > 1.2 && Math.abs(dx) > 0.4) e.vx = damp(e.vx, Math.sign(dx) * 3.2, 8, dt); else if (Math.abs(dx) <= 0.4) e.vx = damp(e.vx, 0, 10, dt);
 }
 
 // ----- boss
@@ -327,7 +371,7 @@ function aiBoss(e, dt, tm) {
     const t = e.st * tm;
     if (t > 0.7 && !e.hitDone) {
       e.hitDone = true; sfx.bossRoar(); shake(0.5); ring(e.x, e.y + 4, 0.5, 0x39d353, { r0: 0.5, r1: 8, dur: 0.6 });
-      for (let i = 0; i < (rage ? 4 : 3); i++) { const sx = clamp(p.x + (i - 1) * 6 + rand(-2, 2), 222, 262); const b = spawnEnemy('bug', sx, 0, { arena: 'boss' }); }
+      for (let i = 0; i < (rage ? 4 : 3); i++) { const sx = clamp(p.x + (i - 1) * 6 + rand(-2, 2), e.bx0 ?? 222, e.bx1 ?? 262); const b = spawnEnemy('bug', sx, 0, { arena: 'boss' }); }
     }
     if (t > 1.6) { e.state = 'idle'; e.hitDone = false; e.cd = 1.8; e.st = 0; e.vulnerable = 1.2; }
   } else if (e.state === 'rain') {
@@ -336,7 +380,7 @@ function aiBoss(e, dt, tm) {
       e.hitDone = true; sfx.telegraph(); e.marks = [];
       const n = 6;
       for (let i = 0; i < n; i++) {
-        const mx = clamp(p.x + (i - (n - 1) / 2) * 4 + rand(-1.2, 1.2), 220, 263);
+        const mx = clamp(p.x + (i - (n - 1) / 2) * 4 + rand(-1.2, 1.2), e.bx0 ?? 220, e.bx1 ?? 263);
         e.marks.push({ x: mx, t: 0.9 + i * 0.12 });
         ring(mx, groundAt(mx) + 0.06, 0.5, RED, { r0: 1.7, r1: 1.7, dur: 0.9 + i * 0.12, flat: true, intensity: 1.4 });
       }
@@ -369,6 +413,17 @@ function animate(e, dt, tm) {
   let cur = g.rotation.y; let d = ry - cur; if (d > Math.PI) d -= 2 * Math.PI; if (d < -Math.PI) d += 2 * Math.PI;
   g.rotation.y = cur + d * (1 - Math.exp(-14 * dt));
   g.position.set(e.x, e.y, 0);
+  // reaction poses: flinch on every hit, tumble while airborne, lie flat when knocked down, then get up
+  if (!e.boss) {
+    const flip = e.kdir || 1;
+    let want = e.recoil * 0.28 * flip;
+    if (e.air && !e.flying) want = clamp(-e.vy * 0.075, -1.1, 1.1) * flip + e.recoil * 0.2 * flip;
+    if (e.downT > 0) want = 1.45 * flip; else if (e.getUp > 0) want = 1.45 * flip * (e.getUp / 0.35);
+    e.tiltZ = damp(e.tiltZ, want, e.downT > 0 || e.getUp > 0 ? 16 : 22, dt);
+    g.rotation.z = -e.tiltZ;
+    g.position.y = e.y + (Math.abs(e.tiltZ) > 0.6 ? Math.min(0.55, e.h * 0.2) * (Math.abs(e.tiltZ) / 1.45) : 0);
+    if (e.spawnT <= 0) g.scale.set(1 + e.recoil * 0.07, 1 - e.recoil * 0.09, 1 + e.recoil * 0.07);
+  }
   // telegraph pulse
   if (e.tele > 0) e.tele -= dt;
   const tele = e.tele > 0 ? (0.5 + 0.5 * Math.sin(t * 35)) : 0;
@@ -405,6 +460,8 @@ function animate(e, dt, tm) {
     else { e.torso.rotation.z = damp(e.torso.rotation.z, e.stagger > 0 ? -0.3 : 0, 10, dt); if (e.state === 'recover') arm = 0.9; }
     e.armF.rotation.z = damp(e.armF.rotation.z, -arm, 18, dt); e.armB.rotation.z = damp(e.armB.rotation.z, arm * 0.6 + w * 0.2, 12, dt);
     e.head.rotation.z = Math.sin(t * 2) * 0.03;
+  } else if (e.type === 'dummy') {
+    e.torso.rotation.z = Math.sin(t * 2 + e.anim) * 0.01;
   } else if (e.type === 'boss') {
     e.torso.position.y = 3.1 + Math.sin(t * 1.2) * 0.08;
     e.head.rotation.z = Math.sin(t * 0.8) * 0.04 + (e.state === 'stunned' ? -0.4 : 0);
@@ -457,11 +514,15 @@ export function updateEnemies(dt) {
     }
     applyStatus(e, dt);
     if (e.dead) continue;
-    const busy = e.stagger > 0 || e.stun > 0;
+    if (e.downT > 0) { e.downT -= dt; if (e.downT <= 0) e.getUp = 0.35; }
+    else if (e.getUp > 0) e.getUp -= dt;
+    if (e.recoil > 0) e.recoil = Math.max(0, e.recoil - dt * 7);
+    const busy = e.stagger > 0 || e.stun > 0 || e.air || e.downT > 0 || e.getUp > 0;
     if (busy && e.state !== 'stunned' && !e.boss) { if (e.state !== 'recover') { e.state = 'idle'; e.cd = Math.max(e.cd, 0.4); } e.tele = 0; }
-    if (!busy && !p.dead) {
-      ({ bug: aiBug, pointer: aiPointer, brute: aiBrute, boss: aiBoss }[e.type])(e, dt, tm);
+    if (!busy && !p.dead && (G.trainAttack !== false || e.dummy)) {
+      ({ bug: aiBug, pointer: aiPointer, brute: aiBrute, boss: aiBoss, dummy: aiDummy }[e.type])(e, dt, tm);
     } else if (!busy && p.dead) e.vx = damp(e.vx, 0, 5, dt);
+    if (e.dummy && busy) e.idleT = 0;
     physics(e, dt, tm);
     animate(e, dt, tm);
     if (e.boss) UI.bossBar(e);

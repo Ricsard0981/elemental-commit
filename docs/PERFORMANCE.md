@@ -64,3 +64,80 @@ Relative render cost per frame (same scene, phone viewport, SwiftShader): **Low 
 ## Still to measure on real hardware
 - Real devices (a mid-range Android and an iPhone) with remote DevTools, checking frame pacing and thermal throttling over a 10-minute run.
 - Whether Medium on modern iPhones can step up to High automatically.
+
+---
+
+# Milestone 2 performance pass (measured on the owner's PC: RX 6600 XT, i5-11400F, 165 Hz, real Chrome)
+
+## What was actually wrong
+The owner saw "large fps drops, ~70 fps". Average frame cost was never the problem: CPU work is ~0.5–1 ms/frame and the GPU
+needs ~2.3 ms/frame at 1080p and 1440p (timer-query ablation below). The drops were **single-frame freezes of 50–500 ms**,
+and the per-frame hitch log (`window.__game.perfStats.hitches`, new) showed that **every one of them was a WebGL shader
+program being compiled mid-game** (ANGLE → D3D11 makes each compile 50–200 ms).
+
+Two root causes:
+1. The boot warm-up only covered a handful of material variants (and the hero for one element).
+2. Worse, `renderer.compile()` compiled against the **canvas** (sRGB output), while everything is drawn into the composer's
+   linear render target. Every warmed program was the wrong variant, so the real one compiled on first use anyway.
+
+## Fixes (kept, with before → after)
+| Change | Before → after | Verdict |
+|---|---|---|
+| `warm.js`: build one of everything (4 heroes, all enemies + boss, every transient effect/projectile/pickup, the Training Grounds, gates) and **render it for real** behind the loading screen; compile against the composer's target (`compileScene`) | runtime shader compiles over a full playthrough of every element/move/mode: **28 → 0**; hitches ≥ 50 ms in that run: 7 → 0 | kept |
+| Re-run the warm-up after a graphics change (behind an "Applying graphics…" overlay) instead of letting the next fight compile | 0 runtime compiles on every preset after a live switch | kept |
+| Hero pooling (a released hero is hidden and reused by the next run of that element, so no clone/bake/upload at run start) | worst frame at run start **497 ms → 42 ms** | kept |
+| Coalesce `resize` events into one reallocation per animation frame and skip unchanged sizes | resize storms (window drag, phone URL bar) no longer reallocate render targets several times per frame | kept |
+| Stop calling `renderer.compile` at every run start (the boot warm-up covers it) | removes a full-scene material walk from the run-start frame | kept |
+
+Worst frame per scenario, headed Chrome, High, 1920×1080 (vsync 165 Hz = 6.1 ms):
+
+| Scenario | Before | After |
+|---|---|---|
+| Run start | 497 ms | 42 ms |
+| Level, standing | 55–73 ms | 6.2 ms |
+| Level, walking | 97–109 ms | 6.3–24 ms |
+| Training combat (6 enemies, all moves + specials) | 60 ms | 18 ms |
+
+## GPU cost ablation (timer queries, median ms per frame, High, combat)
+| | full | no outlines | no shadows | no bloom | no FX pass | no particles | half res |
+|---|---|---|---|---|---|---|---|
+| 1080p | 2.38 | 2.00 | 2.32 | 2.01 | 1.92 | 1.75 | 1.90 |
+| 1440p | 2.21 | 2.20 | 2.09 | 2.08 | 2.16 | 2.15 | 2.18 |
+
+On this GPU nothing is fill-bound; the costs that matter on weaker hardware (phones) are particles, outlines and bloom,
+which is why those are the main knobs of the presets below.
+
+## Considered and not done (measured too small to be worth the complexity)
+| Idea | Measurement | Verdict |
+|---|---|---|
+| Pool ring/slash meshes to avoid per-effect material creation | `getParameters`/`getProgram` ≈ 0.03 ms/frame in heavy combat | not done |
+| Freeze static scene graph matrices | `updateMatrixWorld` ≈ 0.12 ms/frame | not done |
+| Partial particle buffer uploads | peak live glow particles in combat = 5.6k of 7k, so the pool is genuinely used | not done |
+
+## Graphics presets (Settings → Graphics)
+Presets: **Auto, Potato, Low, Medium, High, Ultra**, plus **Advanced** per-option overrides (any change makes it "Custom"),
+and a **frame cap** (Off/30/60/120/144/165/240).
+
+| | Potato | Low | Medium | High | Ultra |
+|---|---|---|---|---|---|
+| Render scale | 70 % | 90 % | 100 % | 100 % | 100 % |
+| Hi-DPI cap | 1× | 1× | 1.25× | 1.5× | 2× |
+| Dynamic resolution | on | on | on | off | off |
+| Shadows | off | off | 1024² PCF | 2048² soft | 4096² soft |
+| Bloom | off | off | half-res | full | full |
+| Anti-aliasing | — | — | — | — | 4× MSAA |
+| Outlines | off | off | on | on | on |
+| Particles | 30 % | 45 % | 75 % | 100 % | 125 % |
+| Hair & capes / hand trails | off / off | low / off | low / short | high / long | ultra / long |
+| Scorch decals, shockwave distortion | off, off | on, off | on, off | on, on | on, on |
+| Flash lights | 1 | 2 | 3 | 5 | 8 |
+| Background detail | low | low | medium | high | ultra |
+
+Every preset was switched live in combat on the RX 6600 XT: 164–165 fps (vsync), worst frame ≤ 18 ms, **0 runtime
+shader compiles**. The frame cap was verified at 30/60/120/144.
+
+## Guard against regressions
+- `perfStats.hitches` records every frame whose own work is > 12 ms, with a per-system breakdown and the names of any
+  shader programs compiled in that frame. **Any entry with `newPrograms > 0` is a bug: add that variant to `warm.js`.**
+- `perfStats.gaps` records frame gaps > 30 ms (work done outside our frame: GC, uploads, the browser).
+- Show FPS now shows fps, the worst frame in the last half second, preset, render resolution, CPU ms and GPU submit ms.

@@ -1,9 +1,10 @@
 import * as THREE from 'three';
 import { G } from './state.js';
-import { scene, glow, dust, sparks, puff, cubes, rgb, ring, slash, flashLight, floatText, shake, punchFov, screenFlash, post, addFx, debrisLit } from './engine.js';
+import { scene, glow, dust, sparks, puff, cubes, rgb, ring, slash, flashLight, floatText, shake, punchFov, screenFlash, post, addFx, debrisLit, impactFlash, decal, shockwave, SPRITE } from './engine.js';
+import { emit } from './events.js';
 import { groundAt, ripple, dyn } from './world.js';
 import { sfx } from './audio.js';
-import { hitBox, hitEnemy, explode, spawnProj, endProj, hitstop, slowmo, later, damagePlayer, enemyBox } from './combat.js';
+import { hitBox, hitEnemy, explode, spawnProj, endProj, hitstop, slowmo, later, damagePlayer, enemyBox, imbueBurst } from './combat.js';
 import { rand, clamp, easeOut, lerp } from './util.js';
 
 // ================================================================= helpers
@@ -471,6 +472,91 @@ const air = {
     },
   },
 };
+
+
+// ================================================================= NEW MOVES (all elements): launcher, air chain, slam
+// Each element gets its own flavour through MOVE_FX; the hitboxes/juggle rules are shared.
+const colOf = (p) => p.el.color, col2Of = (p) => p.el.color2;
+const SPRITE_OF = { fire: SPRITE.streak, water: SPRITE.drop, earth: SPRITE.chip, air: SPRITE.leaf };
+const MAIN_EXTRA = {
+  fire: { burn: 2, burnDps: 7 }, water: { chill: 1.8 }, earth: { poise: 45 }, air: {},
+};
+function column(p, x, h, color, color2, n = 16) { // rising particle pillar
+  const gy = groundAt(x), a = rgb(color, 1.9), b = rgb(color2, 1.8);
+  for (let i = 0; i < n; i++) glow.emit(x + rand(-0.5, 0.5), gy + rand(0, h * 0.5), rand(-0.4, 0.4), rand(-1, 1), rand(7, 16), 0, Math.random() < 0.5 ? a : b, rand(0.35, 0.7), 0, rand(0.3, 0.5), -2, 1, 0);
+}
+const launcherFx = {
+  fire(p, x) { column(p, x, 4, 0xff6a2b, 0xffc233, 22); for (let i = 0; i < 10; i++) glow.emit(x + rand(-0.6, 0.6), groundAt(x) + 0.2, rand(-0.3, 0.3), rand(-2, 2), rand(8, 15), 0, rgb(0xffc233, 1.8), 0.4, 0, 0.5, -1, 0, SPRITE.streak); decal('scorch', x, groundAt(x), 3, 5, 0xffffff); flashLight(x, groundAt(x) + 1.5, 2, 0xff6a2b, 60, 0.35); },
+  water(p, x) { column(p, x, 4, 0x2ea8ff, 0x9fe8ff, 12); for (let i = 0; i < 16; i++) glow.emit(x + rand(-0.5, 0.5), groundAt(x) + 0.3, rand(-0.4, 0.4), rand(-3, 3), rand(9, 17), 0, rgb(0xcfeeff, 1.7), 0.35, 0.15, 0.7, 14, 0, SPRITE.drop, rand(-3, 3)); decal('puddle', x, groundAt(x), 3.2, 6, 0xffffff); flashLight(x, groundAt(x) + 1.5, 2, 0x2ea8ff, 55, 0.35); },
+  earth(p, x) { // a rock pillar bursts up and falls back
+    const gy = groundAt(x), m = new THREE.Mesh(new THREE.BoxGeometry(1.5, 1, 1.3), new THREE.MeshStandardMaterial({ color: 0x8a6a45, roughness: 0.85, flatShading: true }));
+    m.castShadow = true; scene.add(m); let t = 0;
+    addFx((dt) => { t += dt; const k = Math.min(1, t / 0.12), fall = t > 0.3 ? Math.min(1, (t - 0.3) / 0.25) : 0, h = 3.2 * easeOut(k) * (1 - fall * fall);
+      m.scale.set(1, Math.max(0.01, h), 1); m.position.set(x, gy + h / 2, 0); if (t >= 0.55) { scene.remove(m); m.geometry.dispose(); return false; } return true; });
+    cubes(x, gy + 0.5, 0xb98a4e, 12, 9, 0.35); puff(x, gy + 0.2, 8, 0x8b949e, 1.4, 0.7); decal('crack', x, gy, 3.2, 6, 0xffffff); ripple(x, 1.6, 0xc08a4b, 14, 0.8); flashLight(x, gy + 1.5, 2, 0xe0b070, 50, 0.3);
+  },
+  air(p, x) { const gy = groundAt(x); for (let i = 0; i < 5; i++) later(i * 0.04, () => ring(x, gy + 0.3 + i * 0.75, 0.3, i % 2 ? 0x7ff3d6 : 0xcfe9ff, { r0: 0.5, r1: 1.5 - i * 0.08, dur: 0.3, flat: true, intensity: 1.5 }));
+    for (let i = 0; i < 18; i++) glow.emit(x + rand(-0.8, 0.8), gy + rand(0, 1), rand(-0.5, 0.5), rand(-2, 2), rand(10, 18), 0, rgb(0xcfe9ff, 1.5), 0.3, 0.1, 0.5, -2, 1, SPRITE.leaf, rand(-6, 6)); decal('wind', x, gy, 3, 3, 0xffffff); flashLight(x, gy + 1.5, 2, 0xcfe9ff, 45, 0.3); },
+};
+export function launcherStrike(p) {
+  const f = p.facing, k = p.key, c = colOf(p);
+  const x0 = f > 0 ? p.x - 0.3 : p.x - 2.7, x1 = f > 0 ? p.x + 2.7 : p.x + 0.3, fx = p.x + f * 1.5;
+  slash(fx - f * 0.3, p.y + 1.2, f, col2Of(p), { radius: 3.1, angle: 2.4, rot: 0.55, flip: 1, dur: 0.26, sweep: 2.1 });
+  sfx.swing(k, 1, 'launcher'); launcherFx[k](p, fx);
+  ring(fx, groundAt(fx) + 0.06, 0.4, c, { r0: 0.3, r1: 3, dur: 0.4, flat: true });
+  const dmg = { fire: 16, water: 13, earth: 22, air: 12 }[k];
+  const hit = hitBox(x0, x1, p.y - 0.3, p.y + 3.4, dmg, { kind: 'main', dir: f, launch: 17, kx: 1.5, ky: 0, big: true, color: c, hitstop: 0.075, shake: 0.28, ...MAIN_EXTRA[k] });
+  p.vy = Math.max(p.vy, 7); p.onGround = false; p.y += 0.03; p.squash = -0.3;
+  if (hit.length) { imbueBurst(p, fx, p.y + 1.4); punchFov(2); }
+  emit('launcher', { hits: hit.length });
+}
+export function airStrike(p, i) {
+  const f = p.facing, k = p.key, c = colOf(p), cx = p.x + f * 1.3, cy = p.y + 1.1, spike = i === 2;
+  slash(cx, cy, f, spike ? col2Of(p) : c, { radius: spike ? 3 : 2.6, angle: 2.4, rot: spike ? -0.9 : (i ? 0.3 : -0.3), flip: i === 1 ? -1 : 1, dur: 0.2, sweep: spike ? -2.2 : 1.7 });
+  sfx.swing(k, i);
+  sparks(cx + f, cy, c, 7, 7, 0.2, 0.35, f, 1, SPRITE_OF[k]);
+  const dmg = [{ fire: 9, water: 8, earth: 13, air: 7 }, { fire: 9, water: 8, earth: 13, air: 7 }, { fire: 14, water: 12, earth: 20, air: 11 }][i][k];
+  const hit = hitBox(f > 0 ? p.x - 0.4 : p.x - 2.6, f > 0 ? p.x + 2.6 : p.x + 0.4, p.y - 0.9, p.y + 2.4, dmg, { kind: 'main', dir: f, lift: !spike, spike, kx: spike ? 1.5 : 2.5, ky: 0, color: c, big: spike, ...MAIN_EXTRA[k] });
+  if (spike && hit.length) { imbueBurst(p, cx, cy - 0.5); punchFov(2.5); shake(0.3); }
+  emit('airSwing', { i, hits: hit.length });
+}
+const slamFx = {
+  fire(x, gy) { for (let i = 0; i < 26; i++) glow.emit(x + rand(-1.5, 1.5), gy + 0.1, rand(-0.5, 0.5), rand(-9, 9), rand(2, 10), 0, rgb(Math.random() < 0.5 ? 0xff6a2b : 0xffc233, 1.9), rand(0.4, 0.8), 0, 0.5, 6, 1); decal('scorch', x, gy, 4.4, 8, 0xffffff); },
+  water(x, gy) { for (let i = 0; i < 28; i++) glow.emit(x + rand(-1, 1), gy + 0.2, rand(-0.5, 0.5), rand(-8, 8), rand(4, 12), 0, rgb(0xcfeeff, 1.7), 0.35, 0.15, 0.7, 16, 0, SPRITE.drop, rand(-3, 3)); decal('puddle', x, gy, 4.6, 8, 0xffffff); },
+  earth(x, gy) { cubes(x, gy + 0.4, 0xb98a4e, 22, 11, 0.4); puff(x, gy + 0.3, 12, 0x8b949e, 1.8, 0.9); decal('crack', x, gy, 5, 9, 0xffffff); },
+  air(x, gy) { for (let i = 0; i < 28; i++) { const a = rand(Math.PI); glow.emit(x, gy + 0.2, rand(-0.5, 0.5), Math.cos(a) * rand(6, 14) * (Math.random() < 0.5 ? -1 : 1), rand(1, 5), 0, rgb(0xcfe9ff, 1.6), 0.3, 0, 0.5, 0, 2, SPRITE.leaf, rand(-6, 6)); } decal('wind', x, gy, 4.4, 5, 0xffffff); },
+};
+export function slamImpact(p) {
+  const x = p.x, gy = groundAt(x), k = p.key, c = colOf(p);
+  sfx.slam(k); shake(0.6); punchFov(4); post.aberr = Math.max(post.aberr, 0.008);
+  ring(x, gy + 0.06, 0.5, c, { r0: 0.4, r1: 7, dur: 0.55, flat: true, intensity: 2 }); ring(x, gy + 0.7, 0.5, 0xffffff, { r0: 0.3, r1: 3.4, dur: 0.3 });
+  slamFx[k](x, gy); impactFlash(x, gy + 0.4, c, 4.5); ripple(x, 2.6, c, 16, 1.2); flashLight(x, gy + 1, 2, c, 80, 0.4); shockwave(x, gy + 0.5, 0.04, 0.55, 0.45);
+  const base = { kind: 'main', color: c, bounce: true, big: true, hitstop: 0.07, ...MAIN_EXTRA[k] };
+  for (const d of [-1, 1]) groundWave(x, d, { len: 6.5, speed: 15, dmg: 13, color: c, kx: 5, ky: 0, hitOpts: base });
+  explode(x, gy + 0.6, 3.1, { fire: 16, water: 13, earth: 22, air: 12 }[k], { ...base, kx: 6, ky: 0, noGround: true, shake: 0 });
+  imbueBurst(p, x, gy + 1);
+  emit('slam', { x });
+}
+// attach to the elements: clips for the ground combo + launcher / air chain / slam timings
+const SPD = { fire: 1, water: 1.1, earth: 1.4, air: 0.85 };
+const CLIPS = {
+  fire: ['Punch_Jab', 'Sword_Attack', 'Sword_Attack'],
+  water: ['Sword_Attack', 'Punch_Jab', 'Sword_Attack'],
+  earth: ['Punch_Cross', 'Punch_Jab', 'Sword_Attack'],
+  air: ['Punch_Jab', 'Sword_Attack', 'Punch_Cross'],
+};
+for (const el of [fire, water, earth, air]) {
+  const k = el.key, s = SPD[k];
+  el.main.hits.forEach((h, i) => { h.clip = CLIPS[k][i]; });
+  el.main.launcher = { clip: 'Punch_Cross', dur: 0.46 * s, hitAt: 0.11 * s, cancelAt: 0.28 * s, lunge: 1, strike: launcherStrike };
+  el.main.air = { strike: airStrike, hits: [
+    { clip: CLIPS[k][0], dur: 0.32 * s, hitAt: 0.08 * s, cancelAt: 0.2 * s, lunge: 2.5 },
+    { clip: CLIPS[k][1], dur: 0.32 * s, hitAt: 0.08 * s, cancelAt: 0.2 * s, lunge: 2.5 },
+    { clip: 'Sword_Attack', dur: 0.46 * s, hitAt: 0.15 * s, cancelAt: 0.34 * s, lunge: 1 },
+  ] };
+  el.main.slam = { clip: 'Jump_Loop', windup: 0.1, dur: 0.5, strike: slamImpact };
+  el.main.desc += ' Up + Attack launches, Attack in the air chains, Down + Attack slams.';
+}
 
 export const ELEMENTS = { fire, water, earth, air };
 export const KEYS = ['fire', 'water', 'earth', 'air'];
