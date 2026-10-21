@@ -141,3 +141,8 @@ shader compiles**. The frame cap was verified at 30/60/120/144.
   shader programs compiled in that frame. **Any entry with `newPrograms > 0` is a bug: add that variant to `warm.js`.**
 - `perfStats.gaps` records frame gaps > 30 ms (work done outside our frame: GC, uploads, the browser).
 - Show FPS now shows fps, the worst frame in the last half second, preset, render resolution, CPU ms and GPU submit ms.
+
+## Update after the Combat Lock drop
+- New transient effects (boss shield sphere, colossal meteor/mountain meshes, new projectiles) reuse already-warmed material variants. Not every new effect has been re-profiled on a real GPU.
+- Open item: a scripted run that switches elements several times in one page (`startTraining` water → earth → air) still logs a few new shader programs on first use. It is identical before the drop and the normal flow was clean; cause not found.
+- Frame-rate numbers in this file predate the Combat Lock drop: **OUTDATED until re-measured** (iPhone 13 and the owner's PC).

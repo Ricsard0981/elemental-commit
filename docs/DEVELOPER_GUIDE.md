@@ -5,6 +5,11 @@
 
 ---
 
+> **Status (Combat Lock drop).** This guide was first written at the end of Milestone 2. Sections marked **(updated)** were
+> rewritten after the Combat Lock drop; the rest is still accurate. The list of facts that used to be true and no longer are is in
+> **§11 Superseded facts**. The combat rules themselves live in [`COMBAT_LOCK.md`](COMBAT_LOCK.md), the research and roadmap in
+> [`NEXT_STEPS.md`](NEXT_STEPS.md).
+
 ## 0. The pitch, in one breath
 
 A side-view **3D** action game in the browser. You pick an element (**Fire, Water, Earth, Air**), and each element is a
@@ -105,6 +110,17 @@ The punchline: the boot warm-up was compiling **the wrong variant** of every sha
 The fix was a real warm-up: build one of everything and render it for real, behind the loading screen. Runtime compiles
 went from 28 to 0. The same drop added **graphics tiers** (Potato → Ultra), per-option overrides and a frame cap.
 Full numbers are in [`PERFORMANCE.md`](PERFORMANCE.md), part 2.
+
+### 1.8 The Combat Lock drop
+The owner asked for a principal-engineer pass on combat: make it reliable, make it feel physical, make the elements feel different.
+It shipped as one drop in five phases (A control, B feedback and audio, C enemies and boss, D progression and element identity,
+E dev tools), plus three rounds of owner feedback after playtesting:
+- *"Each element should feel DIFFERENT"* → per-element tempo/power profiles and signatures, and a colossal ability option for each
+  (Solar Flare, Leviathan, Mountainfall, Maelstrom).
+- *"The skill tree is weak"* → numbers were bumped first, which missed the point. The real complaint was that no node was worth a point.
+  The tree was rebuilt so the first node of every branch is a **new move**.
+- The research that drove this (feedback timing, hit-stop, parry windows, attack tokens, Spider-Man 2 progression) is summarised in
+  `COMBAT_LOCK.md` and `NEXT_STEPS.md`.
 
 ### 1.7 Small stuff since
 - `ad6c636`: the Training Grounds select screen was dead on first visit. Its buttons called handlers that only got set
@@ -274,25 +290,35 @@ How a hero is put together:
 
 There's a procedural fallback: the old capsule character in `Player.buildLegacy()`. It's used if the GLBs fail to load.
 
-### 4.4 The player controller (`player.js`)
+### 4.4 The player controller (`player.js`) (updated)
 - **States:** `free`, `attack`, `cast`, `dash`, plus `guarding` and `stun` flags.
-- **Input buffering:** buffers last 0.14–0.22 s and work even during hit-stop. Coyote time is 0.1 s. Variable jump
-  height. Double jump, and a triple jump through a skill. A dash with i-frames and one air dash. Hold Down to drop
-  through slabs.
-- **Attack kinds** are picked in `startAttack()` from where you are and what you're holding:
+- **Input buffering (updated):** buffers run on **real** time (`G.rdt`), so hit-stop and slow-mo don't stretch them: main .16 s, jump .14,
+  dash .16, specials .16, ranged .12, guard .09. The **oldest** buffered press that can start wins. Up/Down/direction are latched when
+  Main is pressed. A real hit taken clears every buffer. Coyote time 0.1 s, variable jump height, double jump, a dash with i-frames
+  and one air dash. Hold Down to drop through slabs.
+- **Attack kinds** are picked in `startAttack()`:
   - **ground:** the element's 3-hit combo, chained inside the cancel window.
-  - **launcher (Up + Attack):** pops the enemy up and gives you a small hop. Jump in the cancel window to follow it.
-  - **air (Attack in the air):** a 3-hit chain with **air stall** (gravity × 0.1, fall speed capped while swinging).
-    The 3rd hit **spikes**. You get 6 air swings until you land, so there's no infinite hover.
-  - **slam (Down + Attack in the air):** hover wind-up, dive at -42, hit everything on the way down, then on landing an
-    element shockwave and everything nearby bounces off the floor.
-- **Guard:** a perfect-parry window that starts at 0.22 s and grows with skills, plus element-specific reduction and
-  knockback.
-- **Collision:** axis-separated AABB against the column solids from `solidsNear()`. Steps up to 0.6 are auto-climbed.
+  - **launcher (Up + Attack):** pops the enemy up. Jump in the cancel window to follow it.
+  - **air (Attack in the air):** a 3-hit chain with **air stall**. 6 air swings until you land.
+  - **slam (Down + Attack in the air):** hover wind-up, dive, shockwave, bounce.
+  - **dashStrike (new):** Attack during or within 0.3 s after a Dash, if the Dash Strike node is owned (see §4.8).
+  - Changing kind resets the combo counters.
+- **Attack timeline (new):** startup → contact (`hitAt`) → active window (0.07 s, one hit per enemy per swing, recorded in `atk.hit`)
+  → recovery with a cancel point (`cancelAt`). The animation clip is started at an offset so its peak lands on `hitAt`
+  (`CLIP_PEAK` in `hero.js`). Swing duration is multiplied by the element profile.
+- **Getting hit (new):** interrupts attack/cast/slam, plays the hit clip, clears buffers. Exception: **Stonewill**, and Earth's armoured
+  finisher / Shoulder Charge, keep swinging during the wind-up.
+- **Guard (updated):** tap or hold. Perfect-parry window `0.18 s × (1 + parry mods)`. Every extra press within 0.5 s shrinks it by 30 %
+  (floor 30 %). A perfect parry opens a 0.45 s **counter window** (next main hit ×1.5 damage, ×2 poise). A block grants 0.12 s of
+  i-frames so one attack cannot be blocked twice.
+- **Charged Shot (new):** with the node owned, holding Ranged charges (0.7 s) and releasing fires the element's big shot. A tap still fires
+  the normal shot at once, and holding no longer auto-repeats.
+- **Element profile (new):** `ELEMENTS[key].prof` sets swing time, damage, poise, hit-stop, run speed, dash, jumps and fall (see §4.6).
+- **Collision:** axis-separated AABB against `solidsNear()`. Steps up to 0.6 are auto-climbed.
 
 ### 4.5 Combat (`combat.js`)
 `hitEnemy(e, base, opts)` is the heart of the game. In order:
-1. **Damage.** Base × skills × buffs × crit (10 %, ×1.75) × situational bonuses (frostbite, crushing, vulnerable).
+1. **Damage (updated).** Base × skills × buffs × **element profile** × crit (10 %, ×1.75) × situational bonuses (brand +40 %, frostbite +45 %, crushing +80 %, vulnerable), then ×0.3 on the phase-2 boss shield.
 2. **Knockback.** Heavies resist until they're staggered. Then poise and stagger.
 3. **Statuses.** Burn, chill, stun.
 4. **Resonance imbue**, on main attacks only:
@@ -306,14 +332,13 @@ There's a procedural fallback: the old capsule character in `Player.buildLegacy(
      heavier as the count goes up. After 6 hits, no more lift.
    - `spike` sends them down at -28, then they bounce once. `bounce` slams grounded enemies so they bounce too.
 6. **Feedback.**
-   - Hit-stop of 45–85 ms scaled by weight, camera shake.
-   - Directional sparks with an element sprite, an impact starburst, a micro FOV punch on main hits, a damage number.
-   - Sound, with the pitch rising as the combo grows. Haptics.
+   - **(updated)** All of it comes from one `FEEDBACK` table (hit-stop, shake, FOV, aberration per kind: light … slam, parry, kill). Hit-stop is capped at 0.3 s and overlapping stops extend, never stack. Shake is spent from a per-frame budget.
+   - The victim vibrates during hit-stop. Directional sparks, an impact starburst, a damage number. Sound by kind and material. Haptics.
+   - Skill nodes that change a hit announce themselves with a throttled floating label (`proc()`).
 7. **Bookkeeping.** Combo, energy gain, `emit('hit')`. Dummies refill their HP; everyone else checks for death.
 
 Also in `combat.js`:
-- `damagePlayer()`: block, parry or real hit. **Perfect parry** stacks hit-stop 160 ms, slow-mo 0.22, a big aberration,
-  a shockwave, rings and +25 energy, and staggers the attacker or reflects the projectile.
+- `damagePlayer()` (updated): block, parry or real hit; it emits `playerHit` for every outcome. **Perfect parry**: hit-stop 0.22 s, slow-mo 0.22, a big aberration, rings, +25 energy, staggers the attacker or reflects the projectile, and fires the Riposte counter if that node is owned. The boss can be parry-broken once, then resists for 8 s.
 - Projectiles: homing, gravity, pierce, deflect and reflect.
 - Commit pickups with a magnet and a rising-pitch chain sound. Hearts.
 - XP and level-ups.
@@ -334,35 +359,53 @@ The four new moves share hitboxes and juggle rules, and get their flavour from s
 
 `groundWave()` and `melee()` helpers live here too, and the enemies use `groundWave` as well.
 
-### 4.7 Enemies (`enemies.js`)
-| Enemy | Role |
-|---|---|
-| **Bug** | melee lunge |
-| **Null Pointer** | flying caster with parry-able orbs |
-| **Legacy Bot** | heavy brute: telegraphed smash plus a ground wave |
-| **Dummy** | training only: infinite HP, walks home |
-| **THE LEGACY MONOLITH** | boss: slam, barrage, summon, falling blocks; a rage phase at 50 % |
+**Element profiles (new).** `prof: { atk, dmg, poise, hs, move, dash, jump, jumps, fall, grav }`:
+| Element | Swing | Damage | Run | Dash cooldown | Signature |
+|---|---|---|---|---|---|
+| Fire | ×0.82 | ×1.0 | ×1.08 | 0.8 s | swings up to 22 % faster as the combo grows |
+| Water | ×0.86 | ×1.12 | ×1.10 | 0.65 s | dash chills enemies it passes and cancels any swing |
+| Earth | ×1.38 | ×2.0 | ×0.86 | 1.15 s | armoured 3rd hit, hit-stop ×1.35, poise ×1.8 |
+| Air | ×0.64 | ×0.68 | ×1.28 | 0.5 s | 3 jumps, floaty fall, hit-stop ×0.7 |
+Damage multipliers are a design target, not a measured balance.
 
-How they're built and how they behave:
-- **Construction:** procedural primitives (`mk()`) with toon materials and hard outlines.
-- **AI:** a per-type function gated by `busy`. Busy means staggered, stunned, airborne, knocked down or getting up, and
-  in the sandbox also "attack-back is off".
+**`MOVES` (new).** At the bottom of `elements.js`: per element `dashStrike(p)`, `charged(p, aim)`, `riposte(p, enemy)` and `dsCfg` (the
+Dash Strike's timing). `player.js` dispatches the first two, `combat.js` the third (from `perfectParry`). **Colossal abilities**: Solar Flare
+(Meteor), Leviathan (Tidal Wave), Mountainfall (Quake) and Maelstrom (Cyclone) are flags checked inside those casts.
+
+### 4.7 Enemies (`enemies.js`) (updated)
+| Enemy | Role | Tell | Counterplay |
+|---|---|---|---|
+| **Bug** (22 HP) | flanker | 0.54 s crouch + lunge arrow; pounce 0.6 s when there are several | dodge, punish the 0.8 s vulnerable window |
+| **Null Pointer** | sniper | 0.9 s charge, aim line locks at 0.65 s, orb speed 9, max 2 orbs alive | break line of sight; parry/deflect |
+| **Legacy Bot** | armoured bruiser | 1.0 s wind-up with a floor danger ring, hyper-armour while winding up | parry or slam; 1.5 s recovery (poise ×1.6) |
+| **Dummy** | training only | | |
+| **THE LEGACY MONOLITH** | boss | per attack | two real phases (below) |
+
+- **Encounter director:** one melee, one ranged and one heavy attack token (`takeToken`/`giveToken`). Token-less enemies circle at ring
+  distance. No attacks while off-screen (>8.4 m from the camera) or while you are in hit-stun. Chill slows tells with the enemy.
+- **Boss:** phase 1 = slam → barrage → slam → summon. Phase 2 (entered once, with a shield) = sweep, double-wave slam, barrage, falling
+  blocks, summon. The shield takes ×0.3 damage and ×2 poise; a poise break stuns once per 6 s and drops it. The first parry breaks it,
+  then it resists for 8 s. It is immune to bounce and launch. The body check is a timed shove, not per-frame contact damage.
+- **Construction:** procedural primitives (`mk()`), toon materials and hard outlines.
+- **AI:** a per-type function gated by `busy` (staggered, stunned, airborne, knocked down, getting up, or "attack-back is off").
 - **Airborne states:** launched → juggled → spiked → ground bounce (once) → knockdown (0.6–0.8 s) → get-up (0.35 s).
-  Gravity is floaty going up (26 + 4 per juggle hit) and heavy when spiked (70).
-- **Reactions:** a flinch tilt and squash on every hit, tumbling in the air, lying flat when knocked down. The group
-  uses Euler order `ZYX`, so the tilt is in world space whichever way they face.
-- **Arena bounds:** the boss reads `bx0`/`bx1` for its rain and summon spots, so it works in the Training Grounds too.
+- **Reactions:** flinch tilt and squash, tumbling in the air, lying flat when knocked down (Euler order `ZYX`).
+- **Arena bounds:** the boss reads `bx0`/`bx1`, so it works in the Training Grounds too.
 
-### 4.8 Skills and the save (`skills.js`)
-- **Trees:** 4 branches × 3 tiers per element. The 4th branch is **Resonance**:
-  - **Attunement:** opens the secondary-element picker.
-  - **Harmony:** stronger imbue.
-  - **Convergence:** finishers also detonate the secondary element.
-- **Points:** you get one per level. The level cap is 16, which is enough to buy all 12 nodes.
-- `computeMods()` folds the owned nodes into `player.mods` (numbers add, booleans OR), then resolves `resKey`.
-- **Save:** `localStorage['elemental-commit-save-v1']` holds `{ prog: { [el]: { level, xp, owned[], res } },
-  best: { [el]: { score, rank } }, train: { endless, 'trial:t1'.. } }`. Settings are separate, in
-  `'elemental-commit-settings-v1'`.
+### 4.8 Skills and the save (`skills.js`) (rewritten)
+- **Trees:** per element, 3 mechanic branches + **Resonance**, 3 tiers each (ids `f1`..`f9`, `fr1`..`fr3` etc.).
+  - **Tier 1 of every mechanic branch is a new move**: *Dash Strike* (branch 1), *Charged Shot* (branch 2), *Riposte* (branch 3), each unique per element.
+  - **Tier 2** is a bundled power node (two old effects in one).
+  - **Tier 3** is a mastery. Branch 2's is an **either/or fork** (`forks: [...]`, picked in a modal, re-pickable while owned): Armageddon / Solar Flare,
+    Leviathan / Undertow, Crushing Weight / Mountainfall, Stormcaller / Maelstrom.
+  - **Resonance:** Attunement (secondary-element picker), Harmony, Convergence.
+- **Tempering:** a shared stat track (`TEMPER`: Vitality, Reservoir, Edge, Swiftness, Focus; 3 ranks each, 1 point per rank). Stats are not in the branches.
+- **Points:** one per level, cap **24**. Everything costs 1 point except tier 3 (2). Branches total 15, Tempering up to 15 more: you cannot own everything.
+- `computeMods(el, owned, res, temper, forks)` folds everything into `player.mods` (numbers add, booleans OR).
+- **Save:** `localStorage['elemental-commit-save-v1']`, **save version 3**: `{ v, prog: { [el]: { level, xp, owned[], res, temper{}, fork{} } }, best, train }`.
+  Version bumps refund owned nodes (points derive from level, so nothing is lost) and keep level, XP, Resonance and records.
+  Settings are separate, in `'elemental-commit-settings-v1'`.
+- **Skill UI:** `renderTree()` in `ui.js` shows a NEW MOVE tag on tier-1 nodes, the fork picker (`openForkPicker`) and the Tempering row.
 
 ### 4.9 The level (`world.js`)
 - **Lane:** `laneH[]` holds one height per column (`null` is a pit), written by tiny helpers (`flat`, `ramp`, `pit`).
@@ -378,10 +421,9 @@ How they're built and how they behave:
   - Instanced trees, rocks, grass tufts (they bend when an impact ripple passes) and flowers.
   - Instanced magenta/cyan **Corruption crystals** that snap-jitter, plus floating shards.
 - **Sandbox:** 3 dummies, a **DPS meter** (5 s window, total, max combo, last hit, juggle hits/height/time and best), a
-  spawner for every enemy and the boss, toggles (enemies attack back, infinite energy, no cooldowns), an element
+  spawner for every enemy and the boss, toggles (enemies attack back, infinite energy, no cooldowns, **Combat debug**), an element
   switch, and a Resonance switch at max tier.
-- **Endless Waves:** a budget per wave (`2 + 1.7 × wave`), brutes from wave 4, a double brute every 5th wave, a score
-  multiplier from combo and wave, the best score saved.
+- **Endless Waves (updated):** waves are composed by **role** (`waveList(n)`): bugs `min(6, 2 + n/2)`, pointers from wave 3, a brute on even waves from 4 and an extra one every 5th. A score multiplier from combo and wave, the best score saved.
 - **Combo Trials:** eight trials written as data, `{ steps: [{ text, ev, test }] }`, driven by bus events. There's a
   per-step timeout, and a trial resets if the dummy lands mid-juggle. The first clear of each gives 40 XP.
 - **The Lab panel:** a DOM dock on the right. It's collapsible and starts collapsed on touch devices.
@@ -406,20 +448,18 @@ Mouse: left click attacks, right click fires ranged and aims at the cursor.
 My test scripts drive the game through the same virtual inputs. That's much more reliable than real key presses when
 the frame rate is low.
 
-### 4.12 Audio (`audio.js`)
-Everything is WebAudio oscillators and filtered noise, run through a compressor, a **low-pass that dips during
-slow-motion**, and a short convolution reverb whose impulse is generated noise.
+### 4.12 Audio (`audio.js`) (updated)
+Everything is WebAudio oscillators and filtered noise, through a master **limiter**, a **low-pass that dips during slow-motion**, a short
+convolution reverb whose impulse is generated noise, and fake ducking on big events.
 
-- **Hits** are layered: a transient click, a noise body, a pitch-dropping "thump" and a sub thump on big hits. Crits
-  add a bell and a sparkle arpeggio. Dummies sound like wood.
-- **Moves** have their own sounds: element-specific whooshes, a launcher "whoomph", a rising chime per air hit, a spike
-  whistle-thud, a ground-bounce boom, element slam tails, and a parry made of a crystalline bell stack, a sub drop and
-  a shimmer.
-- **Voice throttling:** low-priority layers drop when more than 44 voices started in the last 140 ms.
-- **Music:** generative. A minor-pentatonic arp over a pad, with a kick/snare/bass/hat groove in combat and a heartbeat
-  at low HP. There's ambient wind, and birds in the arena.
-
-Honest note: the M2 audio was designed carefully but **never actually listened to by its author**. Tune by ear.
+- **Hits** are `transient + body + tail` (80–150 ms), coloured by element and material (flesh / metal / wood), with a combo pitch rise of at
+  most 7 semitones and ±1–2 semitones of random variance. `sfx.hit(kind, combo, material)` takes the same kinds as `FEEDBACK`.
+- **Enemy tells:** each enemy has its own telegraph sound (bug, pointer, bot, boss, summon). Enemy shots differ from the player's fireball.
+- **Moves:** element whooshes, launcher, air hits, spike, bounce, slam tails, a stagger "crack", a parry made of a bell stack and a sub drop.
+- **Voice control:** a per-sound retrigger floor and max plays per 250 ms (`GATE` table).
+- **Music:** generative. A minor-pentatonic arp over a pad, a combat groove, a heartbeat at low HP, ambient wind.
+- **Measured, not heard:** `audio._record(ms)` renders to WAV (offline). Light hit ≈ −9 dB peak, heavy ≈ −2 dB, parry ≈ −1 dB, no clipping.
+  **Nobody has listened to it on headphones yet.** No sampled audio was added.
 
 ### 4.13 Settings and graphics tiers (`settings.js`, `settingsUI.js`)
 - **Presets:** Auto, Potato, Low, Medium, High, Ultra. Each is a set of **tiers**. `deriveQuality()` turns tiers into
@@ -493,6 +533,7 @@ The optimisation scripts used gltf-transform and live outside the repo. To redo 
   - Take cropped screenshots around the player for look reviews.
   - Sample rAF timestamps for frame pacing.
   - For shader work, list `renderer.info.programs` before and after.
+- **Combat debug (new):** Lab → *Combat debug* shows attack phase, contact and cancel times, buffers, guard time vs parry window, hit-stop, time scale, tokens and each enemy's state/tell/poise. `__game.dbg()` returns the same as JSON; the event bus emits `playerHit {result, amount}`.
 - **Lesson learned:** test the UI by **clicking it**, not by calling the function the button calls. That's exactly how
   the dead Training Grounds buttons slipped through.
 
@@ -503,6 +544,10 @@ The optimisation scripts used gltf-transform and live outside the repo. To redo 
 **…add an enemy?** Write `buildX(x, y, o)` with `base('x', …)` and `mk()` parts. Add an `aiX(e, dt, tm)` function. Then
 register it in the two type tables in `spawnEnemy()` and `updateEnemies()`, give it an `animate` branch, and add it to
 the warm-up list in `warm.js` and to the sandbox spawner chips in `training.js`.
+
+**…add a skill node or a new move?** Add an `n(id, branch, tier, name, desc, fx)` entry to `SKILLS[el]` in `skills.js`. `fx` booleans/numbers land in
+`player.mods`; check the flag where it matters (`combat.js`, `elements.js`, `player.js`). A description starting `NEW MOVE: ` gets the tag in the tree. Show a
+`proc('NAME', x, y)` label when it fires. A new *kind* of attack goes through `startAttack()` and `MOVES[key]`. If you change what an existing id means, bump the save version.
 
 **…add or change an ability?** Edit the element object in `elements.js`. Numbers live next to the `cast` and `strike`
 functions. If the ability creates a material with a *new* parameter combination, add a matching mesh in `warm.js`.
@@ -520,28 +565,45 @@ body is about 3 % smaller.
 
 ---
 
-## 9. Known issues and debt (the honest list)
-- **The combat pose layer needs a polish pass** at full frame rate. It was tuned from still frames.
-- Hands are open palms, because finger tracks were dropped to save size.
-- The iPhone 13 hasn't been re-measured since M2. It needs a real device session with Show FPS on.
-- The M2 audio was never heard by its author.
-- The arena's prop density is fixed at boot, so changing "Background detail" only affects the level until a reload.
-- Particle pools resize on preset change, but the hero pool and warm-up are the slow part of a switch (about 0.5 s
-  behind the overlay).
-- `main.js` still owns too much: story arenas, training lifecycle, the frame loop. It will want splitting when the
-  world overhaul lands.
+## 9. Known issues and debt (the honest list) (updated)
+- **Not verified on an iPhone 13** since Milestone 2, and the Combat Lock drop was never tested there at all.
+- **The audio has been measured but never heard** by its author.
+- **Damage balance between elements is a design target** (the `prof` multipliers), not a measured result.
+- **Colossal abilities and the 12 new moves** run without errors but were not reviewed visually frame by frame.
+- **Scripted element switches in one page** (`startTraining` water → earth → air) can still show new shader programs on first use. It is identical
+  before the Combat Lock drop and not understood; the normal flow was clean.
+- The combat pose layer still needs a polish pass at full frame rate. Hands are open palms. Guard has no dedicated clip (pose only).
+- The arena's prop density is fixed at boot. The hero pool and warm-up make a graphics switch take about 0.5 s.
+- `main.js` still owns too much (story arenas, training lifecycle, the frame loop).
+- Deferred: Shieldling archetype, per-tier particle budget with many enemies.
 
 ---
 
-## 10. A tiny peek at what's next
-- **The world overhaul.** Goodbye contribution graph, hello elemental fantasy world eaten by the **Corruption**. The
-  Training Grounds is the style test for it.
-- **New levels and bosses** built for launchers and juggles from the start.
-- Maybe: perfect dodge, an ultimate meter, elemental reactions (steam, mud, firestorm, sandstorm), gamepad support, and
-  the desktop build.
+## 10. What's next (updated)
+See **[`NEXT_STEPS.md`](NEXT_STEPS.md)**: a researched list of what the game is still missing, ranked, with a proposal for something unique.
 
 That's the project. It's small, it's loud, and it's mine. Go hit something. ✦
 
 
+---
+
+## 11. Superseded facts (these used to be true)
+| Old statement | Status | Now |
+|---|---|---|
+| Buffers last 0.14–0.22 s (game time) | OUTDATED | real-time buffers, .09–.16 s, first press wins (§4.4) |
+| Perfect-parry window starts at 0.22 s | OUTDATED | 0.18 s, shrinks 30 % per extra press |
+| Hit-stop 45–85 ms scaled by weight | OUTDATED | `FEEDBACK` table, 40–220 ms, capped 0.3 s |
+| Perfect parry stacks hit-stop 160 ms | OUTDATED | 0.22 s |
+| Skill trees: 4 branches × 3 tiers, 12 nodes, level cap 16 | OUTDATED | 3 mechanic branches + Resonance, forks, Tempering, cap 24 |
+| Skill ids and meanings (e.g. `f1` = a stat) | OUTDATED | all ids were rewritten; save version 3 refunds nodes |
+| Save format `{ level, xp, owned, res }` | OUTDATED | adds `v`, `temper`, `fork` |
+| Endless waves use a random budget `2 + 1.7 × wave` | OUTDATED | role-composed waves |
+| Boss: "a rage phase at 50 %" | OUTDATED | two real phases, shield, pattern lists, parry-break once |
+| Enemies attack whenever their cooldown allows | OUTDATED | attack tokens (1 melee, 1 ranged, 1 heavy) |
+| Bug HP 34 | OUTDATED | 22 |
+| Elements differ in moves only | OUTDATED | per-element tempo/power profiles and signatures |
+| The M2 audio was never listened to | STILL TRUE | measured offline now, still not heard |
+| "Maybe: perfect dodge, ultimate meter, elemental reactions, gamepad" | MOVED | see `NEXT_STEPS.md` |
+
 ## Addendum: Combat Lock
-See `docs/COMBAT_LOCK.md` for the combat rules, `src/dbg.js` for the debug overlay (Lab → Combat debug) and `skills.js` for the new mechanic trees (forks, Tempering).
+See `docs/COMBAT_LOCK.md` for the combat rules, `src/dbg.js` for the debug overlay (Lab → Combat debug) and `skills.js` for the move-based trees.

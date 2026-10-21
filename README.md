@@ -18,16 +18,17 @@ One complete level ("`main` branch"), start to finish, ~8–12 minutes:
 1. Run through the contribution-graph skyline, collect **commits** (currency/score) and tutorial hints.
 2. Hit **checkpoints** (`commit a41f9c2`) — they heal you and become your respawn.
 3. Clear two **Review gates** (arena fights, 3 waves each). Gates turn from `REVIEW REQUIRED` to `APPROVED ✔`.
-4. Defeat the boss — **THE LEGACY MONOLITH** (2 phases, parry-able attacks, stagger window).
+4. Defeat the boss — **THE LEGACY MONOLITH** (two real phases: the second adds a shield, a sweep, a double-wave slam and falling blocks; break its poise, don't spam parries).
 5. Earn a rank (S/A/B/C), keep your XP and skill points, and replay with another element.
 
 ### Enemies
-| Enemy | Behaviour | Counter |
-|---|---|---|
-| **Bug** | Fast crawler, telegraphed lunge | Parry it, or kill it first |
-| **Null Pointer** | Floating caster, fires red orbs (telegraphed) | Parry/deflect the orb straight back |
-| **Legacy Bot** | Heavy brute, overhead smash + ground shockwave | Parry the smash to *break* it, jump the wave |
-| **The Legacy Monolith** | Boss: slam, stack-trace barrage, summons, falling code blocks | Parry the slam for a huge stagger window |
+Enemies attack in turns (one melee, one ranged and one heavy attacker at a time) and always telegraph.
+| Enemy | Role | Tell | Counter |
+|---|---|---|---|
+| **Bug** | Flanker, dies in 1–2 hits | 0.5 s crouch + lunge arrow | Dodge, then punish its recovery |
+| **Null Pointer** | Sniper | 0.9 s charge + aim line that locks | Break line of sight, or parry/deflect the orb |
+| **Legacy Bot** | Armoured bruiser | 1 s wind-up, danger ring on the floor | Parry or slam it; punish its 1.5 s recovery |
+| **The Legacy Monolith** | Boss, two phases | slam, barrage, sweep, summon, falling blocks | Parry-break it once, then break its poise |
 
 ## Phones & tablets
 
@@ -47,7 +48,7 @@ Quality presets (Low / Medium / High) scale pixel ratio, shadows, bloom, particl
 
 ## Elements
 
-Each element has **1 main attack, 1 ranged attack, 1 defence, 2 specials**, and a **9-node skill tree** (3 branches × 3 tiers).
+Each element has **1 main attack, 1 ranged attack, 1 defence, 2 specials**, its own tempo (Air fastest and light, Fire and Water fast, Earth slow and crushing), and a **skill tree of three move branches + Resonance** (see below).
 
 | | Main (`J`) | Ranged (`K`) | Defend (`F`) | Special 1 (`Q`) | Special 2 (`E`) |
 |---|---|---|---|---|---|
@@ -55,6 +56,9 @@ Each element has **1 main attack, 1 ranged attack, 1 defence, 2 specials**, and 
 | 💧 **Water** | Tide Whip — wide chilling sweeps, wave finisher | Water Bolt — rapid homing bolts | Bubble Shield — block, perfect → heal + pop wave | Tidal Wave — screen-crossing crash | Healing Rain — heal zone that hurts enemies |
 | ⛰ **Earth** | Stone Fists — slow & heavy, ground slam | Rock Throw — lobbed boulder, shrapnel | Stone Skin — −85% damage, perfect → stun all | Quake — leap + slam, shockwaves | Stone Bastion — pillars that launch & block |
 | 🌪 **Air** | Gale Blades — very fast, long reach | Wind Cutter — piercing crescent | Wind Wall — deflects projectiles, perfect → gust | Cyclone — tornado that pulls & shreds | Sky Dance — free flight + haste |
+
+### Skill trees
+The first node of every branch is a **new move**, unique per element: **Dash Strike** (Attack during or after a Dash), **Charged Shot** (hold Ranged 0.7 s, release) and **Riposte** (a perfect parry counter-attacks). Tier 2 nodes are bundled power-ups and tier 3 is a mastery, with an either/or fork in the middle branch (including one colossal ability per element: Solar Flare, Leviathan, Mountainfall, Maelstrom). A shared **Tempering** track holds the plain stats. Level cap 24.
 
 ### Controls
 | Action | Keyboard | Mouse |
@@ -77,9 +81,9 @@ Each element has **1 main attack, 1 ranged attack, 1 defence, 2 specials**, and 
 - **Touch:** hold the stick **up** + Attack to launch, stick **down** + Attack in the air to slam. "Flick stick up to jump" is a setting (off by default).
 
 ### Training Grounds
-A separate arena (menu → **Training Grounds**): **Sandbox** (dummies, DPS meter with juggle height/time, spawn any enemy or the boss, infinite energy / no cooldowns / enemies-attack toggles, element + Resonance switcher), **Endless Waves** (escalating mixed waves, saved best score) and **Combo Trials** (8 guided trials: launch, juggle, spike, slam, full course, Resonance). The Lab panel on the right is collapsible (collapsed by default on phones).
+A separate arena (menu → **Training Grounds**): **Sandbox** (dummies, DPS meter with juggle height/time, spawn any enemy or the boss, infinite energy / no cooldowns / enemies-attack toggles, a **Combat debug** overlay, element + Resonance switcher), **Endless Waves** (role-composed waves, saved best score) and **Combo Trials** (8 guided trials: launch, juggle, spike, slam, full course, Resonance). The Lab panel on the right is collapsible (collapsed by default on phones).
 
-**Defending is the heart of the game.** Hold *Defend* to block — but press it *just before* a hit lands for a **PERFECT PARRY**: the world freezes, time slows, the attacker is staggered, projectiles are reflected, and an element-specific counter fires.
+**Defending is the heart of the game.** Hold *Defend* to block — but press it *just before* a hit lands for a **PERFECT PARRY**: the world freezes, time slows, the attacker is staggered, projectiles are reflected, and an element-specific counter fires. Spamming the button shrinks the window, and a parry opens a short counter window (your next hit is stronger). More in [`docs/COMBAT_LOCK.md`](docs/COMBAT_LOCK.md).
 
 ## Game-feel checklist ("juice")
 
@@ -106,7 +110,8 @@ src/arena.js                 Training Grounds scenery + terrain
 src/training.js              sandbox, DPS meter, endless waves, combo trials
 src/elements.js              all 4 elements: main/ranged/guard/2 specials
 src/enemies.js               Bug, Null Pointer, Legacy Bot, THE LEGACY MONOLITH
-src/combat.js                damage, parry, projectiles, pickups, combo, XP
+src/combat.js                damage, parry, projectiles, pickups, combo, XP, the FEEDBACK table
+src/dbg.js                   combat debug overlay + snapshot
 src/skills.js                skill trees, progression, localStorage save
 src/ui.js                    HUD + skill tree UI
 src/audio.js                 synthesized SFX + generative music

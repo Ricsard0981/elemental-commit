@@ -1,3 +1,6 @@
+> ⚠ **HISTORICAL — implemented.** This was the plan for Milestone 2. It shipped, then the Combat Lock drop changed a lot of it (skill trees, enemies, parry, audio).
+> For what is true now read `DEVELOPER_GUIDE.md`, `COMBAT_LOCK.md` and `NEXT_STEPS.md`. Statements below about a 9-node tree, 16-level cap, hit-stop values or enemy behaviour are **OUTDATED**.
+
 # Milestone 2 — "Combat Feel & Animation" (+ Training Grounds)
 
 ## Context

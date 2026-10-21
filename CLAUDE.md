@@ -4,8 +4,9 @@ Side-view **3D** elemental action game (three.js, plain ES modules, **no build s
 https://ricsard0981.github.io/elemental-commit/ (GitHub Pages, auto-deploys on every push to `main`
 via `.github/workflows/pages.yml`).
 
-**Read `docs/DEVELOPER_GUIDE.md` and `docs/HANDOFF.md` first.** It has the full history, decisions and the owner's preferences.
-The current task is **`docs/MILESTONE_2_PLAN.md`** (approved; one big drop).
+**Read `docs/DEVELOPER_GUIDE.md` and `docs/HANDOFF.md` first.** They have the full history, decisions and the owner's preferences.
+Milestone 2 and the Combat Lock drop are done (`docs/MILESTONE_2_PLAN.md` is historical). Combat rules are in `docs/COMBAT_LOCK.md`; the researched roadmap is `docs/NEXT_STEPS.md`.
+`user_plans.md` is mandatory, top-priority product direction.
 
 ## Run / test
 - Serve: `npx http-server -p 8080 -c-1 .` → http://localhost:8080. It must be served over http; `file://` breaks ES modules.

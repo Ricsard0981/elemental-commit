@@ -1,3 +1,5 @@
+> ⚠ **HISTORICAL.** The original vertical-slice plan. Pillars still hold; the skill-tree, enemy and boss details are **OUTDATED** (see `COMBAT_LOCK.md`).
+
 # Vertical Slice Plan — Elemental Commit
 
 ## 1. Pillars

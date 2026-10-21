@@ -153,3 +153,9 @@ guarding inside the boss costs 10 HP per 3 s instead of killing; skill purchase,
 ## 10. Deferred
 Extra enemy archetype (Shieldling), finger animation, a dedicated guard clip (guard is pose-only), world overhaul, Air Wind Wall
 reflect cap (left strong on purpose), per-tier particle budget when many enemies are alive.
+
+## 11. Changelog of this document
+- Drop 1 (A–E): sections 1–10.
+- Owner round 1: per-element profiles, signatures and colossal forks (§4).
+- Owner round 2: numbers and `proc()` labels, then the tree rebuilt around new moves (§6). **Outdated by this:** the first version of §6 (mechanic nodes such as separate Cinder Brand / Spreading Embers) and every skill id's meaning.
+- Dash Strike can also start mid-dash (after 35 % of the dash) by pressing Attack.

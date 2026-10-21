@@ -8,7 +8,8 @@ This file carries the context from the first (cloud) Claude Code session so noth
 - Long-term: ship as a **desktop program too**, while the **browser version always stays available**. Tauri vs Electron is undecided; don't block either.
 - Owner's own testing: iPhone 13 runs it great (High drops to ~59 fps only in the most intense moments). PC testing still to come.
 
-## What exists (vertical slice, done)
+## What exists (vertical slice, done) — ⚠ partly OUTDATED
+> The list below is the original slice. The tree is no longer "9 nodes", enemies and boss were reworked, and elements now have tempo profiles. See `COMBAT_LOCK.md` and the "Combat Lock drop" section at the end of this file.
 - One full level (~270 units) built as a GitHub contribution graph: tutorial → pits → arena A (3 waves) → plateau → arena B (3 waves) → boss arena.
 - Enemies: Bug, Null Pointer (ranged, parry-able orbs), Legacy Bot (heavy, poise), boss **THE LEGACY MONOLITH** (2 phases: slam, barrage, summon, falling blocks).
 - 4 elements, 20 abilities, a perfect-parry system, a 9-node skill tree per element, XP/levels, a localStorage save, and S–C run ranks.
@@ -88,3 +89,6 @@ Main-level reskin and world overhaul, new levels and bosses, perfect dodge, ulti
   save v2 refunds nodes), Training Grounds "Combat debug" overlay and `window.__game.dbg()`.
 - New files: `src/dbg.js`, `docs/COMBAT_LOCK.md`. The skill ids changed (see `skills.js`); old saves keep level/XP/Resonance and refund nodes.
 - Not verified by the author: iPhone 13 fps/touch feel, in-ear audio. Decisions: no CC0 audio samples added (could not audition them).
+- **Later in the same drop (owner feedback):** per-element tempo/power profiles (`prof`), colossal ability forks, and a skill-tree rebuild where tier 1 of each
+  branch is a new move (Dash Strike, Charged Shot, Riposte). Save version 3. Skill ids from before are refunded.
+- **Next:** `docs/NEXT_STEPS.md` holds the researched gap analysis and a proposed roadmap. `docs/MILESTONE_2_PLAN.md` is historical.
