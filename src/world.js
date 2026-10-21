@@ -94,7 +94,7 @@ function darkenBelow(mat, lo = -8, hi = 0.8, floor = 0.1) {
 const col = new THREE.Color();
 const bars = { rows: [], lane: null, caps: null };
 export const ripples = [];
-export function ripple(x, amp = 1.2, color = 0x39d353, speed = 14, dur = 1.0) { ripples.push({ x, t: 0, amp, color: new THREE.Color(color), speed, dur }); if (ripples.length > 14) ripples.shift(); }
+export function ripple(x, amp = 1.2, color = 0x39d353, speed = 14, dur = 1.0) { const c = new THREE.Color(color); ripples.push({ x, t: 0, amp, color: c, hot: c.clone().multiplyScalar(2.5), speed, dur }); if (ripples.length > 14) ripples.shift(); }
 
 let skyMat, panels = [], nodes = [], graphGroup, sparks;
 export const worldState = { tint: new THREE.Color(0x39d353) };
@@ -323,7 +323,7 @@ export function updateWorld(dt, camX, playerX, time) {
     let boost = 0; col.copy(bars.capBase[k]);
     for (const r of ripples) {
       const d = Math.abs(colIdx + 0.5 - r.x), w = Math.abs(d - r.t * r.speed);
-      if (w < 2.2) { const a = (1 - w / 2.2) * (1 - r.t / r.dur) * r.amp; boost += a; col.lerp(r.color.clone().multiplyScalar(2.5), Math.min(1, a * 0.8)); }
+      if (w < 2.2) { const a = (1 - w / 2.2) * (1 - r.t / r.dur) * r.amp; boost += a; col.lerp(r.hot, Math.min(1, a * 0.8)); }
     }
     caps.setColorAt(k, col); capsDirty = true;
   });
@@ -346,7 +346,7 @@ export function updateWorld(dt, camX, playerX, time) {
     if (any) m.instanceMatrix.needsUpdate = true;
   }
   // platforms bob slightly (visual only; collision uses base y) — keep static for fairness, just glow pulse
-  for (const p of platforms) p.mesh.children[1].material.color.setScalar(1.3 + Math.sin(time * 2 + p.mesh.userData.ph) * 0.2).multiply(new THREE.Color(0x39d353));
+  for (const p of platforms) p.mesh.children[1].material.color.setRGB(0.22, 0.83, 0.33).multiplyScalar(1.3 + Math.sin(time * 2 + p.mesh.userData.ph) * 0.2);
   // code panels float
   for (const p of panels) p.position.y = p.userData.baseY + Math.sin(time * 0.5 + p.userData.ph) * 0.5;
   // git nodes pop when the player passes

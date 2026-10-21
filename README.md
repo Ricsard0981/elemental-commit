@@ -3,7 +3,7 @@
 > A side-view **3D** elemental action game that lives inside a **GitHub contribution graph**.
 > Pick **Fire, Water, Earth or Air**, fix the bugs, parry the review comments, and merge into `main`.
 
-**Play:** https://ricsard0981.github.io/elemental-commit/ *(deployed by the GitHub Actions workflow in `.github/workflows/pages.yml`)*
+**Play:** `https://<your-user>.github.io/elemental-commit/` — deployed by the GitHub Actions workflow in `.github/workflows/pages.yml` (enable it once under *Settings → Pages → Source: GitHub Actions*).
 
 Zero build step. Zero asset files — all models are procedural, all audio is synthesized with WebAudio. Just open `index.html` through any static server:
 

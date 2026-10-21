@@ -9,11 +9,12 @@ import * as UI from './ui.js';
 import { clamp, damp, rand, lerp, sign, easeOut } from './util.js';
 
 const RED = 0xf85149;
+const ICE = new THREE.Color(0x4db8ff);
 const box = new THREE.BoxGeometry(1, 1, 1), sph = new THREE.SphereGeometry(1, 16, 12), cyl = new THREE.CylinderGeometry(1, 1, 1, 8);
 const barGeo = new THREE.PlaneGeometry(1, 1);
 
 function mk(e, geo, color, { em = 0, ei = 0, rough = 0.5, metal = 0.3, x = 0, y = 0, z = 0, sx = 1, sy = 1, sz = 1, parent } = {}) {
-  const mat = new THREE.MeshStandardMaterial({ color, roughness: rough, metalness: metal, emissive: em, emissiveIntensity: ei, flatShading: false });
+  const mat = new THREE.MeshStandardMaterial({ color, roughness: Math.max(rough, 0.55), metalness: Math.min(metal, 0.1), emissive: em, emissiveIntensity: ei, flatShading: false });
   mat.userData.base = { em, ei };
   e.mats.push(mat);
   const m = new THREE.Mesh(geo, mat);
@@ -47,7 +48,7 @@ function buildBug(x, y, o) {
   const e = base('bug', x, y, { name: 'Bug', w: 1.15, h: 0.95, hp: 34, hpMax: 34, poise: 24, poiseMax: 24, xp: 12, commits: 3, speed: 3.6, ...o });
   const g = e.group;
   e.body = pivot(g, 0, 0.5, 0);
-  mk(e, sph, 0x4a1218, { em: 0x3a0508, ei: 0.7, sx: 0.62, sy: 0.4, sz: 0.5, parent: e.body, rough: 0.35, metal: 0.5 });
+  mk(e, sph, 0x8a2a33, { em: 0x3a0508, ei: 0.7, sx: 0.62, sy: 0.4, sz: 0.5, parent: e.body, rough: 0.35, metal: 0.5 });
   mk(e, box, RED, { em: RED, ei: 1.2, y: 0.17, sx: 0.5, sy: 0.05, sz: 0.2, parent: e.body });
   mk(e, sph, 0xffffff, { em: 0xff3030, ei: 3, x: 0.48, y: 0.08, z: 0.17, sx: 0.09, sy: 0.09, sz: 0.09, parent: e.body });
   mk(e, sph, 0xffffff, { em: 0xff3030, ei: 3, x: 0.48, y: 0.08, z: -0.17, sx: 0.09, sy: 0.09, sz: 0.09, parent: e.body });
@@ -55,10 +56,10 @@ function buildBug(x, y, o) {
   for (let i = 0; i < 6; i++) {
     const side = i < 3 ? 1 : -1, px = (i % 3 - 1) * 0.3;
     const leg = pivot(g, px, 0.42, side * 0.3);
-    mk(e, cyl, 0x2b0d10, { sx: 0.035, sy: 0.38, sz: 0.035, y: -0.17, parent: leg, em: 0x400808, ei: 0.5 });
+    mk(e, cyl, 0x4d1a1f, { sx: 0.035, sy: 0.38, sz: 0.035, y: -0.17, parent: leg, em: 0x400808, ei: 0.5 });
     leg.userData = { ph: i * 1.1, side }; e.legs.push(leg);
   }
-  e.ant = mk(e, cyl, 0x2b0d10, { sx: 0.02, sy: 0.4, sz: 0.02, x: 0.5, y: 0.85, z: 0.1, parent: g });
+  e.ant = mk(e, cyl, 0x4d1a1f, { sx: 0.02, sy: 0.4, sz: 0.02, x: 0.5, y: 0.85, z: 0.1, parent: g });
   return e;
 }
 function buildPointer(x, y, o) {
@@ -76,44 +77,44 @@ function buildBrute(x, y, o) {
   const e = base('brute', x, y, { name: 'Legacy Bot', w: 1.9, h: 3.0, hp: 150, hpMax: 150, poise: 75, poiseMax: 75, xp: 45, commits: 10, heavy: true, speed: 2.1, staggerTime: 1.2, color: 0xff7b72, heart: 0.35, kbMul: 0.6, ...o });
   const g = e.group;
   e.torso = pivot(g, 0, 1.7, 0);
-  mk(e, box, 0x2d333b, { sx: 1.5, sy: 1.5, sz: 1.1, parent: e.torso, metal: 0.7, rough: 0.35 });
+  mk(e, box, 0x4d5866, { sx: 1.5, sy: 1.5, sz: 1.1, parent: e.torso, metal: 0.7, rough: 0.35 });
   mk(e, box, RED, { em: RED, ei: 1.6, y: 0.1, x: 0.76, sx: 0.04, sy: 1.0, sz: 0.8, parent: e.torso });
   mk(e, box, RED, { em: RED, ei: 1, y: -0.2, sx: 1.55, sy: 0.07, sz: 1.15, parent: e.torso });
   e.head = pivot(e.torso, 0.15, 1.1, 0);
-  mk(e, box, 0x22272e, { sx: 0.8, sy: 0.6, sz: 0.8, parent: e.head, metal: 0.7 });
+  mk(e, box, 0x38414d, { sx: 0.8, sy: 0.6, sz: 0.8, parent: e.head, metal: 0.7 });
   mk(e, box, 0xff3030, { em: 0xff3030, ei: 3, x: 0.41, y: 0.04, sx: 0.04, sy: 0.12, sz: 0.62, parent: e.head });
   e.armF = pivot(e.torso, 0, 0.5, 0.85); e.armB = pivot(e.torso, 0, 0.5, -0.85);
   for (const a of [e.armF, e.armB]) {
-    mk(e, box, 0x2d333b, { sx: 0.5, sy: 1.1, sz: 0.5, y: -0.55, parent: a, metal: 0.7 });
-    mk(e, box, 0x3a424c, { sx: 0.8, sy: 0.8, sz: 0.8, y: -1.3, parent: a, metal: 0.7 });
+    mk(e, box, 0x4d5866, { sx: 0.5, sy: 1.1, sz: 0.5, y: -0.55, parent: a, metal: 0.7 });
+    mk(e, box, 0x566272, { sx: 0.8, sy: 0.8, sz: 0.8, y: -1.3, parent: a, metal: 0.7 });
     mk(e, box, RED, { em: RED, ei: 1.4, sx: 0.84, sy: 0.08, sz: 0.84, y: -1.05, parent: a });
   }
   e.legF = pivot(g, 0, 1.0, 0.4); e.legB = pivot(g, 0, 1.0, -0.4);
-  for (const l of [e.legF, e.legB]) mk(e, box, 0x22272e, { sx: 0.6, sy: 1.1, sz: 0.55, y: -0.5, parent: l, metal: 0.6 });
+  for (const l of [e.legF, e.legB]) mk(e, box, 0x38414d, { sx: 0.6, sy: 1.1, sz: 0.55, y: -0.5, parent: l, metal: 0.6 });
   return e;
 }
 function buildBoss(x, y) {
   const e = base('boss', x, y, { name: 'THE LEGACY MONOLITH', w: 3.6, h: 6.2, hp: 1500, hpMax: 1500, poise: 220, poiseMax: 220, xp: 450, commits: 60, heavy: true, boss: true, color: 0xff4d4d, spawnT: 1.9, heart: 0, staggerTime: 2.4 });
   const g = e.group;
   e.torso = pivot(g, 0, 3.1, 0);
-  mk(e, box, 0x1c2128, { sx: 3.2, sy: 3.2, sz: 2.4, parent: e.torso, metal: 0.6, rough: 0.4 });
+  mk(e, box, 0x333c48, { sx: 3.2, sy: 3.2, sz: 2.4, parent: e.torso, metal: 0.6, rough: 0.4 });
   for (let i = 0; i < 5; i++) mk(e, box, RED, { em: RED, ei: 1.3, y: -1.2 + i * 0.6, x: 1.62, sx: 0.04, sy: 0.08, sz: 1.8 - i * 0.2, parent: e.torso });
-  mk(e, box, 0x30363d, { sx: 3.5, sy: 0.4, sz: 2.6, y: 1.7, parent: e.torso, metal: 0.7 });
+  mk(e, box, 0x464f5c, { sx: 3.5, sy: 0.4, sz: 2.6, y: 1.7, parent: e.torso, metal: 0.7 });
   e.head = pivot(e.torso, 0.2, 2.5, 0);
-  mk(e, box, 0x22272e, { sx: 1.5, sy: 1.3, sz: 1.5, parent: e.head, metal: 0.6 });
+  mk(e, box, 0x38414d, { sx: 1.5, sy: 1.3, sz: 1.5, parent: e.head, metal: 0.6 });
   e.eyes = [mk(e, box, 0xff2020, { em: 0xff2020, ei: 3.5, x: 0.77, y: 0.15, z: 0.4, sx: 0.06, sy: 0.18, sz: 0.4, parent: e.head }), mk(e, box, 0xff2020, { em: 0xff2020, ei: 3.5, x: 0.77, y: 0.15, z: -0.4, sx: 0.06, sy: 0.18, sz: 0.4, parent: e.head })];
   // code-block crown
   e.crown = [];
   for (let i = 0; i < 9; i++) { const c = mk(e, box, 0x161b22, { em: i % 2 ? 0x39d353 : RED, ei: 1.3, sx: 0.28, sy: 0.28, sz: 0.28, parent: g }); c.userData.ph = i * 0.7; c.userData.r = 2.6 + (i % 3) * 0.5; e.crown.push(c); }
   e.legL = pivot(g, 0, 1.5, 0.7); e.legR = pivot(g, 0, 1.5, -0.7);
-  for (const l of [e.legL, e.legR]) mk(e, box, 0x22272e, { sx: 1.1, sy: 1.6, sz: 0.9, y: -0.7, parent: l, metal: 0.6 });
+  for (const l of [e.legL, e.legR]) mk(e, box, 0x38414d, { sx: 1.1, sy: 1.6, sz: 0.9, y: -0.7, parent: l, metal: 0.6 });
   e.onStagger = () => { if (e.state !== 'stunned') { e.state = 'stunned'; e.st = 0; e.staggerTime = 2.4; e.vulnerable = 2.4; e.hitDone = false; e.tele = 0; sfx.bossRoar(); floatText(e.x, e.y + 7, 'BROKEN!', { color: '#ffd33d', size: 40 }); } };
   e.onDeath = () => { G.onBossDead?.(e); };
   // fists live in world space so they can slam anywhere
   e.fists = [];
   for (const z of [1.6, -1.6]) {
     const f = new THREE.Group();
-    mk(e, box, 0x2d333b, { sx: 1.7, sy: 1.7, sz: 1.7, parent: f, metal: 0.7, rough: 0.35 });
+    mk(e, box, 0x4d5866, { sx: 1.7, sy: 1.7, sz: 1.7, parent: f, metal: 0.7, rough: 0.35 });
     mk(e, box, RED, { em: RED, ei: 1.5, sx: 1.74, sy: 0.14, sz: 1.74, y: 0.5, parent: f });
     f.position.set(x, 4, z); scene.add(f);
     e.fists.push({ g: f, x, y: 4, z, tx: x, ty: 4, k: 10 });
@@ -256,7 +257,7 @@ function aiBrute(e, dt, tm) {
     if (e.st * tm >= 0.85) {
       e.state = 'smash'; e.st = 0; e.tele2 = false;
       const fx = e.x + e.dirLock * 2.1;
-      sfx.stomp(); shake(0.45); puff(fx, groundAt(fx) + 0.2, 8, 0x8b949e, 1.4, 0.7); cubes(fx, groundAt(fx) + 0.4, 0x2d333b, 8, 8, 0.3); ripple(fx, 1.8, RED, 14, 0.8);
+      sfx.stomp(); shake(0.45); puff(fx, groundAt(fx) + 0.2, 8, 0x8b949e, 1.4, 0.7); cubes(fx, groundAt(fx) + 0.4, 0x4d5866, 8, 8, 0.3); ripple(fx, 1.8, RED, 14, 0.8);
       ring(fx, groundAt(fx) + 0.05, 0.5, RED, { r0: 0.3, r1: 3.4, dur: 0.4, flat: true }); flashLight(fx, groundAt(fx) + 1, 2, RED, 40, 0.3);
       if (Math.abs(p.x - fx) < 2.0 && p.y - groundAt(p.x) < 2.4 && !p.dead) damagePlayer(22, { x: e.x, y: p.y, enemy: e, kind: 'melee' });
       groundWave(fx, e.dirLock, { len: 6, speed: 12, dmg: 12, color: RED, owner: 'enemy', height: 1.1 });
@@ -303,7 +304,7 @@ function aiBoss(e, dt, tm) {
       e.hitDone = true; const x = e.slamX, gy = groundAt(x);
       sfx.stomp(); sfx.quake(); shake(0.9); punchFov(4); post.aberr = 0.01;
       ring(x, gy + 0.05, 0.5, RED, { r0: 0.5, r1: 7, dur: 0.6, flat: true }); ring(x, gy + 1, 0.5, 0xffffff, { r0: 0.5, r1: 4, dur: 0.35 });
-      puff(x, gy + 0.3, 14, 0x8b949e, 2, 1); cubes(x, gy + 1, 0x30363d, 18, 11, 0.45); cubes(x, gy + 1, RED, 10, 9, 0.3, true); ripple(x, 3.4, RED, 18, 1.2); flashLight(x, gy + 1, 2, RED, 90, 0.5);
+      puff(x, gy + 0.3, 14, 0x8b949e, 2, 1); cubes(x, gy + 1, 0x464f5c, 18, 11, 0.45); cubes(x, gy + 1, RED, 10, 9, 0.3, true); ripple(x, 3.4, RED, 18, 1.2); flashLight(x, gy + 1, 2, RED, 90, 0.5);
       if (Math.abs(p.x - x) < 2.4 && p.y - gy < 2.5 && !p.dead) damagePlayer(26, { x, y: p.y, enemy: e, kind: 'melee' });
       for (const d of [-1, 1]) groundWave(x, d, { len: rage ? 20 : 14, speed: rage ? 14 : 11, dmg: 15, color: RED, owner: 'enemy', height: 1.2 });
     }
@@ -342,7 +343,7 @@ function aiBoss(e, dt, tm) {
     }
     for (const m of e.marks) if (!m.done && t >= m.t) {
       m.done = true; const gy = groundAt(m.x);
-      sfx.explosion(0.5); shake(0.25); cubes(m.x, gy + 1, RED, 6, 7, 0.4, true); cubes(m.x, gy + 1, 0x30363d, 8, 8, 0.4); puff(m.x, gy + 0.3, 5, 0x8b949e, 1.3, 0.6); ripple(m.x, 1.6, RED, 14, 0.7);
+      sfx.explosion(0.5); shake(0.25); cubes(m.x, gy + 1, RED, 6, 7, 0.4, true); cubes(m.x, gy + 1, 0x464f5c, 8, 8, 0.4); puff(m.x, gy + 0.3, 5, 0x8b949e, 1.3, 0.6); ripple(m.x, 1.6, RED, 14, 0.7);
       ring(m.x, gy + 0.5, 0.5, RED, { r0: 0.3, r1: 3, dur: 0.35 }); flashLight(m.x, gy + 1, 2, RED, 50, 0.3);
       for (let j = 0; j < 8; j++) glow.emit(m.x + rand(-0.8, 0.8), gy + rand(0, 14), 0, 0, -rand(10, 20), 0, rgb(RED, 1.8), 0.3, 0.1, 0.4);
       if (Math.abs(p.x - m.x) < 1.8 && p.y - gy < 4 && !p.dead) damagePlayer(18, { x: m.x, y: p.y, enemy: e, kind: 'melee' });
@@ -376,7 +377,7 @@ function animate(e, dt, tm) {
     if (e.flash > 0) { m.emissive.setRGB(1, 1, 1); m.emissiveIntensity = 1.8; }
     else if (tele) { m.emissive.setHex(0xff2020); m.emissiveIntensity = tele * 1.5 + (b.ei || 0) * 0.5; }
     else { m.emissive.setHex(b.em); m.emissiveIntensity = b.ei * (e.chill > 0 ? 0.5 : 1); }
-    if (e.chill > 0 && !e.flash && !tele) m.emissive.lerp(new THREE.Color(0x4db8ff), 0.5), m.emissiveIntensity = Math.max(m.emissiveIntensity, 0.5);
+    if (e.chill > 0 && !e.flash && !tele) { m.emissive.lerp(ICE, 0.5); m.emissiveIntensity = Math.max(m.emissiveIntensity, 0.5); }
   }
   const spd = Math.abs(e.vx);
   if (e.type === 'bug') {
@@ -441,7 +442,7 @@ export function updateEnemies(dt) {
         e.vy -= 55 * dt; e.y += e.vy * dt;
         const gy = groundAt(e.x);
         if (e.y <= gy) {
-          e.y = gy; if (e.vy < -5 && !e.landed) { e.landed = true; sfx.bossRoar(); sfx.stomp(); shake(1); punchFov(8); post.aberr = 0.02; ring(e.x, gy + 0.1, 0.5, RED, { r0: 1, r1: 24, dur: 1, flat: true, intensity: 2.5 }); ring(e.x, gy + 3, 0.5, 0xffffff, { r0: 1, r1: 14, dur: 0.6 }); puff(e.x, gy + 0.3, 24, 0x8b949e, 3, 1.5, 6); cubes(e.x, gy + 1, 0x30363d, 30, 14, 0.5); ripple(e.x, 4, RED, 22, 1.6); screenFlash(0xff4d4d, 0.3); UI.banner('THE LEGACY MONOLITH', '2,000,000 lines · 0 tests · no docs', '#ff7b72'); }
+          e.y = gy; if (e.vy < -5 && !e.landed) { e.landed = true; sfx.bossRoar(); sfx.stomp(); shake(1); punchFov(8); post.aberr = 0.02; ring(e.x, gy + 0.1, 0.5, RED, { r0: 1, r1: 24, dur: 1, flat: true, intensity: 2.5 }); ring(e.x, gy + 3, 0.5, 0xffffff, { r0: 1, r1: 14, dur: 0.6 }); puff(e.x, gy + 0.3, 24, 0x8b949e, 3, 1.5, 6); cubes(e.x, gy + 1, 0x464f5c, 30, 14, 0.5); ripple(e.x, 4, RED, 22, 1.6); screenFlash(0xff4d4d, 0.3); UI.banner('THE LEGACY MONOLITH', '2,000,000 lines · 0 tests · no docs', '#ff7b72'); }
           e.vy = 0;
         }
         animate(e, dt, 1);

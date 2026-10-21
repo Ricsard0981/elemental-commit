@@ -45,7 +45,7 @@ export class Player {
   build() {
     const c = this.el.color, c2 = this.el.color2;
     const cloth = new THREE.MeshStandardMaterial({ color: 0x4a5a70, roughness: 0.55, metalness: 0.1, emissive: 0x1a2430, emissiveIntensity: 0.6 });
-    const dark = new THREE.MeshStandardMaterial({ color: 0x2a3340, roughness: 0.5, metalness: 0.3, emissive: 0x10161d, emissiveIntensity: 0.6 });
+    const dark = new THREE.MeshStandardMaterial({ color: 0x2a3340, roughness: 0.6, metalness: 0.08, emissive: 0x10161d, emissiveIntensity: 0.6 });
     const accent = new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: 1.1, roughness: 0.3 });
     const glowM = new THREE.MeshBasicMaterial({ color: new THREE.Color(c2).multiplyScalar(2.2), toneMapped: false });
     this.mats = { cloth, dark, accent };
@@ -89,6 +89,7 @@ export class Player {
       const s = new THREE.Mesh(box, accent); s.scale.set(0.34 - i * 0.03, 0.1, 0.12); s.castShadow = true;
       scene.add(s); this.scarf.push({ m: s, x: this.x, y: this.y + 1.5 });
     }
+    g.scale.setScalar(1.1);
     scene.add(g);
     // shields
     this.shields = {};
@@ -192,7 +193,7 @@ export class Player {
 
   // ------------------------------------------------------------ update
   update(dt) {
-    if (this.dead) { this.syncModel(); return; }
+    if (this.dead) { this.group.visible = false; this.scarf.forEach((s) => (s.m.visible = false)); this.shield.visible = false; this.syncModel(); return; }
     // input buffering works even during hit-stop (dt = 0)
     for (const k of ['main', 'jump', 's1', 's2', 'dash']) if (In.hitNow(k)) this.buf[k] = k === 'jump' ? 0.14 : 0.22;
     if (dt <= 0) return;

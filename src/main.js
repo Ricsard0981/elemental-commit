@@ -7,7 +7,7 @@ import { buildWorld, updateWorld, groundAt, arenas, checkpoints, roamers, commit
 import { ELEMENTS } from './elements.js';
 import { Player } from './player.js';
 import { spawnEnemy, updateEnemies, clearEnemies } from './enemies.js';
-import { updateProjectiles, updatePickups, clearAll, spawnCommits, spawnCommit, later, giveXP, comboBreak, slowmo } from './combat.js';
+import { updateProjectiles, updatePickups, clearAll, spawnCommits, spawnCommit, later, giveXP, comboBreak, killEnemy } from './combat.js';
 import { prog, recordRun, pointsLeft } from './skills.js';
 import * as UI from './ui.js';
 
@@ -185,8 +185,7 @@ G.onBossDead = () => {
   audio.combat = 0;
   const a = arenas.find((x) => x.boss);
   a.state = 'done'; a.gates.forEach((g) => setGate(g, false, true));
-  for (const e of G.enemies) if (!e.dead && !e.boss) { e.hp = 0; }
-  for (const e of G.enemies.slice()) if (!e.dead && !e.boss) { import('./combat.js').then((m) => m.killEnemy(e, {})); }
+  for (const e of G.enemies.slice()) if (!e.dead && !e.boss) killEnemy(e, {});
   UI.hideBoss(); sfx.win();
   UI.banner('MERGED ✔', 'The Legacy Monolith has been refactored', '#7ee787', 3.2);
   const p = G.player;

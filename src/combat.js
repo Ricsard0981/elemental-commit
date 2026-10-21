@@ -348,7 +348,8 @@ export function updatePickups(dt) {
     k.age += dt;
     const dx = p.x - k.x, dy = p.y + 1 - k.y, d = Math.hypot(dx, dy);
     const mag = k.type === 'heart' ? 2.6 : k.home ? 99 : 2.8;
-    if (!k.still && (k.age > (k.home ? 0.45 : 0) && d < mag && !p.dead)) {
+    if (k.age > (k.home ? 0.45 : 0) && d < mag && !p.dead) {
+      k.still = false;
       const pull = (k.home ? 28 : 18) * dt * (1 + k.age * 1.5);
       k.vx += (dx / d) * pull * 3; k.vy += (dy / d) * pull * 3;
       k.vx *= 1 - 3 * dt; k.vy *= 1 - 3 * dt; k.mag = true;
