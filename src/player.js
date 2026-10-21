@@ -1,0 +1,460 @@
+import * as THREE from 'three';
+import { G } from './state.js';
+import { scene, glow, dust, sparks, puff, cubes, rgb, ring, flashLight, floatText, shake, punchFov, player_light, post } from './engine.js';
+import { groundAt, solidsNear, platforms, ripple } from './world.js';
+import { sfx } from './audio.js';
+import { ELEMENTS } from './elements.js';
+import { computeMods, prog } from './skills.js';
+import * as In from './input.js';
+import * as UI from './ui.js';
+import { clamp, damp, lerp, rand, easeOut, sign } from './util.js';
+
+const tmp = [];
+const capsule = new THREE.CapsuleGeometry(1, 1, 4, 10), sph = new THREE.SphereGeometry(1, 16, 12), box = new THREE.BoxGeometry(1, 1, 1);
+
+export class Player {
+  constructor(key) {
+    this.key = key; this.el = ELEMENTS[key];
+    this.x = 4; this.y = 0; this.vx = 0; this.vy = 0; this.w = 0.7; this.h = 1.75;
+    this.facing = 1; this.onGround = false; this.coyote = 0; this.jumps = 0; this.airDash = true;
+    this.state = 'free'; this.lockT = 0; this.stun = 0; this.hurtI = 0; this.dashInv = 0;
+    this.guarding = false; this.guardT = 99; this.parryWindow = 0.22;
+    this.cd = { ranged: 0, guard: 0, s1: 0, s2: 0, dash: 0 }; this.cdMax = { ranged: 1, guard: 1, s1: 1, s2: 1, dash: 1 };
+    this.buf = { main: 0, jump: 0, s1: 0, s2: 0, dash: 0 };
+    this.atk = null; this.combo = 0; this.comboT = 0; this.castT = 0; this.castSlot = '';
+    this.dash = null; this.slam = null; this.fly = 0; this.haste = 0; this.dmgBuff = 1; this.dmgBuffT = 0; this.drBuff = 0;
+    this.squash = 0; this.dead = false; this.reborn = false; this.critBonus = 0; this.sinceHurt = 99;
+    this.safeX = 4; this.runPhase = 0; this.stepT = 0; this.turn = 0; this.shieldK = 0;
+    this.refreshMods(true);
+    this.hp = this.hpMax; this.energy = this.energyMax * 0.6;
+    this.build();
+  }
+
+  refreshMods(first) {
+    const owned = prog(this.key).owned;
+    const old = this.hpMax;
+    this.mods = computeMods(this.key, owned);
+    this.hpMax = 100 + this.mods.hp;
+    this.energyMax = 100 + this.mods.energy;
+    this.maxJumps = 2 + this.mods.jumps;
+    this.parryWindow = 0.22 * (1 + this.mods.parry);
+    if (!first && old) this.hp = Math.min(this.hpMax, this.hp + (this.hpMax - old));
+  }
+
+  // ------------------------------------------------------------ model
+  build() {
+    const c = this.el.color, c2 = this.el.color2;
+    const cloth = new THREE.MeshStandardMaterial({ color: 0x4a5a70, roughness: 0.55, metalness: 0.1, emissive: 0x1a2430, emissiveIntensity: 0.6 });
+    const dark = new THREE.MeshStandardMaterial({ color: 0x2a3340, roughness: 0.5, metalness: 0.3, emissive: 0x10161d, emissiveIntensity: 0.6 });
+    const accent = new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: 1.1, roughness: 0.3 });
+    const glowM = new THREE.MeshBasicMaterial({ color: new THREE.Color(c2).multiplyScalar(2.2), toneMapped: false });
+    this.mats = { cloth, dark, accent };
+    const g = this.group = new THREE.Group();
+    const body = this.body = new THREE.Group(); g.add(body);
+    const add = (geo, mat, parent, x, y, z, sx, sy, sz) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.scale.set(sx, sy, sz); m.castShadow = true; parent.add(m); return m; };
+    // hips + legs
+    this.hips = new THREE.Group(); this.hips.position.y = 0.88; body.add(this.hips);
+    this.legL = new THREE.Group(); this.legR = new THREE.Group();
+    this.legL.position.set(0, 0, 0.14); this.legR.position.set(0, 0, -0.14);
+    this.hips.add(this.legL, this.legR);
+    for (const l of [this.legL, this.legR]) {
+      add(capsule, cloth, l, 0, -0.36, 0, 0.1, 0.17, 0.1);
+      add(box, accent, l, 0.04, -0.76, 0, 0.2, 0.1, 0.15);
+      add(box, dark, l, 0, -0.72, 0, 0.14, 0.18, 0.13);
+    }
+    // torso
+    this.torso = new THREE.Group(); this.torso.position.y = 0.08; this.hips.add(this.torso);
+    add(capsule, cloth, this.torso, 0, 0.32, 0, 0.25, 0.22, 0.2);
+    add(box, accent, this.torso, 0, 0.07, 0, 0.45, 0.06, 0.38);
+    add(box, glowM, this.torso, -0.2, 0.42, 0, 0.04, 0.2, 0.18); // back crest
+    this.crest = add(new THREE.OctahedronGeometry(1), glowM, this.torso, -0.3, 0.5, 0, 0.12, 0.16, 0.12);
+    // head
+    this.head = new THREE.Group(); this.head.position.y = 0.78; this.torso.add(this.head);
+    add(sph, dark, this.head, 0, 0.12, 0, 0.23, 0.25, 0.22);
+    add(box, glowM, this.head, 0.16, 0.14, 0, 0.1, 0.07, 0.3); // visor
+    add(new THREE.ConeGeometry(1, 1, 5), accent, this.head, -0.1, 0.33, 0, 0.14, 0.3, 0.14).rotation.z = 0.7; // hood tip
+    // arms (z offset so the near arm is visible in side view)
+    this.armF = new THREE.Group(); this.armB = new THREE.Group();
+    this.armF.position.set(0, 0.62, 0.3); this.armB.position.set(0, 0.62, -0.3);
+    this.torso.add(this.armF, this.armB);
+    this.hands = [];
+    for (const a of [this.armF, this.armB]) {
+      add(capsule, cloth, a, 0, -0.26, 0, 0.075, 0.13, 0.075);
+      add(sph, accent, a, 0, -0.1, 0, 0.1, 0.1, 0.1);
+      const h = add(sph, glowM, a, 0, -0.56, 0, 0.1, 0.1, 0.1); this.hands.push(h);
+    }
+    // scarf (trailing chain)
+    this.scarf = [];
+    for (let i = 0; i < 6; i++) {
+      const s = new THREE.Mesh(box, accent); s.scale.set(0.34 - i * 0.03, 0.1, 0.12); s.castShadow = true;
+      scene.add(s); this.scarf.push({ m: s, x: this.x, y: this.y + 1.5 });
+    }
+    scene.add(g);
+    // shields
+    this.shields = {};
+    const mkS = (geo, color, op) => new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: new THREE.Color(color).multiplyScalar(1.7), transparent: true, opacity: op, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, toneMapped: false }));
+    const fireS = new THREE.Group(); const fd = mkS(new THREE.CircleGeometry(1.5, 28, -Math.PI / 2, Math.PI), 0xff6a2b, 0.35); const fr = mkS(new THREE.RingGeometry(1.35, 1.5, 28, 1, -Math.PI / 2, Math.PI), 0xffc233, 0.9); fireS.add(fd, fr); fireS.position.set(0.3, 1, 0.2);
+    const waterS = mkS(new THREE.SphereGeometry(1.5, 24, 16), 0x2ea8ff, 0.22);
+    const earthS = new THREE.Group(); for (let i = 0; i < 5; i++) { const r = new THREE.Mesh(box, new THREE.MeshStandardMaterial({ color: 0x9a7448, roughness: 0.9, flatShading: true })); r.scale.set(0.35, 0.8, 0.8); const a = -1.1 + i * 0.55; r.position.set(Math.cos(a) * 1.05, Math.sin(a) * 1.05 + 0.2, 0); r.rotation.z = a; earthS.add(r); }
+    const airS = new THREE.Group(); for (let i = 0; i < 3; i++) { const r = mkS(new THREE.TorusGeometry(1.0 + i * 0.25, 0.04, 6, 24, Math.PI), i % 2 ? 0x7ff3d6 : 0xcfe9ff, 0.8); r.rotation.z = -Math.PI / 2; airS.add(r); }
+    airS.position.set(0.4, 1, 0);
+    this.shields = { fire: fireS, water: waterS, earth: earthS, air: airS };
+    for (const s of Object.values(this.shields)) { s.visible = false; g.add(s); s.position.y = 1; }
+    this.shield = this.shields[this.key];
+    this.syncModel();
+  }
+  destroy() {
+    scene.remove(this.group); this.scarf.forEach((s) => scene.remove(s.m));
+  }
+
+  // ------------------------------------------------------------ input helpers
+  aim(forRanged) {
+    const cy = this.y + 1.2;
+    if (In.mouse.active > 0) {
+      let dx = In.mouse.wx - this.x, dy = In.mouse.wy - cy; const l = Math.hypot(dx, dy) || 1;
+      if (l < 0.6) return { x: this.facing, y: 0 };
+      dx /= l; dy /= l;
+      if (Math.abs(In.mouse.wx - this.x) > 0.4) this.facing = sign(dx);
+      return { x: dx, y: dy };
+    }
+    // keyboard aim-assist: nearest enemy in a forward cone
+    let best = null, bs = 99;
+    for (const e of G.enemies) {
+      if (e.dead || e.spawnT > 0) continue;
+      const dx = e.x - this.x, dy = e.y + e.h / 2 - cy;
+      if (dx * this.facing < 0.5 || Math.hypot(dx, dy) > 15) continue;
+      const ang = Math.abs(Math.atan2(dy, Math.abs(dx)));
+      if (ang < 0.7 && ang < bs) { bs = ang; best = { dx, dy }; }
+    }
+    if (best) { const l = Math.hypot(best.dx, best.dy); return { x: best.dx / l, y: best.dy / l }; }
+    return { x: this.facing, y: 0 };
+  }
+  nearestDir(range = 3.5) {
+    let best = null, bd = range;
+    for (const e of G.enemies) { if (e.dead || e.spawnT > 0) continue; const d = Math.abs(e.x - this.x); if (d < bd && Math.abs(e.y - this.y) < 3) { bd = d; best = e; } }
+    return best ? sign(best.x - this.x) : 0;
+  }
+  speedMul() { return 1 + this.mods.speed + (this.haste > 0 ? 0.35 : 0) + (this.fly > 0 ? 0.15 : 0); }
+
+  // ------------------------------------------------------------ abilities
+  startDash(o) {
+    this.state = 'dash';
+    this.dash = { t: 0, ...o };
+    this.dashInv = o.inv ?? 0.2;
+    this.facing = o.dir; this.atk = null; this.guarding = false; this.castT = 0;
+  }
+  tryDash() {
+    if (this.cd.dash > 0 || (!this.onGround && !this.airDash)) return false;
+    const ax = In.axis(), dir = ax || this.facing;
+    if (!this.onGround) this.airDash = false;
+    const cd = 0.85 * (1 - this.mods.dashCd);
+    this.cd.dash = cd; this.cdMax.dash = cd;
+    sfx.dash();
+    this.startDash({ dir, speed: 25, dur: 0.17, inv: 0.26, tint: this.el.color });
+    punchFov(2); ring(this.x, this.y + 0.9, 0.5, this.el.color2, { r0: 0.2, r1: 1.6, dur: 0.25 });
+    puff(this.x, this.y + 0.1, 5, 0x8b949e, 0.8, 0.4);
+    return true;
+  }
+  startAttack() {
+    const cfgs = this.el.main.hits;
+    if (this.comboT <= 0) this.combo = 0; else this.combo = (this.combo + 1) % cfgs.length;
+    const cfg = cfgs[this.combo];
+    const toward = this.nearestDir(4.5), ax = In.axis();
+    if (ax) this.facing = ax; else if (toward) this.facing = toward;
+    const sp = this.mods.hurricane ? 0.8 : 1, hs = this.haste > 0 ? 0.78 : 1, k = sp * hs;
+    this.atk = { cfg, i: this.combo, t: 0, dur: cfg.dur * k, hitAt: cfg.hitAt * k, cancelAt: cfg.cancelAt * k, struck: false };
+    this.state = 'attack'; this.guarding = false;
+    this.vx = this.facing * cfg.lunge * (this.onGround ? 1 : 0.6);
+    this.buf.main = 0;
+  }
+  tryCast(slot) {
+    const a = this.el[slot];
+    if (this.cd[slot] > 0) return false;
+    if (this.energy < a.cost) { UI.noEnergy(slot); sfx.hover(); return false; }
+    this.energy -= a.cost;
+    let cd = (a.cdFn ? a.cdFn(this) : a.cd);
+    if (slot === 's1' || slot === 's2') cd *= 1 - Math.min(0.6, this.mods.cdr);
+    if (slot === 'ranged' && this.haste > 0) cd *= 0.65;
+    this.cd[slot] = cd; this.cdMax[slot] = cd;
+    this.atk = null; this.guarding = false;
+    const ax = In.axis();
+    let aim;
+    if (slot === 'ranged' || slot === 's2') aim = this.aim(true); else { aim = { x: this.facing, y: 0 }; if (ax) this.facing = ax; }
+    this.facing = aim.x >= 0 && Math.abs(aim.x) > 0.05 ? 1 : Math.abs(aim.x) > 0.05 ? -1 : this.facing;
+    if (slot === 's1' && ax) this.facing = ax;
+    this.state = slot === 's1' && this.el.key === 'fire' ? this.state : 'cast';
+    this.lockT = a.lock * (this.haste > 0 ? 0.7 : 1); this.castT = 0; this.castSlot = slot;
+    if (slot === 's1' || slot === 's2') { sfx.cast(this.key); }
+    a.cast(this, aim, In.mouse.active > 0 ? In.mouse : null);
+    UI.castFlash(slot);
+    return true;
+  }
+
+  // ------------------------------------------------------------ update
+  update(dt) {
+    if (this.dead) { this.syncModel(); return; }
+    // input buffering works even during hit-stop (dt = 0)
+    for (const k of ['main', 'jump', 's1', 's2', 'dash']) if (In.hitNow(k)) this.buf[k] = k === 'jump' ? 0.14 : 0.22;
+    if (dt <= 0) return;
+    const m = this.mods, el = this.el;
+    // timers
+    for (const k in this.cd) if (this.cd[k] > 0) { this.cd[k] -= dt; if (this.cd[k] <= 0) { this.cd[k] = 0; if (k !== 'guard' && k !== 'dash') UI.ready(k); } }
+    for (const k in this.buf) this.buf[k] = Math.max(0, this.buf[k] - dt);
+    this.hurtI = Math.max(0, this.hurtI - dt); this.dashInv = Math.max(0, this.dashInv - dt);
+    this.stun = Math.max(0, this.stun - dt);
+    this.comboT = Math.max(0, this.comboT - dt); this.sinceHurt += dt;
+    if (this.haste > 0) this.haste -= dt; if (this.fly > 0) { this.fly -= dt; if (this.fly <= 0) floatText(this.x, this.y + 2.5, 'sky dance ended', { size: 14, color: '#bfe1ff' }); }
+    if (this.dmgBuffT > 0) { this.dmgBuffT -= dt; if (this.dmgBuffT <= 0) this.dmgBuff = 1; }
+    this.energy = Math.min(this.energyMax, this.energy + (5 + (this.haste > 0 ? 3 : 0)) * dt);
+    if (m.regen && this.sinceHurt > 4 && this.hp < this.hpMax) this.hp = Math.min(this.hpMax, this.hp + m.regen * dt);
+    this.coyote = this.onGround ? 0.1 : Math.max(0, this.coyote - dt);
+
+    const ax = In.axis();
+    const canAct = this.state === 'free' && this.stun <= 0;
+    // ---- guard
+    const gHeld = In.down('guard');
+    if (gHeld && !this.guarding && this.cd.guard <= 0 && this.stun <= 0 && (this.state === 'free' || (this.state === 'attack' && this.atk.t > this.atk.cancelAt) || this.state === 'cast' && this.lockT < 0.12)) {
+      this.guarding = true; this.guardT = 0; this.state = 'free'; this.atk = null; sfx.guardUp();
+      ring(this.x + this.facing * 0.7, this.y + 1.1, 0.5, el.color2, { r0: 0.2, r1: 1.4, dur: 0.22 });
+    }
+    if (this.guarding) {
+      this.guardT += dt;
+      if (!gHeld || this.stun > 0 || this.state === 'dash') { this.guarding = false; this.cd.guard = 0.3; }
+      if (m.immovable && this.key === 'earth') this.hp = Math.min(this.hpMax, this.hp + 4 * dt);
+    }
+
+    // ---- state machine
+    if (this.state === 'dash') {
+      const d = this.dash; d.t += dt;
+      this.vx = d.dir * d.speed; this.vy = d.vy0 ?? 0;
+      d.tick?.(this, dt);
+      // dash afterimages
+      for (let i = 0; i < 4; i++) glow.emit(this.x + rand(-0.2, 0.2), this.y + rand(0.2, 1.6), rand(-0.2, 0.2), -d.dir * rand(1, 4), rand(-1, 1), 0, rgb(d.tint ?? el.color, 1.7), rand(0.3, 0.55), 0, 0.35);
+      if (d.t >= d.dur) { this.vx = d.dir * Math.min(d.speed, 8) * 0.5; this.state = 'free'; this.dash = null; d.end?.(this); }
+    } else if (this.state === 'attack') {
+      const a = this.atk; a.t += dt;
+      this.vx = damp(this.vx, 0, 9, dt);
+      if (!a.struck && a.t >= a.hitAt) { a.struck = true; el.main.strike(this, a.i); }
+      if (a.t >= a.cancelAt && this.buf.main > 0 && !this.stun) {
+        // chain into next hit
+        this.comboT = 0.5; this.startAttack();
+      } else if (a.t >= a.dur) { this.state = 'free'; this.comboT = 0.45; this.atk = null; }
+      if (this.atk && a.t >= a.cancelAt && this.buf.dash > 0 && this.tryDash()) this.buf.dash = 0;
+    } else if (this.state === 'cast') {
+      this.lockT -= dt; this.castT += dt;
+      this.vx = damp(this.vx, 0, 8, dt);
+      if (this.lockT <= 0) this.state = 'free';
+      if (this.buf.dash > 0 && this.tryDash()) this.buf.dash = 0;
+    } else if (this.state === 'free' && this.stun <= 0) {
+      // movement
+      let sm = 1;
+      if (this.guarding) sm = { fire: 0.45, water: 0.6, earth: m.immovable ? 0.45 : 0, air: 0.85 }[this.key];
+      const target = ax * 8.2 * this.speedMul() * sm;
+      const acc = Math.abs(target) > Math.abs(this.vx) || sign(target) !== sign(this.vx) ? (this.onGround ? 70 : 38) : (this.onGround ? 55 : 10);
+      if (ax) { this.vx += clamp(target - this.vx, -acc * dt, acc * dt); if (!this.guarding) this.facing = ax; } else this.vx = damp(this.vx, 0, this.onGround ? 16 : 3, dt);
+      if (this.guarding && ax) this.facing = this.facing; // facing locked while guarding
+      // jump
+      const flying = this.fly > 0;
+      if (this.buf.jump > 0 && !this.guarding) {
+        if (this.coyote > 0 || (this.onGround)) { this.jump(false); }
+        else if (flying || this.jumps < this.maxJumps - 1) { this.jump(true); }
+      }
+      // actions
+      if (this.buf.dash > 0 && !this.guarding) { this.buf.dash = 0; this.tryDash(); }
+      else if (!this.guarding) {
+        if (this.buf.main > 0) this.startAttack();
+        else if (In.down('ranged')) this.tryCast('ranged');
+        else if (this.buf.s1 > 0) { this.buf.s1 = 0; this.tryCast('s1'); }
+        else if (this.buf.s2 > 0) { this.buf.s2 = 0; this.tryCast('s2'); }
+      }
+    } else if (this.stun > 0) {
+      this.vx = damp(this.vx, 0, 5, dt);
+    }
+
+    // ---- physics
+    const wasGround = this.onGround, pvy = this.vy;
+    if (this.state !== 'dash') {
+      const g = this.vy < 0 ? 54 : 40;
+      this.vy -= g * dt * (this.fly > 0 ? 0.55 : 1);
+      if (!In.down('jump') && this.vy > 5 && this.state !== 'attack' && !this.fly) this.vy -= 55 * dt; // variable jump height
+      this.vy = Math.max(this.vy, -34);
+      if (this.fly > 0 && !this.onGround && this.vy < -6) this.vy = -6;
+    }
+    this.collide(dt);
+    if (this.onGround) { this.jumps = 0; this.airDash = true; this.safeX = groundAt(this.x - 1.2) > -20 && groundAt(this.x + 1.2) > -20 ? this.x : this.safeX; }
+    if (!wasGround && this.onGround) this.land(pvy);
+    // pits
+    if (this.y < -14) this.fellInPit();
+
+    // ---- visuals
+    this.animate(dt);
+    // ambient aura + hands
+    this.fxTick(dt);
+    // light
+    player_light.position.set(this.x, this.y + 1.8, 2.5);
+    player_light.color.set(el.color);
+    player_light.intensity = 9 + (this.guarding ? 8 : 0) + (this.state === 'cast' ? 14 : 0);
+  }
+
+  jump(double) {
+    this.buf.jump = 0; this.coyote = 0;
+    if (double) {
+      this.jumps++; this.vy = this.fly > 0 ? 12.5 : 14.5; sfx.djump();
+      ring(this.x, this.y + 0.2, 0.3, this.el.color2, { r0: 0.2, r1: 1.7, dur: 0.3, flat: false });
+      for (let i = 0; i < 10; i++) glow.emit(this.x + rand(-0.4, 0.4), this.y + 0.1, rand(-0.3, 0.3), rand(-3, 3), rand(-4, -1), 0, rgb(this.el.color2, 1.6), 0.3, 0, 0.4);
+      this.squash = -0.3;
+    } else {
+      this.jumps = 1; this.vy = 15.2; sfx.jump(); puff(this.x, this.y + 0.1, 5, 0x8b949e, 0.8, 0.45, 2.5);
+      this.squash = -0.35;
+    }
+    this.onGround = false;
+  }
+  land(vy) {
+    const k = clamp(-vy / 28, 0, 1);
+    if (this.slam) { const f = this.slam; this.slam = null; f(); }
+    if (k > 0.2) {
+      this.squash = 0.15 + k * 0.4; sfx.land(k);
+      puff(this.x, this.y + 0.1, 3 + Math.round(k * 7), 0x8b949e, 0.7 + k * 0.6, 0.5, 3 + k * 3);
+      if (k > 0.6) { shake(0.12); ring(this.x, this.y + 0.05, 0.5, 0x8b949e, { r0: 0.3, r1: 2.2, dur: 0.3, flat: true, intensity: 0.8 }); }
+    }
+  }
+  fellInPit() {
+    this.x = this.safeX; this.y = groundAt(this.safeX) + 0.2; this.vx = this.vy = 0;
+    this.hp = Math.max(1, this.hp - 15); this.hurtI = 1.4;
+    sfx.hurt(); shake(0.4); post.aberr = 0.01; UI.damageVignette();
+    floatText(this.x, this.y + 2.5, 'git stash pop!', { color: '#ffa657', size: 22 });
+    ring(this.x, this.y + 1, 0.5, 0x39d353, { r0: 0.3, r1: 3, dur: 0.5 });
+  }
+
+  // ------------------------------------------------------------ collision
+  collide(dt) {
+    const hw = this.w / 2;
+    // horizontal
+    this.x += this.vx * dt;
+    let s = solidsNear(this.x - hw - 0.2, this.x + hw + 0.2, tmp);
+    for (const b of s) {
+      if (this.x + hw > b.x0 && this.x - hw < b.x1 && this.y < b.y1 - 0.02 && this.y + this.h > b.y0) {
+        if (b.y1 - this.y <= 0.6 && this.vy <= 0.5 && b.y1 < 40) { this.y = b.y1; if (this.vy < 0) this.vy = 0; }
+        else if (this.vx > 0 || (this.vx === 0 && this.x < (b.x0 + b.x1) / 2)) { this.x = b.x0 - hw; this.vx = 0; }
+        else { this.x = b.x1 + hw; this.vx = 0; }
+      }
+    }
+    // vertical
+    const prevY = this.y;
+    this.y += this.vy * dt;
+    this.onGround = false;
+    s = solidsNear(this.x - hw + 0.02, this.x + hw - 0.02, tmp);
+    for (const b of s) {
+      if (this.x + hw > b.x0 && this.x - hw < b.x1 && this.y < b.y1 && this.y + this.h > b.y0) {
+        if (this.vy <= 0 && prevY >= b.y1 - 0.15) { this.y = b.y1; this.vy = 0; this.onGround = true; }
+        else if (this.vy > 0 && prevY + this.h <= b.y0 + 0.15) { this.y = b.y0 - this.h; this.vy = 0; }
+      }
+    }
+    // one-way slabs
+    if (this.vy <= 0 && !In.down('down')) {
+      for (const p of platforms) {
+        if (Math.abs(this.x - p.x) < p.w / 2 + hw * 0.6 && prevY >= p.y - 0.1 && this.y <= p.y) { this.y = p.y; this.vy = 0; this.onGround = true; }
+      }
+    }
+  }
+
+  // ------------------------------------------------------------ animation
+  animate(dt) {
+    const sp = Math.abs(this.vx), gnd = this.onGround;
+    this.runPhase += dt * (6 + sp * 1.1) * (gnd ? 1 : 0);
+    const run = gnd ? clamp(sp / 8, 0, 1.2) : 0;
+    const t = G.time;
+    // legs
+    let legA = Math.sin(this.runPhase) * 0.95 * run, legB = -legA;
+    let kneeTuck = 0;
+    if (!gnd) { const up = clamp(this.vy / 14, -1, 1); legA = 0.5 - up * 0.3; legB = -0.4 + up * 0.2; kneeTuck = 1; }
+    this.legL.rotation.z = damp(this.legL.rotation.z, legA, 25, dt); this.legR.rotation.z = damp(this.legR.rotation.z, legB, 25, dt);
+    // torso lean & arms
+    let lean = -run * 0.16, armF = -Math.sin(this.runPhase) * 0.9 * run, armB = Math.sin(this.runPhase) * 0.9 * run;
+    let bob = Math.abs(Math.sin(this.runPhase)) * 0.07 * run + (gnd && run < 0.1 ? Math.sin(t * 2.2) * 0.012 : 0);
+    if (!gnd) { armF = 1.2 + clamp(-this.vy / 20, 0, 1) * 0.8; armB = -armF * 0.5; lean = clamp(-this.vy / 60, -0.2, 0.25) - 0.1; }
+    if (this.state === 'dash') { lean = -0.75; armF = -2.4; armB = -2.2; this.legL.rotation.z = 1.0; this.legR.rotation.z = -1.1; }
+    if (this.state === 'attack') {
+      const a = this.atk, k = clamp(a.t / a.dur, 0, 1), cfg = a.i;
+      const wind = clamp(a.t / Math.max(0.01, a.hitAt), 0, 1), sw = clamp((a.t - a.hitAt) / (a.dur * 0.5), 0, 1);
+      const ang = a.t < a.hitAt ? lerp(-0.4, -2.1, wind) : lerp(-2.1, 2.2, easeOut(sw));
+      if (this.key === 'earth') { armF = a.t < a.hitAt ? lerp(0, 2.8, wind) : lerp(2.8, 0.3, easeOut(sw)); armB = armF * 0.8; lean = a.t < a.hitAt ? 0.15 : -0.4; }
+      else if (a.i % 2 === 0) { armF = ang; armB = ang * 0.3; lean = a.t < a.hitAt ? 0.1 : -0.4; }
+      else { armB = ang; armF = -ang * 0.2; lean = a.t < a.hitAt ? 0.15 : -0.45; }
+    }
+    if (this.state === 'cast') { const k = clamp(this.castT / 0.12, 0, 1); armF = lerp(armF, 1.6, k); armB = lerp(armB, 1.5, k); lean = lerp(lean, -0.15, k); if (this.castSlot === 's2' || this.castSlot === 's1') { armF = 2.9; armB = 2.7; lean = 0.1; } }
+    if (this.guarding) { armF = 1.7; armB = 1.5; lean = this.key === 'earth' ? 0.2 : -0.12; }
+    if (this.stun > 0) { lean = 0.4; armF = -0.8; armB = -0.8; }
+    this.torso.rotation.z = damp(this.torso.rotation.z, lean, 20, dt);
+    this.armF.rotation.z = damp(this.armF.rotation.z, armF, 28, dt); this.armB.rotation.z = damp(this.armB.rotation.z, armB, 28, dt);
+    this.head.rotation.z = damp(this.head.rotation.z, -lean * 0.5 + (gnd ? 0 : -0.1), 12, dt);
+    this.crest.rotation.y += dt * 2; this.crest.rotation.z = Math.sin(t * 3) * 0.2;
+    this.hips.position.y = 0.88 + bob - (this.guarding ? 0.08 : 0);
+    // turning
+    const ry = this.facing > 0 ? 0 : Math.PI;
+    let d = ry - this.group.rotation.y; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI;
+    this.group.rotation.y += d * (1 - Math.exp(-22 * dt));
+    // squash & stretch springs
+    this.squash = damp(this.squash, 0, 10, dt);
+    const stretch = !gnd && this.state !== 'dash' ? clamp(Math.abs(this.vy) / 40, 0, 0.18) : 0;
+    const sy = 1 - this.squash * 0.55 + stretch, sxz = 1 + this.squash * 0.5 - stretch * 0.5;
+    this.body.scale.set(sxz, sy, sxz);
+    // blink on i-frames
+    const blink = this.hurtI > 0 && this.dashInv <= 0 && Math.floor(G.time * 25) % 2 === 0;
+    this.group.visible = !blink;
+    // shield visuals
+    const want = this.guarding ? 1 : 0;
+    this.shieldK = damp(this.shieldK, want, 22, dt);
+    const sh = this.shield;
+    sh.visible = this.shieldK > 0.02;
+    if (sh.visible) {
+      const k = this.shieldK, flick = 1 + Math.sin(t * 25) * 0.04;
+      if (this.key === 'fire') { sh.position.set(0.45, 1.0, 0.2); sh.scale.setScalar(k * flick * 0.85); }
+      else if (this.key === 'water') { sh.position.set(0, 1, 0); sh.scale.setScalar(k * (1 + Math.sin(t * 6) * 0.03) * 0.95); }
+      else if (this.key === 'earth') { sh.position.set(0, 1, 0); sh.scale.setScalar(k * 0.95); }
+      else { sh.position.set(0.5, 1, 0); sh.scale.setScalar(k); sh.children.forEach((c, i) => { c.rotation.x = t * (4 + i * 2); }); }
+      const inPerfect = this.guardT <= this.parryWindow;
+      sh.traverse((o) => { if (o.material && o.material.opacity !== undefined && !o.material.isMeshStandardMaterial) { o.material.color.setHex(inPerfect ? 0xffffff : this.el.color).multiplyScalar(inPerfect ? 3 : 1.7); } });
+    }
+    // earth skin tint
+    this.mats.cloth.color.setHex(this.guarding && this.key === 'earth' ? 0x9a8054 : 0x4a5a70);
+    this.syncModel();
+    // scarf follow
+    let px = this.x - this.facing * 0.2, py = this.y + 1.45 + bob;
+    this.scarf.forEach((s, i) => {
+      const wind = -this.facing * (0.28 + Math.abs(this.vx) * 0.02) ;
+      s.x = damp(s.x, px + wind, 18 - i * 1.5, dt); s.y = damp(s.y, py - 0.05 - (this.vy < 0 ? -this.vy * 0.004 : 0) + Math.sin(t * 7 + i) * 0.03 + (Math.abs(this.vx) > 2 ? 0.05 : -0.07), 14, dt);
+      s.m.position.set(s.x, s.y, 0); s.m.rotation.z = Math.atan2(s.y - py, s.x - px) * 0.5; s.m.visible = this.group.visible;
+      px = s.x; py = s.y;
+    });
+    // footsteps
+    if (gnd && run > 0.5) { this.stepT -= dt; if (this.stepT <= 0) { this.stepT = 0.17; puff(this.x - this.facing * 0.2, this.y + 0.05, 1, 0x8b949e, 0.5, 0.4, 1); } }
+  }
+  syncModel() { this.group.position.set(this.x, this.y, 0); }
+
+  fxTick(dt) {
+    const c = this.el.color, c2 = this.el.color2, t = G.time;
+    const hand = (i) => { const h = this.hands[i]; return h.getWorldPosition(new THREE.Vector3()); };
+    const rate = this.state === 'cast' || this.guarding ? 0.9 : 0.25;
+    if (Math.random() < rate) { const p = hand(Math.random() < 0.5 ? 0 : 1); glow.emit(p.x, p.y, p.z, rand(-0.5, 0.5), rand(0.5, 1.5), 0, rgb(c2, 1.8), 0.2, 0, 0.4); }
+    // ambient aura per element
+    if (Math.random() < 0.55) {
+      const x = this.x + rand(-0.4, 0.4), y = this.y + rand(0.1, 1.7);
+      if (this.key === 'fire') glow.emit(x, y, rand(-0.3, 0.3), rand(-0.3, 0.3), rand(1, 2.4), 0, rgb(Math.random() < 0.5 ? c : c2, 1.6), rand(0.15, 0.3), 0, 0.7, -1);
+      else if (this.key === 'water') glow.emit(x, y, rand(-0.3, 0.3), rand(-0.3, 0.3), rand(0.4, 1.4), 0, rgb(Math.random() < 0.5 ? c : c2, 1.4), rand(0.12, 0.22), 0, 0.9, -0.5);
+      else if (this.key === 'earth') glow.emit(x, this.y + rand(0, 0.5), rand(-0.3, 0.3), rand(-0.3, 0.3), rand(0.2, 0.8), 0, rgb(c, 1.1), rand(0.1, 0.2), 0, 0.8, 1);
+      else { const a = t * 4 + rand(6); glow.emit(this.x + Math.cos(a) * 0.7, this.y + 0.9 + Math.sin(a * 0.5) * 0.8, Math.sin(a) * 0.5, -Math.sin(a) * 2, 0.3, Math.cos(a), rgb(Math.random() < 0.5 ? c : c2, 1.4), rand(0.1, 0.2), 0, 0.5); }
+    }
+    if (this.fly > 0) for (let i = 0; i < 3; i++) glow.emit(this.x + rand(-0.4, 0.4), this.y + rand(0, 1.8), rand(-0.3, 0.3), -this.vx * 0.2 + rand(-1, 1), rand(-1, 1), 0, rgb(0xcfe9ff, 1.6), rand(0.2, 0.4), 0, 0.5);
+    if (this.guarding && this.key === 'fire') glow.emit(this.x + this.facing * rand(0.4, 1.4), this.y + rand(0, 2), 0.2, 0, rand(2, 5), 0, rgb(Math.random() < 0.5 ? c : c2, 1.8), rand(0.3, 0.5), 0, 0.5);
+    if (this.guarding && this.key === 'air') glow.emit(this.x + this.facing * 1.8, this.y + rand(0, 2), rand(-0.5, 0.5), -this.facing * rand(8, 14), rand(-1, 1), 0, rgb(0xcfe9ff, 1.5), 0.25, 0, 0.35);
+  }
+
+  respawn(x) {
+    this.dead = false; this.hp = this.hpMax; this.energy = this.energyMax * 0.5; this.x = x; this.y = groundAt(x) + 0.1; this.vx = this.vy = 0;
+    this.hurtI = 2; this.state = 'free'; this.atk = null; this.guarding = false; this.dash = null; this.stun = 0; this.group.visible = true;
+    this.fly = 0; this.haste = 0; this.dmgBuff = 1; this.slam = null; this.safeX = x;
+    for (const k in this.cd) this.cd[k] = 0;
+    this.syncModel();
+  }
+}

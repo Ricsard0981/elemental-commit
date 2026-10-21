@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Elemental Commit</title>
+<meta name="description" content="A side-view 3D elemental action game set inside a GitHub contribution graph. Pick Fire, Water, Earth or Air.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d1117'/%3E%3Crect x='6' y='6' width='9' height='9' rx='2' fill='%2339d353'/%3E%3Crect x='17' y='6' width='9' height='9' rx='2' fill='%2326a641'/%3E%3Crect x='6' y='17' width='9' height='9' rx='2' fill='%23006d32'/%3E%3Crect x='17' y='17' width='9' height='9' rx='2' fill='%2339d353'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="./style.css">
+<script type="importmap">{"imports":{"three":"./vendor/three.module.js","three/addons/":"./vendor/addons/"}}</script>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="floaters"></div>
+<div id="vignette"></div><div id="parryfx"></div>
+
+<div id="hud">
+  <div id="topleft">
+    <div id="elicon"></div>
+    <div><div id="elname"></div><div id="ellvl"></div><div id="xp"><i id="xp-fill"></i></div></div>
+    <button id="btn-skills" title="Skill tree (Tab)">Skills</button>
+    <div id="skillhint"></div>
+  </div>
+  <div id="combo"><div id="combo-rank"></div><div id="combo-n">0</div><div id="combo-label">COMBO</div><div id="combo-track"><i id="combo-bar"></i></div></div>
+  <div id="topright"><div id="commits"><span class="sq"></span><b id="commit-n">0</b> <small>commits</small></div><div id="progress"></div></div>
+  <div id="bossbar"><div id="boss-name"></div><div class="track"><i id="boss-fill"></i></div><div class="poise"><i id="boss-poise"></i></div></div>
+  <div id="bottomleft">
+    <div id="hpbar" class="bar"><i id="hp-lag"></i><i id="hp-fill"></i><span id="hp-txt"></span></div>
+    <div id="enbar" class="bar"><i id="en-fill"></i><span id="en-txt"></span></div>
+  </div>
+  <div id="abilities"></div>
+  <div id="hint"></div>
+  <div id="toasts"></div>
+</div>
+<div id="banner"></div>
+
+<section id="menu" class="screen show">
+  <div class="title">
+    <div class="logo"><i></i><i></i><i></i><i></i></div>
+    <h1>ELEMENTAL <span>COMMIT</span></h1>
+    <p>Fight through the contribution graph. Fix the bugs. Merge into <code>main</code>.</p>
+  </div>
+  <div id="cards"></div>
+  <div class="foot"><span><kbd>A</kbd><kbd>D</kbd> move</span><span><kbd>Space</kbd> jump ×2</span><span><kbd>Shift</kbd> dash</span><span><kbd>J</kbd> attack</span><span><kbd>K</kbd> ranged</span><span><kbd>L</kbd> defend</span><span><kbd>Q</kbd><kbd>E</kbd> specials</span><span><kbd>Tab</kbd> skills</span><span>Mouse: <kbd>LMB</kbd> attack <kbd>RMB</kbd> ranged (aims)</span></div>
+</section>
+
+<section id="skills" class="screen">
+  <header><h2 id="sk-title"></h2><div id="sk-level"></div><div id="sk-points"></div><button id="btn-respec">Refund all</button><button id="btn-skills-close" class="primary">Close <kbd>Tab</kbd></button></header>
+  <div id="tree"></div>
+  <p class="sk-foot">Skill points are earned by leveling up — kill bugs, parry attacks and chain combos for XP. Progress is saved in your browser.</p>
+</section>
+
+<section id="pause" class="screen"><div class="panel"><h2>Paused</h2><button id="btn-resume" class="primary">Resume</button><button id="btn-pause-skills">Skill tree</button><button id="btn-pause-menu">Change element</button></div></section>
+<section id="death" class="screen"><div class="panel"><h2 class="red">Build failed</h2><pre>$ git reset --hard HEAD</pre><p id="death-pts"></p><button id="btn-respawn" class="primary">Revert to last commit <kbd>R</kbd></button><button id="btn-death-skills">Skill tree</button></div></section>
+<section id="win" class="screen"><div class="panel wide"><div class="merged">MERGED INTO <span>main</span> ✔</div><h2>The Monolith is refactored.</h2><div id="win-rank">S</div><div id="win-new">★ New best run</div><div id="win-stats"></div><div class="row"><button id="btn-again" class="primary">Play again</button><button id="btn-win-skills">Skill tree</button><button id="btn-win-menu">Change element</button></div></div></section>
+<div id="loading">Compiling…</div>
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>

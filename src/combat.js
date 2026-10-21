@@ -1,0 +1,382 @@
+import * as THREE from 'three';
+import { G } from './state.js';
+import { scene, glow, dust, sparks, puff, cubes, rgb, ring, slash, flashLight, floatText, shake, punchFov, screenFlash, post, addFx } from './engine.js';
+import { groundAt, ripple } from './world.js';
+import { sfx } from './audio.js';
+import { ELEMENTS } from './elements.js';
+import { addXP, xpNeed, prog } from './skills.js';
+import { clamp, rand, pick, randi, easeOut } from './util.js';
+import * as UI from './ui.js';
+
+// ----------------------------------------------------------------- time helpers
+export const hitstop = (s) => { G.freeze = Math.max(G.freeze, s); };
+export const slowmo = (scale, real) => { G.tsTarget = scale; G.tsHold = Math.max(G.tsHold, real); };
+export const later = (delay, fn) => G.timers.push({ t: delay, fn });
+
+export const enemyBox = (e) => ({ x0: e.x - e.w / 2, x1: e.x + e.w / 2, y0: e.y, y1: e.y + e.h });
+const overlap = (a, b) => a.x0 < b.x1 && a.x1 > b.x0 && a.y0 < b.y1 && a.y1 > b.y0;
+
+// ----------------------------------------------------------------- combo
+const MILESTONES = [5, 10, 20, 35, 50, 75, 100, 150];
+export function comboAdd(n = 1) {
+  const c = G.combo, before = c.n;
+  c.n += n; c.t = 3.4; c.best = Math.max(c.best, c.n);
+  for (let i = 0; i < MILESTONES.length; i++) if (before < MILESTONES[i] && c.n >= MILESTONES[i]) {
+    c.rank = i + 1; sfx.combo(i * 2); UI.comboMilestone(i + 1);
+    const p = G.player; ring(p.x, p.y + 1, 0.5, 0xffd33d, { r0: 0.5, r1: 5 + i, dur: 0.6 });
+    post.bloomBoost = 0.4;
+  }
+}
+export function comboBreak() { G.combo.n = 0; G.combo.rank = 0; }
+
+// ----------------------------------------------------------------- XP / level
+export function giveXP(amount, x, y) {
+  const el = G.element;
+  const ups = addXP(el, amount);
+  floatText(x, y + 0.6, `+${amount} XP`, { color: '#7ee787', size: 15, dur: 0.9, vy: 2 });
+  if (ups > 0) levelUp(ups);
+}
+function levelUp(n) {
+  const p = G.player;
+  sfx.levelUp();
+  p.hp = p.hpMax; p.energy = p.energyMax;
+  const c = ELEMENTS[G.element].color;
+  for (let i = 0; i < 3; i++) later(i * 0.12, () => ring(p.x, p.y + 0.9, 0.5, i % 2 ? 0xffffff : c, { r0: 0.4, r1: 5 + i * 3, dur: 0.7 + i * 0.1 }));
+  cubes(p.x, p.y + 1, 0x39d353, 36, 12, 0.3, true, 1.8);
+  cubes(p.x, p.y + 1, c, 20, 9, 0.25, true, 1.6);
+  flashLight(p.x, p.y + 1.5, 2, 0x39d353, 80, 0.8);
+  screenFlash(0x39d353, 0.3); post.bloomBoost = 0.8; punchFov(5); shake(0.3);
+  ripple(p.x, 2.4, 0x39d353, 18, 1.4);
+  UI.levelUpBanner(prog(G.element).level);
+}
+
+// ----------------------------------------------------------------- enemy damage
+export function hitEnemy(e, base, o = {}) {
+  if (e.dead || e.spawnT > 0) return 0;
+  const p = G.player, m = p.mods;
+  let d = base * (1 + m.allDmg) * (p.dmgBuff || 1);
+  const crit = !o.noCrit && Math.random() < 0.1 + (p.critBonus || 0);
+  if (crit) d *= 1.75;
+  if (e.chill > 0 && m.frostbite) d *= 1.3;
+  if (e.stun > 0 && m.crushing) d *= 1.5;
+  if (e.vulnerable > 0) d *= 1.25;
+  d = Math.max(1, Math.round(d));
+  e.hp -= d; e.flash = 0.13; e.hurtT = 2.2;
+  // knockback
+  const dir = o.dir ?? (Math.sign(e.x - p.x) || 1);
+  if (!e.heavy || e.stagger > 0) {
+    e.vx += dir * (o.kx ?? 5) * (e.kbMul ?? 1); if (o.ky) e.vy += o.ky * (e.kbMul ?? 1);
+  } else e.vx += dir * (o.kx ?? 5) * 0.12;
+  // poise / stagger
+  e.poise -= o.poise ?? d * 0.9;
+  if (e.poise <= 0 && e.stagger <= 0 && !e.boss) { e.stagger = e.staggerTime || 0.45; e.poise = e.poiseMax; e.onStagger?.(); }
+  if (e.boss && e.poise <= 0) { e.poise = e.poiseMax; e.onStagger?.(); }
+  // statuses
+  if (o.burn) { e.burn = Math.max(e.burn, o.burn); e.burnDps = Math.max(e.burnDps || 0, o.burnDps || 8); }
+  if (o.chill) e.chill = Math.max(e.chill, o.chill);
+  if (o.stun && !e.boss) { e.stun = Math.max(e.stun, o.stun); e.onStun?.(); }
+  if (o.pull) e.vx += o.pull;
+  // feedback
+  const col = o.color ?? ELEMENTS[G.element].color;
+  const big = d > 30 || o.big;
+  hitstop(o.hitstop ?? (crit ? 0.085 : big ? 0.07 : 0.045));
+  shake(o.shake ?? (crit ? 0.3 : big ? 0.25 : 0.14));
+  sparks(e.x, e.y + e.h * 0.55, col, crit ? 16 : 9, crit ? 11 : 8, 0.26, 0.45, dir);
+  sparks(e.x, e.y + e.h * 0.55, 0xffffff, 4, 6, 0.18, 0.25, dir);
+  if (!o.quiet) sfx.hit(big, crit);
+  floatText(e.x, e.y + e.h + 0.4, crit ? `${d}!` : String(d), { cls: crit ? 'crit' : '', color: crit ? '#ffd33d' : '#ffffff', size: crit ? 34 : big ? 26 : 20, dur: crit ? 1.1 : 0.8, vy: crit ? 3.4 : 2.6 });
+  if (crit) { ring(e.x, e.y + e.h * 0.5, 0.6, 0xffd33d, { r0: 0.2, r1: 1.8, dur: 0.3 }); punchFov(1.5); }
+  if (!o.noCombo) comboAdd(1);
+  if (!o.noEnergy) p.energy = Math.min(p.energyMax, p.energy + (o.kind === 'main' ? 4.5 : 1.5));
+  e.onHurt?.(d, o);
+  if (e.hp <= 0) killEnemy(e, o);
+  return d;
+}
+
+export function killEnemy(e, o = {}) {
+  if (e.dead) return;
+  e.dead = true;
+  const p = G.player, big = e.heavy || e.boss;
+  G.stats.kills++;
+  const cy = e.y + e.h * 0.5;
+  sfx.kill(big);
+  hitstop(big ? 0.16 : 0.08); shake(big ? 0.7 : 0.3);
+  ring(e.x, cy, 0.6, e.color, { r0: 0.3, r1: big ? 7 : 3.2, dur: 0.5 });
+  ring(e.x, cy, 0.6, 0xffffff, { r0: 0.2, r1: big ? 4 : 1.8, dur: 0.3 });
+  flashLight(e.x, cy, 2, e.color, big ? 90 : 40, 0.4);
+  sparks(e.x, cy, 0xffffff, big ? 30 : 14, 12, 0.3, 0.6);
+  cubes(e.x, cy, e.color, big ? 40 : 14, big ? 13 : 9, big ? 0.5 : 0.32, false, 1.7);
+  cubes(e.x, cy, 0x39d353, big ? 24 : 8, 8, 0.2, true, 1.2);
+  puff(e.x, e.y + 0.3, big ? 12 : 5, 0x8b949e, 1.2, 0.8);
+  ripple(e.x, big ? 3 : 1.4, e.color, 16, 1.0);
+  if (big) { slowmo(0.28, 0.5); punchFov(6); post.aberr = 0.012; screenFlash(0xffffff, 0.25); }
+  else post.aberr = Math.max(post.aberr, 0.004);
+  floatText(e.x, e.y + e.h + 1, pick(['BUG FIXED', 'RESOLVED', 'MERGED', 'REFACTORED', 'DEPRECATED', 'CLOSED']) + ` #${randi(100, 9999)}`, { color: '#7ee787', size: big ? 26 : 15, dur: 1.2, vy: 1.6 });
+  // loot
+  const mult = 1 + Math.floor(G.combo.n / 20) * 0.5;
+  spawnCommits(e.x, cy, Math.round(e.commits * mult));
+  if (Math.random() < (e.heart ?? 0.1) && p.hp < p.hpMax * 0.9) spawnHeart(e.x, cy);
+  giveXP(e.xp, e.x, e.y + e.h);
+  // fire passive
+  if (e.burn > 0 && p.mods.deathExplode) later(0.12, () => explode(e.x, cy, 3.6, 38, { color: 0xff6a2b, burn: 3, chain: true }));
+  e.onDeath?.();
+  p.energy = Math.min(p.energyMax, p.energy + 10);
+}
+
+export function hitBox(x0, x1, y0, y1, dmg, o = {}) {
+  const box = { x0, x1, y0, y1 }, hit = [];
+  for (const e of G.enemies.slice()) {
+    if (e.dead || e.spawnT > 0) continue;
+    if (overlap(box, enemyBox(e))) { hitEnemy(e, dmg, o); hit.push(e); }
+  }
+  return hit;
+}
+
+export function explode(x, y, r, dmg, o = {}) {
+  const c = o.color ?? ELEMENTS[G.element].color;
+  sfx.explosion(r / 3);
+  ring(x, y, 0.4, c, { r0: 0.3, r1: r * 1.1, dur: 0.45, intensity: 2 });
+  ring(x, y, 0.4, 0xffffff, { r0: 0.1, r1: r * 0.7, dur: 0.25 });
+  if (!o.noGround) ring(x, groundAt(x) + 0.05, 0.4, c, { r0: 0.3, r1: r * 1.3, dur: 0.5, flat: true });
+  flashLight(x, y, 2.5, c, 60 + r * 8, 0.35);
+  sparks(x, y, c, 18 + r * 4, 6 + r * 2.2, 0.32, 0.6);
+  sparks(x, y, 0xffffff, 8, 8, 0.2, 0.3);
+  cubes(x, y, o.cubeColor ?? c, 8 + r * 2, 6 + r * 1.5, 0.28, true, 1);
+  puff(x, y - 0.3, 6, 0x6e7681, 1.1, 0.7);
+  ripple(x, Math.min(3, r * 0.5), c, 14, 0.9);
+  shake(o.shake ?? Math.min(0.6, 0.12 + r * 0.07));
+  hitstop(o.hitstop ?? 0.05);
+  for (const e of G.enemies.slice()) {
+    if (e.dead || e.spawnT > 0) continue;
+    const cx = e.x, cy = e.y + e.h * 0.5;
+    const d = Math.hypot(cx - x, (cy - y) * 0.9);
+    if (d <= r + e.w * 0.5) hitEnemy(e, dmg * (1 - 0.35 * (d / (r + 0.01))), { ...o, dir: Math.sign(cx - x) || 1, kx: (o.kx ?? 7) * (1 - d / (r + 3)) + 2, ky: o.ky ?? 5, big: true, hitstop: 0.03, color: c });
+  }
+  // player-harming explosion (enemy-owned) handled by caller
+}
+
+// ----------------------------------------------------------------- projectiles
+const geo = { orb: new THREE.SphereGeometry(1, 14, 10), box: new THREE.BoxGeometry(1, 1, 1) };
+export function spawnProj(o) {
+  const col = new THREE.Color(o.color ?? 0xffffff).multiplyScalar(o.shape === 'rock' ? 1 : 2.2);
+  const mesh = new THREE.Mesh(o.shape === 'rock' ? geo.box : geo.orb,
+    o.shape === 'rock' ? new THREE.MeshStandardMaterial({ color: o.color, roughness: 0.8, flatShading: true }) : new THREE.MeshBasicMaterial({ color: col, toneMapped: false }));
+  const r = o.r ?? 0.35;
+  mesh.scale.set(o.shape === 'blade' ? r * 2.4 : r, o.shape === 'blade' ? r * 0.45 : r, r);
+  mesh.position.set(o.x, o.y, 0);
+  mesh.castShadow = o.shape === 'rock';
+  scene.add(mesh);
+  const pr = { owner: 'player', dmg: 10, life: 3, grav: 0, pierce: 0, hit: new Set(), trailC: o.color ?? 0xffffff, mesh, vx: 0, vy: 0, r, spin: 0, ...o };
+  G.projectiles.push(pr);
+  return pr;
+}
+export function endProj(pr, hitSomething = true) {
+  if (pr.dead) return;
+  pr.dead = true; scene.remove(pr.mesh); pr.mesh.material.dispose();
+  pr.onEnd?.(pr, hitSomething);
+}
+export function reflectProj(pr, mult = 2.5, pierce = false) {
+  pr.owner = 'player'; pr.dmg *= mult;
+  const src = pr.src;
+  let tx = pr.x - pr.vx, ty = pr.y;
+  if (src && !src.dead) { tx = src.x; ty = src.y + src.h * 0.5; }
+  const dx = tx - pr.x, dy = ty - pr.y, l = Math.hypot(dx, dy) || 1;
+  const sp = Math.max(16, Math.hypot(pr.vx, pr.vy) * 1.6);
+  pr.vx = (dx / l) * sp; pr.vy = (dy / l) * sp; pr.hit = new Set(); pr.life = 2.5; pr.pierce = pierce ? 3 : 0; pr.reflected = true;
+  const c = ELEMENTS[G.element].color;
+  pr.mesh.material.color.set(c).multiplyScalar(2.6); pr.trailC = c; pr.mesh.scale.multiplyScalar(1.25);
+  pr.onEnd = (p) => explode(p.x, p.y, 2.4, 18 * mult, { color: c, quiet: true });
+}
+export function updateProjectiles(dt) {
+  const p = G.player;
+  for (let i = G.projectiles.length - 1; i >= 0; i--) {
+    const pr = G.projectiles[i];
+    if (pr.dead) { G.projectiles.splice(i, 1); continue; }
+    if (pr.homing && pr.owner === 'player') {
+      let best = null, bd = pr.homing.range ?? 9;
+      for (const e of G.enemies) if (!e.dead && e.spawnT <= 0) { const d = Math.hypot(e.x - pr.x, e.y + e.h / 2 - pr.y); if (d < bd) { bd = d; best = e; } }
+      if (best) {
+        const sp = Math.hypot(pr.vx, pr.vy), a = Math.atan2(pr.vy, pr.vx), ta = Math.atan2(best.y + best.h / 2 - pr.y, best.x - pr.x);
+        let da = ta - a; while (da > Math.PI) da -= 2 * Math.PI; while (da < -Math.PI) da += 2 * Math.PI;
+        const na = a + clamp(da, -pr.homing.turn * dt, pr.homing.turn * dt);
+        pr.vx = Math.cos(na) * sp; pr.vy = Math.sin(na) * sp;
+      }
+    }
+    pr.vy -= pr.grav * dt;
+    pr.x += pr.vx * dt; pr.y += pr.vy * dt; pr.life -= dt;
+    pr.mesh.position.set(pr.x, pr.y, 0);
+    if (pr.shape === 'blade') pr.mesh.rotation.z = Math.atan2(pr.vy, pr.vx);
+    if (pr.shape === 'rock') { pr.mesh.rotation.x += dt * 8; pr.mesh.rotation.z += dt * 6; }
+    pr.mesh.scale.multiplyScalar(1 + Math.sin(G.time * 30) * 0.002);
+    // trail
+    const tc = rgb(pr.trailC, 1.5);
+    glow.emit(pr.x + rand(-0.1, 0.1), pr.y + rand(-0.1, 0.1), 0, -pr.vx * 0.05, rand(-0.4, 0.4), 0, tc, pr.r * 1.6, 0, 0.3, 0, 3);
+    if (pr.trailDust) dust.emit(pr.x, pr.y, 0, rand(-0.5, 0.5), rand(0, 1), 0, rgb(pr.trailDust, 0.6), pr.r * 1.5, pr.r * 3, 0.5, 0, 2);
+    // terrain
+    const ground = groundAt(pr.x);
+    if (!pr.ghost && pr.y - pr.r * 0.3 < ground) { pr.y = ground + pr.r * 0.3; endProj(pr, true); continue; }
+    if (pr.life <= 0 || pr.y < -20 || Math.abs(pr.x - p.x) > 70) { endProj(pr, false); continue; }
+    if (pr.owner === 'player') {
+      for (const e of G.enemies) {
+        if (e.dead || e.spawnT > 0 || pr.hit.has(e)) continue;
+        const b = enemyBox(e);
+        if (pr.x > b.x0 - pr.r && pr.x < b.x1 + pr.r && pr.y > b.y0 - pr.r && pr.y < b.y1 + pr.r) {
+          pr.hit.add(e);
+          if (pr.onHit) pr.onHit(pr, e); else hitEnemy(e, pr.dmg, { kind: 'ranged', dir: Math.sign(pr.vx) || 1, color: pr.trailC });
+          if (pr.pierce > 0) pr.pierce--; else { endProj(pr, true); break; }
+        }
+      }
+    } else if (!p.dead) {
+      const hw = p.w / 2 + pr.r * 0.8;
+      if (Math.abs(pr.x - p.x) < hw && pr.y > p.y - pr.r && pr.y < p.y + p.h + pr.r) {
+        const res = damagePlayer(pr.dmg, { x: pr.x - Math.sign(pr.vx) * 0.5, y: pr.y, proj: pr, enemy: pr.src, kind: 'proj' });
+        if (res === 'parry' || res === 'iframes' || res === 'deflect') continue;
+        endProj(pr, true);
+      }
+    }
+  }
+}
+
+// ----------------------------------------------------------------- player damage / defence
+export function damagePlayer(amount, src = {}) {
+  const p = G.player;
+  if (!p || p.dead || p.hurtI > 0 || p.dashInv > 0) return 'iframes';
+  const el = ELEMENTS[G.element], g = el.guard;
+  const front = (src.x - p.x) * p.facing >= -0.4;
+  const guarded = p.guarding && (front || g.allAround);
+  if (guarded) {
+    const win = p.parryWindow;
+    if (p.guardT <= win) { perfectParry(src); return 'parry'; }
+    if (src.proj && g.deflects) { reflectProj(src.proj, p.mods.vacuum ? 3 : 1.6, !!p.mods.vacuum); sfx.block(); sparks(p.x + p.facing, p.y + 1, el.color2, 10, 7); return 'deflect'; }
+    // normal block
+    const red = g.reduction + p.mods.dr;
+    const taken = Math.max(0, Math.round(amount * (1 - Math.min(0.95, red))));
+    sfx.block(); shake(0.22); hitstop(0.05);
+    sparks(p.x + p.facing * 0.7, p.y + 1.1, el.color2, 14, 8, 0.25, 0.4, p.facing);
+    ring(p.x + p.facing * 0.7, p.y + 1.1, 0.6, el.color2, { r0: 0.2, r1: 1.6, dur: 0.25 });
+    p.vx -= Math.sign(src.x - p.x) * (g.knockback ?? 5);
+    p.guardFlash = 0.15;
+    if (p.mods.thorns) explode(p.x + p.facing * 0.5, p.y + 1, 3, amount * 2.2, { color: el.color, kx: 8, stun: 0.6 });
+    floatText(p.x, p.y + 2.4, taken > 0 ? `-${taken}` : 'BLOCKED', { color: taken > 0 ? '#ffa657' : '#9ecbff', size: 18 });
+    if (taken > 0) { p.hp -= taken; G.stats.damageTaken += taken; if (p.hp <= 0) return playerDown(src); }
+    if (src.proj) endProj(src.proj, true);
+    p.energy = Math.min(p.energyMax, p.energy + 6);
+    return 'blocked';
+  }
+  // ---- real hit
+  const dr = clamp(p.mods.dr + (p.drBuff || 0), 0, 0.8);
+  const dmg = Math.max(1, Math.round(amount * (1 - dr)));
+  p.hp -= dmg; G.stats.damageTaken += dmg;
+  p.hurtI = 0.9; p.stun = 0.22;
+  p.vx = Math.sign(p.x - src.x || 1) * 7; p.vy = Math.max(p.vy, 6);
+  p.squash = 0.55;
+  comboBreak();
+  sfx.hurt(); hitstop(0.1); shake(0.55); punchFov(-2);
+  post.aberr = 0.014; screenFlash(0xf85149, 0.4); UI.damageVignette();
+  sparks(p.x, p.y + 1, 0xff4d4d, 16, 9, 0.28, 0.5);
+  floatText(p.x, p.y + 2.5, `-${dmg}`, { color: '#ff6b6b', size: 30, cls: 'hurt' });
+  if (src.proj) endProj(src.proj, true);
+  if (p.hp <= 0) return playerDown(src);
+  return 'hit';
+}
+function playerDown(src) {
+  const p = G.player;
+  if (p.mods.rebirth && !p.reborn) {
+    p.reborn = true; p.hp = p.hpMax * 0.5; p.hurtI = 2.2;
+    explode(p.x, p.y + 1, 7, 90, { color: 0xff6a2b, kx: 14, ky: 8, shake: 0.8 });
+    floatText(p.x, p.y + 3, 'REBIRTH!', { color: '#ffb347', size: 42 }); screenFlash(0xffb347, 0.6); slowmo(0.3, 0.6);
+    return 'hit';
+  }
+  p.hp = 0; p.dead = true; G.mode = 'dead';
+  sfx.die(); shake(0.9); slowmo(0.2, 1.4);
+  cubes(p.x, p.y + 1, ELEMENTS[G.element].color, 30, 10, 0.3, true, 2);
+  UI.showDeath();
+  return 'dead';
+}
+function perfectParry(src) {
+  const p = G.player, el = ELEMENTS[G.element];
+  G.stats.parries++;
+  p.hurtI = 0.5;
+  sfx.parry(); hitstop(0.16); slowmo(0.22, 0.5);
+  shake(0.55); punchFov(5); post.aberr = 0.02; post.bloomBoost = 0.9; screenFlash(0xffffff, 0.35);
+  const x = p.x + p.facing * 0.6, y = p.y + 1.1;
+  ring(x, y, 0.8, 0xffffff, { r0: 0.2, r1: 6, dur: 0.5, intensity: 2.5 });
+  ring(x, y, 0.8, el.color, { r0: 0.2, r1: 9, dur: 0.7, intensity: 2.2 });
+  sparks(x, y, 0xffffff, 24, 14, 0.3, 0.6); sparks(x, y, el.color, 24, 12, 0.3, 0.7);
+  cubes(x, y, el.color2, 14, 9, 0.22, true, 1.2);
+  flashLight(x, y, 2, el.color, 100, 0.5);
+  ripple(p.x, 2.2, el.color, 18, 1.2);
+  floatText(p.x, p.y + 3, 'PERFECT PARRY', { color: '#ffd33d', size: 34, cls: 'parry', dur: 1.2 });
+  UI.parryFlash();
+  p.energy = Math.min(p.energyMax, p.energy + 25);
+  comboAdd(3);
+  if (src.proj) reflectProj(src.proj, 3, !!p.mods.vacuum);
+  if (src.enemy && !src.enemy.dead) {
+    const e = src.enemy;
+    e.poise = 0; e.stagger = Math.max(e.stagger, e.boss ? 0 : 1.8); e.vulnerable = 3; e.stun = Math.max(e.stun, 0.4);
+    e.parried?.();
+    spawnCommits(e.x, e.y + e.h / 2, 4);
+    floatText(e.x, e.y + e.h + 1, 'STAGGERED', { color: '#ffd33d', size: 20 });
+  }
+  g_perfect(p, src);
+}
+function g_perfect(p, src) { ELEMENTS[G.element].guard.onPerfect(p, src); }
+
+// ----------------------------------------------------------------- pickups
+const pk = { commit: new THREE.BoxGeometry(0.3, 0.3, 0.3), heart: new THREE.OctahedronGeometry(0.28), cm: new THREE.MeshBasicMaterial({ color: new THREE.Color(0x39d353).multiplyScalar(2.4), toneMapped: false }), hm: new THREE.MeshBasicMaterial({ color: new THREE.Color(0xff8fc7).multiplyScalar(2.4), toneMapped: false }) };
+export function spawnCommit(x, y, o = {}) {
+  const mesh = new THREE.Mesh(pk.commit, pk.cm);
+  mesh.position.set(x, y, 0); scene.add(mesh);
+  G.pickups.push({ type: 'commit', x, y, vx: o.vx ?? 0, vy: o.vy ?? 0, mesh, age: 0, home: !!o.home, still: !!o.still, ph: rand(6) });
+}
+export function spawnCommits(x, y, n) {
+  for (let i = 0; i < n; i++) {
+    const a = rand(Math.PI), s = rand(4, 11);
+    spawnCommit(x, y, { vx: Math.cos(a) * s, vy: Math.sin(a) * s + 3, home: true });
+  }
+}
+export function spawnHeart(x, y) {
+  const mesh = new THREE.Mesh(pk.heart, pk.hm); mesh.scale.set(1, 1.3, 1); mesh.position.set(x, y, 0); scene.add(mesh);
+  G.pickups.push({ type: 'heart', x, y, vx: rand(-2, 2), vy: 7, mesh, age: 0, home: false, ph: 0 });
+}
+let chain = 0, chainT = 0;
+export function updatePickups(dt) {
+  const p = G.player;
+  chainT -= dt; if (chainT <= 0) chain = 0;
+  for (let i = G.pickups.length - 1; i >= 0; i--) {
+    const k = G.pickups[i];
+    k.age += dt;
+    const dx = p.x - k.x, dy = p.y + 1 - k.y, d = Math.hypot(dx, dy);
+    const mag = k.type === 'heart' ? 2.6 : k.home ? 99 : 2.8;
+    if (!k.still && (k.age > (k.home ? 0.45 : 0) && d < mag && !p.dead)) {
+      const pull = (k.home ? 28 : 18) * dt * (1 + k.age * 1.5);
+      k.vx += (dx / d) * pull * 3; k.vy += (dy / d) * pull * 3;
+      k.vx *= 1 - 3 * dt; k.vy *= 1 - 3 * dt; k.mag = true;
+    } else if (!k.mag) {
+      k.vy -= 24 * dt;
+      const g = groundAt(k.x) + 0.25;
+      if (!k.still && k.y < g) { k.y = g; k.vy *= -0.4; k.vx *= 0.7; }
+      if (k.still) { k.vx = 0; k.vy = 0; }
+    }
+    k.x += k.vx * dt; k.y += k.vy * dt;
+    k.mesh.position.set(k.x, k.y + (k.still ? Math.sin(G.time * 3 + k.ph) * 0.12 : 0), 0);
+    k.mesh.rotation.y += dt * 4; k.mesh.rotation.x += dt * 2;
+    if (k.type === 'commit' && Math.random() < 0.25) glow.emit(k.x, k.y, 0, 0, 0.5, 0, rgb(0x39d353, 1.5), 0.25, 0, 0.35);
+    if (d < 0.9 && !p.dead) {
+      scene.remove(k.mesh); G.pickups.splice(i, 1);
+      if (k.type === 'commit') {
+        G.stats.commits++; chain++; chainT = 0.5; sfx.pickup(chain);
+        UI.commitPop();
+        sparks(k.x, k.y, 0x7ee787, 5, 5, 0.2, 0.3);
+      } else {
+        p.hp = Math.min(p.hpMax, p.hp + 18); sfx.heal(); ring(p.x, p.y + 1, 0.5, 0xff8fc7, { r0: 0.3, r1: 2.4, dur: 0.5 });
+        floatText(p.x, p.y + 2.4, '+18 HP', { color: '#ff8fc7', size: 22 }); sparks(p.x, p.y + 1, 0xff8fc7, 14, 6);
+      }
+    }
+  }
+}
+export function clearAll() {
+  for (const pr of G.projectiles) { scene.remove(pr.mesh); }
+  for (const k of G.pickups) scene.remove(k.mesh);
+  G.projectiles.length = 0; G.pickups.length = 0; G.fx.length = 0; G.timers.length = 0;
+}
