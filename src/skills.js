@@ -14,7 +14,7 @@ const fork = (id, name, desc, fx, icon) => ({ id, name, desc, fx, icon });
 
 export const SKILLS = {
   fire: [
-    n('f1', 0, 0, 'Cinder Brand', 'Your flames brand enemies: burning targets take +25% damage from everything you do.', { brand: true }, '✦'),
+    n('f1', 0, 0, 'Cinder Brand', 'Every main hit ignites, and burning targets take +25% damage from everything you do.', { brand: true, burnMain: true }, '✦'),
     n('f2', 0, 1, 'Spreading Embers', 'Enemies that die while burning set everything within 5 m on fire.', { spreadBurn: true }, '♨'),
     n('f3', 0, 2, 'Inferno Mastery', 'Your 3rd ground hit slams a pillar of fire into the floor that burns for 3 s. Burning kills explode.', { firePillar: true, deathExplode: true }, '✺'),
     n('f4', 1, 0, 'Phoenix Cadence', 'Phoenix Dash refunds your ranged cooldown and 15 energy for every enemy it ignites.', { cadence: true }, '⁂'),
@@ -23,7 +23,7 @@ export const SKILLS = {
       fork('a', 'Armageddon', 'Meteor Storm rains 9 bigger meteors and shakes the whole map.', { armageddon: true }, '☄'),
       fork('b', 'Solar Flare', 'Meteor Storm becomes ONE colossal meteor: huge blast, 1.4 s stun, burns everything.', { solarFlare: true }, '☀'),
     ]),
-    n('f7', 2, 0, 'Burning Guard', 'Enemies that strike your guard catch fire.', { burnGuard: true }, '◈'),
+    n('f7', 2, 0, 'Burning Guard', 'Enemies that strike your guard catch fire, and every block erupts in a small fire nova.', { burnGuard: true }, '◈'),
     n('f8', 2, 1, 'Heat Haze', 'Perfect-parry window +50%. Perfect parries refresh Phoenix Dash.', { parry: 0.5, heatHaze: true }, '◉'),
     n('f9', 2, 2, 'Rebirth', 'Once per run, fatal damage revives you at 50% HP with a fire nova.', { rebirth: true }, '✹'),
   ],
@@ -34,7 +34,7 @@ export const SKILLS = {
     n('w4', 1, 0, 'Riptide Pull', 'Water Bolts drag their target 3 m towards you, setting up launchers.', { riptide: true }, '〰'),
     n('w5', 1, 1, 'Surge', 'Tidal Wave crashes back after reaching its end.', { waveReturn: true }, '☂'),
     n('w6', 1, 2, 'Tide Mastery', 'Choose the nature of your great wave.', {}, '◉', [
-      fork('a', 'Leviathan', 'Tidal Wave is gigantic and your special cooldowns are −25%.', { leviathan: true, cdr: 0.25 }, '◉'),
+      fork('a', 'Leviathan', 'Tidal Wave becomes ONE colossal tsunami: screen-high, 30 m long, hurls everything skyward. Special cooldowns −25%.', { leviathan: true, cdr: 0.25 }, '◉'),
       fork('b', 'Undertow', 'Tidal Wave drags everything into its centre and freezes it for 5 s of chill.', { undertow: true }, '⟲'),
     ]),
     n('w7', 2, 0, 'Mirror Tide', 'Perfect blocks heal 18 HP and refund 30 energy.', { mirror: true }, '◈'),
@@ -49,7 +49,7 @@ export const SKILLS = {
     n('e5', 1, 1, 'Fortress', 'Stone Bastion raises 5 pillars that last twice as long.', { fortress: true }, '▥'),
     n('e6', 1, 2, 'Tectonic Mastery', 'Choose what your earthquakes do to enemies.', {}, '⬢', [
       fork('a', 'Crushing Weight', 'Stunned enemies take +50% damage.', { crushing: true }, '⬢'),
-      fork('b', 'Tectonic Spire', 'Quake waves travel 6 m further, stun for 2.5 s and LAUNCH everything they hit: juggle starters.', { spire: true }, '⛰'),
+      fork('b', 'Mountainfall', 'Quake calls down ONE colossal mountain: a crater-sized blast, 2.5 s stun, and shockwaves that LAUNCH everything they touch.', { mountainfall: true, spire: true }, '⛰'),
     ]),
     n('e7', 2, 0, 'Rebound', 'Every 3 blocked hits charge your next main attack: double damage and a heavy stagger.', { rebound: true }, '◈'),
     n('e8', 2, 1, 'Reflective Crust', 'Blocked hits are reflected as a shockwave.', { thorns: true }, '◉'),
@@ -63,7 +63,7 @@ export const SKILLS = {
     n('a5', 1, 1, 'Wings', 'Sky Dance lasts +3 s and recharges faster.', { wings: true }, '❦'),
     n('a6', 1, 2, 'Storm Mastery', 'Choose how the Cyclone finishes.', {}, '⚡', [
       fork('a', 'Stormcaller', 'Cyclone calls lightning down on nearby enemies.', { cycloneBolts: true }, '⚡'),
-      fork('b', 'Jetstream', 'When the Cyclone ends it flings everything it caught into the air: a free juggle.', { jetstream: true }, '⇡'),
+      fork('b', 'Maelstrom', 'Cyclone becomes ONE colossal storm: twice the size, drags everything in, and when it ends flings it all into the air.', { maelstrom: true, jetstream: true }, '🌀'),
     ]),
     n('a7', 2, 0, 'Light Feet', '+15% move speed and a third jump.', { speed: 0.15, jumps: 1 }, '➶'),
     n('a8', 2, 1, 'Tailwind Parry', 'Perfect parries give 3 s of haste and restore 30 energy.', { tailwindParry: true }, '◈'),

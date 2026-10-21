@@ -76,6 +76,7 @@ const fire = {
   key: 'fire', name: 'Fire', color: 0xff6a2b, color2: 0xffc233, css: '#ff6a2b', css2: '#ffc233',
   blurb: 'Relentless aggression. Burn everything, then burn it again.',
   stats: [4, 2, 3, 5],
+  prof: { atk: 0.82, dmg: 1.0, poise: 1.0, hs: 0.9, move: 1.08, dash: { speed: 27, dur: 0.17, cd: 0.8, inv: 0.26 }, jump: 15.2, jumps: 0, fall: -34, grav: 1.0, tag: 'Fast · medium power · speeds up as your combo grows' },
   main: {
     name: 'Flame Blade', desc: 'Fast 3-hit sword combo. The finisher erupts in a fire burst and ignites enemies.',
     hits: [{ dur: 0.3, hitAt: 0.07, cancelAt: 0.2, lunge: 5 }, { dur: 0.3, hitAt: 0.07, cancelAt: 0.2, lunge: 5 }, { dur: 0.46, hitAt: 0.13, cancelAt: 0.34, lunge: 8 }],
@@ -181,6 +182,7 @@ const water = {
   key: 'water', name: 'Water', color: 0x2ea8ff, color2: 0x9fe8ff, css: '#2ea8ff', css2: '#9fe8ff',
   blurb: 'Flow, control and sustain. Chill enemies, heal through the fight.',
   stats: [3, 5, 4, 3],
+  prof: { atk: 0.86, dmg: 1.12, poise: 0.9, hs: 0.95, move: 1.1, dash: { speed: 26, dur: 0.18, cd: 0.65, inv: 0.32 }, jump: 15.2, jumps: 0, fall: -34, grav: 1.0, tag: 'Fast · strong · dash cancels any swing and chills' },
   main: {
     name: 'Tide Whip', desc: 'Wide, sweeping whip combo that chills enemies. The finisher sends a wave rolling forward.',
     hits: [{ dur: 0.34, hitAt: 0.09, cancelAt: 0.22, lunge: 3 }, { dur: 0.34, hitAt: 0.09, cancelAt: 0.22, lunge: 3 }, { dur: 0.5, hitAt: 0.15, cancelAt: 0.36, lunge: 4 }],
@@ -227,7 +229,8 @@ const water = {
     name: 'Tidal Wave', desc: 'Summon a huge wave that crashes forward, hurling and chilling everything in its path.', cost: 35, cd: 8, lock: 0.45,
     cdFn: (p) => 8,
     cast(p) {
-      const big = p.mods.leviathan, ret = p.mods.waveReturn, dir = p.facing, len = big ? 24 : 18, scl = big ? 1.5 : 1;
+      const big = p.mods.leviathan, ret = p.mods.waveReturn, dir = p.facing, len = big ? 30 : 18, scl = big ? 2.7 : 1;
+      if (big) { screenFlash(0x2ea8ff, 0.3); shake(0.6); }
       sfx.cast('water'); sfx.wave(); shake(0.3); punchFov(3);
       let x = p.x + dir * 1.5, t = 0, d = 0, backwards = false, hit = new Set();
       const mesh = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1, 3.5), new THREE.MeshBasicMaterial({ color: new THREE.Color(0x2ea8ff).multiplyScalar(1.1), transparent: true, opacity: 0.4, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }));
@@ -249,7 +252,7 @@ const water = {
         for (const e of G.enemies) {
           if (e.dead || e.spawnT > 0 || hit.has(e)) continue;
           if (Math.abs(e.x - x) < 1.6 * scl && e.y < Math.max(gy, 0) + h) {
-            hit.add(e); hitEnemy(e, 32 * (big ? 1.35 : 1), { kind: 'special', dir: backwards ? -dir : dir, kx: p.mods.undertow ? 2 : 14, ky: 8, chill: p.mods.undertow ? 5 : 3.5, stun: 0.4, big: true, color: 0x2ea8ff, poise: 90 });
+            hit.add(e); hitEnemy(e, 32 * (big ? 2.4 : 1), { kind: 'special', dir: backwards ? -dir : dir, kx: p.mods.undertow ? 2 : 14, ky: big ? 15 : 8, chill: p.mods.undertow ? 5 : 3.5, stun: 0.4, big: true, color: 0x2ea8ff, poise: 90 });
             if (big) p.energy = Math.min(p.energyMax, p.energy + 5);
           }
         }
@@ -290,6 +293,7 @@ const earth = {
   key: 'earth', name: 'Earth', color: 0xc08a4b, color2: 0x8bd450, css: '#d9a05b', css2: '#8bd450',
   blurb: 'Unmovable and devastating. Break poise, stun, crush.',
   stats: [5, 1, 5, 2],
+  prof: { atk: 1.38, dmg: 2.0, poise: 1.8, hs: 1.35, move: 0.86, dash: { speed: 21, dur: 0.15, cd: 1.15, inv: 0.2 }, jump: 14.2, jumps: 0, fall: -38, grav: 1.12, tag: 'Slow · crushing · armoured finisher' },
   main: {
     name: 'Stone Fists', desc: 'Slow, heavy punches with huge stagger. The finisher slams the ground in both directions.',
     hits: [{ dur: 0.42, hitAt: 0.16, cancelAt: 0.3, lunge: 3 }, { dur: 0.42, hitAt: 0.16, cancelAt: 0.3, lunge: 3 }, { dur: 0.7, hitAt: 0.3, cancelAt: 0.5, lunge: 2 }],
@@ -339,6 +343,27 @@ const earth = {
     cdFn: () => 7,
     cast(p) {
       sfx.cast('earth');
+      if (p.mods.mountainfall) { // ONE colossal mountain drops ahead of you
+        const tx = clamp(p.x + p.facing * 7, 2, 264), gy = groundAt(tx);
+        screenFlash(0xe0b070, 0.25); shake(0.3); punchFov(3);
+        ring(tx, gy + 0.05, 0.5, 0xe0b070, { r0: 0.4, r1: 9, dur: 0.9, flat: true });
+        const m = new THREE.Mesh(new THREE.IcosahedronGeometry(1, 1), new THREE.MeshBasicMaterial({ color: new THREE.Color(0xa07a45).multiplyScalar(1.8), toneMapped: false }));
+        scene.add(m); let t = 0; sfx.telegraph();
+        addFx((dt) => {
+          t += dt; const k = Math.min(1, t / 0.75), y = lerp(gy + 30, gy + 2.2, k * k);
+          m.position.set(tx, y, 0); m.scale.setScalar(3.4); m.rotation.x += dt * 2.5; m.rotation.y += dt * 1.6;
+          if (Math.random() < 0.7) dust.emit(tx + rand(-3, 3), y + rand(-2, 2), rand(-1, 1), rand(-2, 2), rand(2, 7), 0, rgb(0x8b949e, 0.6), 1, 1.5, 0.8);
+          if (k < 1) return true;
+          scene.remove(m); m.geometry.dispose();
+          sfx.quake(); shake(1.0); punchFov(7); post.aberr = 0.02; screenFlash(0xffe0a0, 0.45);
+          ring(tx, gy + 0.05, 0.5, 0xe0b070, { r0: 0.5, r1: 16, dur: 0.9, flat: true }); ring(tx, gy + 1, 0.5, 0xffffff, { r0: 0.3, r1: 9, dur: 0.5 });
+          puff(tx, gy + 0.5, 24, 0x8b949e, 3, 1.4); cubes(tx, gy + 1, 0xb98a4e, 40, 16, 0.6, false, 2.4); ripple(tx, 5, 0xc08a4b, 24, 1.8); flashLight(tx, gy + 2, 2, 0xe0b070, 120, 0.7);
+          explode(tx, gy + 1, 8.5, 110, { color: 0xc08a4b, stun: 2.5, kx: 8, ky: 14, launch: 14, shake: 0, hitstop: 0.14, noGround: true });
+          for (const d of [-1, 1]) groundWave(tx, d, { len: 16, speed: 20, dmg: 40, color: 0xc08a4b, stun: 2.5, kx: 3, ky: 12, thick: 1.6, height: 3, hitOpts: { launch: 14 } });
+          return false;
+        });
+        return;
+      }
       p.vy = 11; punchFov(2);
       const impact = (mult) => {
         const x = p.x, gy = groundAt(x);
@@ -395,6 +420,7 @@ const air = {
   key: 'air', name: 'Air', color: 0xcfe9ff, color2: 0x7ff3d6, css: '#bfe1ff', css2: '#7ff3d6',
   blurb: 'Speed and freedom. Out-maneuver, deflect, and dominate the sky.',
   stats: [3, 4, 2, 5],
+  prof: { atk: 0.64, dmg: 0.68, poise: 0.7, hs: 0.7, move: 1.28, dash: { speed: 29, dur: 0.2, cd: 0.5, inv: 0.24 }, jump: 16.2, jumps: 1, fall: -15, grav: 0.86, tag: 'Fastest · light · floats, 3 jumps, quick dash' },
   main: {
     name: 'Gale Blades', desc: 'Very fast slashes with long reach. The finisher dashes forward through enemies.',
     hits: [{ dur: 0.24, hitAt: 0.05, cancelAt: 0.14, lunge: 8 }, { dur: 0.24, hitAt: 0.05, cancelAt: 0.14, lunge: 8 }, { dur: 0.36, hitAt: 0.09, cancelAt: 0.26, lunge: 14 }],
@@ -436,7 +462,8 @@ const air = {
     name: 'Cyclone', desc: 'Conjure a tornado ahead that drags enemies in, lifts and shreds them.', cost: 35, cd: 9, lock: 0.45,
     cdFn: () => 9,
     cast(p) {
-      const eye = p.mods.stormEye, bolts = p.mods.cycloneBolts, R = eye ? 5.4 : 3.8, dur = eye ? 6 : 3.8;
+      const mael = p.mods.maelstrom, eye = p.mods.stormEye || mael, bolts = p.mods.cycloneBolts, R = mael ? 8.6 : eye ? 5.4 : 3.8, dur = mael ? 7 : eye ? 6 : 3.8;
+      if (mael) { screenFlash(0xcfe9ff, 0.3); shake(0.5); }
       let cx = clamp(p.x + p.facing * 5, 3, 264); const dir = p.facing;
       sfx.cast('air'); shake(0.3); punchFov(2);
       const g = new THREE.Group(); const rings = [];
@@ -456,13 +483,13 @@ const air = {
         rings.forEach((m, i) => { m.rotation.z += dt * (9 - i); m.position.x = Math.sin(t * 3 + i) * 0.3; });
         for (let i = 0; i < 6; i++) { const a = rand(6.28), h = rand(0, 5.5) * (R / 3.8), rr = (0.4 + h * 0.3) * k; glow.emit(cx + Math.cos(a) * rr, Math.max(0, gy) + h, Math.sin(a) * rr, -Math.sin(a) * 8, 2, Math.cos(a) * 3, rgb(0xcfe9ff, 1.5), rand(0.25, 0.5), 0, 0.5, 0, 0); }
         if (Math.random() < 0.4) dust.emit(cx + rand(-1.5, 1.5), Math.max(0, gy) + 0.2, rand(-1, 1), rand(-3, 3), rand(0, 3), 0, rgb(0x8b949e, 0.5), 0.6, 1.5, 0.6);
-        const pull = eye ? 30 : 20;
+        const pull = mael ? 46 : eye ? 30 : 20;
         for (const e of G.enemies) {
           if (e.dead || e.spawnT > 0) continue;
           const dx = cx - e.x;
           if (Math.abs(dx) < R + 2 && e.y < gy + 9) { e.vx += Math.sign(dx) * Math.min(pull, Math.abs(dx) * 8) * dt; e.vy = Math.max(e.vy, 3.5); e.lift = 0.3; }
         }
-        if (tk >= 0.3) { tk = 0; for (const e of G.enemies) if (!e.dead && e.spawnT <= 0 && Math.abs(e.x - cx) < R) hitEnemy(e, eye ? 11 : 9, { kind: 'special', kx: 0, ky: 0, color: 0xcfe9ff, quiet: false, hitstop: 0.015, shake: 0.08, poise: 6, noCrit: false }); }
+        if (tk >= 0.3) { tk = 0; for (const e of G.enemies) if (!e.dead && e.spawnT <= 0 && Math.abs(e.x - cx) < R) hitEnemy(e, mael ? 20 : eye ? 11 : 9, { kind: 'special', kx: 0, ky: 0, color: 0xcfe9ff, quiet: false, hitstop: 0.015, shake: 0.08, poise: 6, noCrit: false }); }
         if (bolts && bk >= 0.7) { bk = 0; const e = nearest(cx, gy + 2, R + 4); if (e) { bolt(cx, gy + 10, e.x, e.y + e.h / 2, 0xe8f6ff); hitEnemy(e, 24, { kind: 'special', color: 0xffffff, stun: 0.5, big: true }); shake(0.2); } }
         if (t >= dur) {
           if (p.mods.jetstream) { ring(cx, Math.max(0, gy) + 1, 0.5, 0xcfe9ff, { r0: 0.5, r1: R * 1.4, dur: 0.4 }); for (const e of G.enemies) if (!e.dead && e.spawnT <= 0 && !e.boss && Math.abs(e.x - cx) < R + 1) { e.vy = 17; e.vx *= 0.3; e.air = true; e.juggle = 0; e.lift = 0.4; } sfx.wave(); }

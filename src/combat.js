@@ -36,7 +36,7 @@ export const FEEDBACK = {
 };
 export function fb(kind, o = {}) {
   const T = FEEDBACK[kind];
-  hitstop(o.hitstop ?? T.hs); shake(o.shake ?? T.shake);
+  hitstop((o.hitstop ?? T.hs) * (G.player ? G.player.el.prof.hs : 1)); shake(o.shake ?? T.shake);
   if (T.fov) punchFov(T.fov);
   if (T.ab) post.aberr = Math.max(post.aberr, T.ab);
   return T;
@@ -128,7 +128,7 @@ export function imbueBurst(p, x, y) {
 export function hitEnemy(e, base, o = {}) {
   if (e.dead || e.spawnT > 0) return 0;
   const p = G.player, m = p.mods;
-  let d = base * (1 + m.allDmg) * (p.dmgBuff || 1);
+  let d = base * (1 + m.allDmg) * (p.dmgBuff || 1) * p.el.prof.dmg;
   const crit = !o.noCrit && Math.random() < 0.1 + (p.critBonus || 0);
   if (crit) d *= 1.75;
   if (e.chill > 0 && m.frostbite) d *= 1.3;
@@ -152,7 +152,7 @@ export function hitEnemy(e, base, o = {}) {
     e.vx += dir * (o.kx ?? 5) * (e.kbMul ?? 1); if (o.ky && !e.air) e.vy += o.ky * (e.kbMul ?? 1);
   } else e.vx += dir * (o.kx ?? 5) * 0.12;
   // poise / stagger
-  e.poise -= (o.poise ?? dRaw * 0.9) * (e.shield ? 2 : 1) * (e.state === 'recover' ? 1.6 : 1) * (e.armorT > 0 ? 0.5 : 1);
+  e.poise -= (o.poise ?? dRaw * 0.9) * p.el.prof.poise * (e.shield ? 2 : 1) * (e.state === 'recover' ? 1.6 : 1) * (e.armorT > 0 ? 0.5 : 1);
   if (e.armorT > 0 && (e.armorMsg ?? 0) < G.time) { e.armorMsg = G.time + 0.5; floatText(e.x, e.y + e.h + 0.9, 'ARMOR', { color: '#9fd0ff', size: 14, dur: 0.6 }); }
   if (e.poise <= 0 && e.stagger <= 0 && !e.boss) { e.stagger = e.staggerTime || 0.45; e.poise = e.poiseMax; e.onStagger?.(); staggerFx(e); }
   if (e.boss && e.poise <= 0) { e.poise = e.poiseMax; e.onStagger?.(); }
@@ -388,6 +388,7 @@ function damagePlayerInner(amount, src) {
     const taken = Math.max(0, Math.round(amount * (1 - Math.min(0.95, red))));
     p.hurtI = Math.max(p.hurtI, 0.12); // one attack can't be blocked twice (brute smash + its wave)
     p.lastBlockT = G.time;
+    if (p.mods.burnGuard) explode(p.x + p.facing * 0.8, p.y + 1, 2.2, 10, { color: 0xff6a2b, burn: 2.5, kx: 5, quiet: true, shake: 0, hitstop: 0 });
     if (p.mods.burnGuard && src.enemy) { src.enemy.burn = Math.max(src.enemy.burn, 3); src.enemy.burnDps = Math.max(src.enemy.burnDps || 0, 8); ring(src.enemy.x, src.enemy.y + 1, 0.5, 0xff6a2b, { r0: 0.3, r1: 1.6, dur: 0.3 }); }
     if (p.mods.rebound) { p.blockCharge = Math.min(3, (p.blockCharge || 0) + 1); if (p.blockCharge === 3) floatText(p.x, p.y + 3.1, 'REBOUND READY', { color: '#e0b070', size: 16, dur: 0.9 }); }
     const late = p.guardT > win && p.guardT < win + 0.18;
@@ -408,7 +409,7 @@ function damagePlayerInner(amount, src) {
   const dmg = Math.max(1, Math.round(amount * (1 - dr)));
   p.hp -= dmg; G.stats.damageTaken += dmg;
   // Stonewill: while winding up a combo hit you keep swinging (damage is taken, but no stun / knockback / interruption)
-  const stoneArmor = p.mods.stonewill && p.state === 'attack' && p.atk && p.atk.kind !== 'slam' && p.atk.t < p.atk.cancelAt;
+  const stoneArmor = p.state === 'attack' && p.atk && p.atk.kind !== 'slam' && p.atk.t < p.atk.cancelAt && (p.mods.stonewill || (p.key === 'earth' && p.atk.kind === 'ground' && p.atk.i === 2)); // Earth's finisher is armoured by default
   p.hurtI = 0.9; p.stun = stoneArmor ? 0 : 0.22; p.blink = 0.9;
   if (stoneArmor) floatText(p.x, p.y + 3, 'STONEWILL', { color: '#e0b070', size: 14, dur: 0.6 });
   // a real hit interrupts whatever you were doing and drops the buffered inputs (no stale actions after the stun)

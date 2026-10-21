@@ -49,7 +49,7 @@ export class Player {
     this.hero?.setImbue(this.imbue);
     this.hpMax = 100 + this.mods.hp;
     this.energyMax = 100 + this.mods.energy;
-    this.maxJumps = 2 + this.mods.jumps;
+    this.maxJumps = 2 + this.mods.jumps + this.el.prof.jumps;
     this.parryBase = 0.18 * (1 + this.mods.parry); this.parryWindow = this.parryBase; // ~11 frames at 60 fps, skills widen it
     if (!first && old) this.hp = Math.min(this.hpMax, this.hp + (this.hpMax - old));
   }
@@ -169,7 +169,7 @@ export class Player {
     for (const e of G.enemies) { if (e.dead || e.spawnT > 0) continue; const d = Math.abs(e.x - this.x); if (d < bd && Math.abs(e.y - this.y) < 3) { bd = d; best = e; } }
     return best ? sign(best.x - this.x) : 0;
   }
-  speedMul() { return 1 + this.mods.speed + (this.haste > 0 ? 0.35 : 0) + (this.fly > 0 ? 0.15 : 0); }
+  speedMul() { return this.el.prof.move * (1 + this.mods.speed) + (this.haste > 0 ? 0.35 : 0) + (this.fly > 0 ? 0.15 : 0); }
 
   // ------------------------------------------------------------ abilities
   startDash(o) {
@@ -182,10 +182,12 @@ export class Player {
     if (this.cd.dash > 0 || (!this.onGround && !this.airDash)) return false;
     const ax = In.axis(), dir = ax ? sign(ax) : this.facing;
     if (!this.onGround) this.airDash = false;
-    const cd = 0.85 * (1 - this.mods.dashCd);
+    const D = this.el.prof.dash, cd = D.cd * (1 - this.mods.dashCd);
     this.cd.dash = cd; this.cdMax.dash = cd;
     sfx.dash(); haptic('dash');
-    this.startDash({ dir, speed: 25, dur: 0.17, inv: 0.26, tint: this.el.color });
+    const chilled = new Set(); // Water: the dash itself is a control tool, it chills whatever you slip through
+    this.startDash({ dir, speed: D.speed, dur: D.dur, inv: D.inv, tint: this.el.color,
+      tick: this.key === 'water' ? (pl) => { for (const e of G.enemies) if (!e.dead && e.spawnT <= 0 && !chilled.has(e) && Math.abs(e.x - pl.x) < 1.3 && Math.abs(e.y - pl.y) < 2) { chilled.add(e); e.chill = Math.max(e.chill, 2.5); e.chillStacks = (e.chillStacks || 0) + (pl.mods.freeze ? 1 : 0); sparks(e.x, e.y + 1, 0x9fe8ff, 8, 6, 0.2, 0.3); } } : null });
     punchFov(2); ring(this.x, this.y + 0.9, 0.5, this.el.color2, { r0: 0.2, r1: 1.6, dur: 0.25 });
     puff(this.x, this.y + 0.1, 5, 0x8b949e, 0.8, 0.4);
     return true;
@@ -204,7 +206,8 @@ export class Player {
     if (kind === 'air' && this.airHits >= 6) { this.buf.main = 0; return; } // land first: no endless air stall
     if (kind !== this.lastKind) { this.comboT = 0; this.acomboT = 0; } // a different move type always starts its own chain at hit 1
     this.lastKind = kind;
-    const sp = this.mods.hurricane ? 0.8 : 1, hs = this.haste > 0 ? 0.78 : 1, k = sp * hs;
+    const ramp = this.key === 'fire' ? 1 - Math.min(0.22, G.combo.n * 0.018) : 1; // Fire snowballs: the longer the combo the faster it swings
+    const sp = this.mods.hurricane ? 0.8 : 1, hs = this.haste > 0 ? 0.78 : 1, k = sp * hs * this.el.prof.atk * ramp;
     let cfg, i = 0;
     if (kind === 'ground') {
       const cfgs = m.hits;
@@ -371,7 +374,7 @@ export class Player {
           this.comboT = 0.5; this.acomboT = 0.5; this.startAttack(); // chain into the next hit
         } else if (canCancel && a.struck && this.tryBufferedCast()) { /* cancelled into a special / ranged */ }
         else if (a.t >= a.dur) { this.state = 'free'; this.comboT = a.kind === 'ground' ? 0.45 : 0; this.acomboT = a.kind === 'air' ? 0.45 : 0; this.atk = null; }
-        if (this.atk && canCancel && this.buf.dash > 0 && this.tryDash()) this.buf.dash = 0;
+        if (this.atk && (canCancel || (this.key === 'water' && a.t > 0.04)) && this.buf.dash > 0 && this.tryDash()) this.buf.dash = 0; // Water flows out of any swing
         // recovery: you can already steer (and turn) a little once the cancel window is open
         if (this.atk && a.t >= a.cancelAt && ax && !this.stun) { this.vx += clamp(ax * 8.2 * 0.5 - this.vx, -40 * dt, 40 * dt); this.facing = sign(ax); }
       }
@@ -405,12 +408,12 @@ export class Player {
     // ---- physics
     const wasGround = this.onGround, pvy = this.vy;
     if (this.state !== 'dash' && !(this.state === 'attack' && this.atk && this.atk.kind === 'slam' && this.atk.t >= this.atk.hitAt && !this.atk.landed)) {
-      const g = this.vy < 0 ? 54 : 40;
+      const g = (this.vy < 0 ? 54 : 40) * this.el.prof.grav;
       const stall = this.state === 'attack' && this.atk && this.atk.kind === 'air'; // air stall: hang while chaining
       this.vy -= g * dt * (this.fly > 0 ? 0.55 : 1) * (stall ? 0.1 : 1);
       if (stall) { this.vy = Math.max(this.vy, -2.2); if (this.vy > 3) this.vy -= 18 * dt; }
       if (!In.down('jump') && this.vy > 5 && this.state !== 'attack' && !this.fly) this.vy -= 55 * dt; // variable jump height
-      this.vy = Math.max(this.vy, -34);
+      this.vy = Math.max(this.vy, this.el.prof.fall);
       if (this.fly > 0 && !this.onGround && this.vy < -6) this.vy = -6;
     }
     this.collide(dt);
@@ -442,7 +445,7 @@ export class Player {
       for (let i = 0; i < 10; i++) glow.emit(this.x + rand(-0.4, 0.4), this.y + 0.1, rand(-0.3, 0.3), rand(-3, 3), rand(-4, -1), 0, rgb(this.el.color2, 1.6), 0.3, 0, 0.4);
       this.squash = -0.3;
     } else {
-      this.jumps = 1; this.vy = 15.2; sfx.jump(); puff(this.x, this.y + 0.1, 5, 0x8b949e, 0.8, 0.45, 2.5);
+      this.jumps = 1; this.vy = this.el.prof.jump; sfx.jump(); puff(this.x, this.y + 0.1, 5, 0x8b949e, 0.8, 0.45, 2.5);
       this.squash = -0.35;
     }
     this.onGround = false;

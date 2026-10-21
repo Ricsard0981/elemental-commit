@@ -77,6 +77,23 @@ The victim vibrates during hit-stop. A poise break plays a distinct ring + `BREA
 
 Juggle decay: each air hit lifts 24% less; after 6 hits the target is forced down, so a chain always ends.
 
+### Tempo / power profiles (`prof` in elements.js)
+Applied centrally (swing duration, outgoing damage and poise, hit-stop, run speed, dash, jump, fall).
+
+| Element | Swing time | Damage | Poise | Run | Dash (cooldown) | Air | Signature (built in) |
+|---|---|---|---|---|---|---|---|
+| Fire | ×0.82 | ×1.0 | ×1.0 | ×1.08 | 0.8 s | normal | swings up to 22% faster as the combo grows |
+| Water | ×0.86 | ×1.12 | ×0.9 | ×1.10 | 0.65 s, chills what it passes | normal | dash cancels any swing |
+| Earth | ×1.38 | ×2.0 | ×1.8 | ×0.86 | 1.15 s, short | lower jump, heavy fall | 3rd ground hit is armoured, hit-stop ×1.35 |
+| Air | ×0.64 | ×0.68 | ×0.7 | ×1.28 | 0.5 s, long | 3 jumps, floaty fall, higher jump | hit-stop ×0.7 (flurries) |
+
+Measured swing rate with the attack button tapped for ~3.8 s in the Lab: Air 23 swings, Fire 16, Water 15, Earth 8.
+Damage per second was **not** cleanly measured (dummies get knocked out of range), so the damage multipliers are a design target, not a verified balance.
+
+### Colossal forks
+Fire *Solar Flare* (one huge meteor), Water *Leviathan* (one screen-high tsunami), Earth *Mountainfall* (one colossal mountain),
+Air *Maelstrom* (one storm twice the size that flings everything at the end). Ran without errors; not visually reviewed frame by frame.
+
 ## 5. Enemy roles
 | Enemy | Role | Tell | Counterplay |
 |---|---|---|---|
