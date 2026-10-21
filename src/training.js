@@ -188,6 +188,7 @@ export function buildLab() {
   $('lab-toggle').onclick = () => { const l = $('lab'); l.classList.toggle('closed'); $('lab-toggle').setAttribute('aria-expanded', String(!l.classList.contains('closed'))); sfx.click(); };
 }
 let trainMode = 'sandbox';
+export function setTrainHandlers(h) { T.handlers = h; } // set at boot: the select screen needs them before any mode has started
 export function showSelect(on = true) { buildLab(); $('train').classList.toggle('show', on); }
 
 export function renderLab() {

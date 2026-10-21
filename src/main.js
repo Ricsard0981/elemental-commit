@@ -18,7 +18,7 @@ import { applyQuality, adaptResolution, perfStats, Q } from './engine.js';
 import { setVolumes, setSlow, setAmbience } from './audio.js';
 import { loadAssets, assets } from './assets.js';
 import { enterArena, leaveArena, updateArena, ARENA_L } from './arena.js';
-import { startMode, stopTraining, updateTraining, showSelect, endlessOver, T as TR } from './training.js';
+import { startMode, stopTraining, updateTraining, showSelect, endlessOver, setTrainHandlers, T as TR } from './training.js';
 import { setLevelVisible } from './world.js';
 import * as EV from './events.js';
 import { warmAll } from './warm.js';
@@ -97,6 +97,7 @@ const trainHandlers = {
   restart: () => startTraining(G.element, TR.mode),
   switchElement: (k) => startTraining(k, TR.mode, true),
 };
+setTrainHandlers(trainHandlers);
 function startTraining(key, mode, keepFlags = false) {
   const old = G.player, flags = keepFlags && old ? { inf: old.infEnergy, nocd: old.noCooldowns } : null;
   ['menu', 'death', 'win', 'pause', 'skills'].forEach((id) => UI.show(id, false)); showSelect(false);
