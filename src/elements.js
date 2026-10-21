@@ -601,5 +601,106 @@ for (const el of [fire, water, earth, air]) {
   el.main.desc += ' Up + Attack launches, Attack in the air chains, Down + Attack slams.';
 }
 
+// ================================================================= NEW MOVES (unlocked by the first node of each skill branch)
+// Dash Strike: Attack right after a Dash.  Charged Shot: hold Ranged.  Riposte: a perfect parry counter-attacks.
+// Each element does all three in its own way; player.js / combat.js only dispatch to MOVES[key].
+const hitLane = (p, reach, dmg, o) => hitBox(Math.min(p.x, p.x + p.facing * reach) - 0.3, Math.max(p.x, p.x + p.facing * reach) + 0.3, p.y - 0.2, p.y + 2.2, dmg, { kind: 'special', dir: p.facing, ...o });
+function blink(p, x, face) { // vanish and reappear beside the target
+  puff(p.x, p.y + 0.8, 8, 0xffffff, 1, 0.4); ring(p.x, p.y + 1, 0.4, p.el.color2, { r0: 0.2, r1: 2.2, dur: 0.3 });
+  p.x = clamp(x, 1, 264); p.vx = 0; p.facing = face; p.hurtI = Math.max(p.hurtI, 0.8); p.safeX = p.x;
+  puff(p.x, p.y + 0.8, 8, 0xffffff, 1, 0.4); ring(p.x, p.y + 1, 0.4, p.el.color, { r0: 0.2, r1: 2.6, dur: 0.35 });
+}
+
+export const MOVES = {
+  fire: {
+    dsCfg: { dur: 0.42, hitAt: 0.08, cancelAt: 0.3, lunge: 0, clip: 'Sword_Attack' },
+    dashStrike(p) { // Flame Lash: a 7 m blazing cut through the whole lane
+      const d = p.facing; p.vx = d * 18; sfx.swing('fire', 2);
+      slash(p.x + d * 2.5, p.y + 1.1, d, 0xffc233, { radius: 4.2, angle: 2.6, dur: 0.3, sweep: 1.6 });
+      for (let i = 0; i < 26; i++) glow.emit(p.x + d * rand(0, 7), p.y + rand(0.2, 1.8), d * rand(2, 8), rand(-1, 2), 0, 0, rgb(Math.random() < 0.5 ? 0xff6a2b : 0xffc233, 1.9), rand(0.3, 0.7), 0, 0.5, -2, 1);
+      flashLight(p.x + d * 3, p.y + 1, 2, 0xff6a2b, 60, 0.3); shake(0.25); punchFov(3);
+      hitLane(p, 7, 24, { burn: 3.5, burnDps: 10, kx: 8, ky: 3, big: true, color: 0xff6a2b });
+    },
+    charged(p, a) { // Ember Cannon
+      sfx.cast('fire'); shake(0.3); punchFov(3); screenFlash(0xff6a2b, 0.2);
+      spawnProj({ x: p.x + a.x * 0.9, y: p.y + 1.2 + a.y * 0.7, vx: a.x * 17, vy: a.y * 17, r: 1.0, color: 0xff7a30, trailC: 0xffc233, trailDust: 0x333333, life: 1.5, dmg: 0, onHit: () => {},
+        onEnd: (pr) => { explode(pr.x, pr.y, 5.2, 72, { color: 0xff6a2b, burn: 4, burnDps: 12, kx: 11, ky: 9, shake: 0.7, hitstop: 0.12 }); ring(pr.x, pr.y, 0.5, 0xffc233, { r0: 0.5, r1: 8, dur: 0.5 }); } });
+    },
+    riposte(p, e) { // Flame Riposte
+      blink(p, e.x - p.facing * 1.4, p.facing); sfx.explosion(0.8); screenFlash(0xffc233, 0.3);
+      slash(p.x + p.facing * 1.5, p.y + 1.1, p.facing, 0xffc233, { radius: 3.4, angle: 3, dur: 0.3, sweep: 1.4 });
+      explode(e.x, e.y + e.h * 0.5, 3.4, 52, { color: 0xff6a2b, burn: 3.5, kx: 10, ky: 8, stun: 0.8, hitstop: 0.1 });
+    },
+  },
+  water: {
+    dsCfg: { dur: 0.42, hitAt: 0.08, cancelAt: 0.3, lunge: 0, clip: 'Sword_Attack' },
+    dashStrike(p) { // Riptide Slash: drags everything in the lane along with you
+      const d = p.facing; p.vx = d * 20; sfx.swing('water', 2); sfx.wave();
+      slash(p.x + d * 2.4, p.y + 1.1, d, 0x9fe8ff, { radius: 4, angle: 2.6, dur: 0.3, sweep: 1.5 });
+      for (let i = 0; i < 24; i++) glow.emit(p.x + d * rand(0, 6), p.y + rand(0.2, 2), d * rand(4, 12), rand(-1, 2), 0, 0, rgb(0x9fe8ff, 1.7), rand(0.3, 0.6), 0, 0.5, 0, 1);
+      shake(0.2); punchFov(2);
+      for (const e of hitLane(p, 6, 22, { chill: 3.5, kx: 2, ky: 3, big: true, color: 0x2ea8ff })) if (!e.boss) e.vx = d * 20;
+    },
+    charged(p, a) { // Frost Lance: pierces everything and freezes it
+      sfx.cast('water'); shake(0.25); punchFov(3);
+      spawnProj({ x: p.x + a.x * 0.9, y: p.y + 1.2 + a.y * 0.7, vx: a.x * 36, vy: a.y * 36, r: 0.5, shape: 'blade', color: 0x9fe8ff, trailC: 0xcfeeff, life: 0.9, dmg: 0, pierce: 99, ghost: true,
+        onHit: (pr, e) => { if (p.mods.freeze) e.chillStacks = Math.max(e.chillStacks || 0, 2); hitEnemy(e, 44, { kind: 'special', dir: Math.sign(pr.vx), chill: 4, stun: 0.5, kx: 5, ky: 4, big: true, color: 0x9fe8ff }); sparks(pr.x, pr.y, 0xcfeeff, 14, 8); } });
+    },
+    riposte(p, e) { // Tidal Riposte
+      blink(p, e.x - p.facing * 1.4, p.facing); sfx.wave(); sfx.heal(); screenFlash(0x2ea8ff, 0.25);
+      p.hp = Math.min(p.hpMax, p.hp + 10); floatText(p.x, p.y + 3.7, '+10 HP', { color: '#9fe8ff', size: 22 });
+      slash(p.x + p.facing * 1.5, p.y + 1.1, p.facing, 0x9fe8ff, { radius: 3.4, angle: 3, dur: 0.3, sweep: 1.4 });
+      explode(e.x, e.y + e.h * 0.5, 3.6, 46, { color: 0x2ea8ff, chill: 4, kx: 9, ky: 8, stun: 0.7, hitstop: 0.1 });
+    },
+  },
+  earth: {
+    dsCfg: { dur: 0.55, hitAt: 0.1, cancelAt: 0.4, lunge: 0, clip: 'Punch_Cross' },
+    dashStrike(p) { // Shoulder Charge: an armoured barge
+      const d = p.facing; p.vx = d * 17; sfx.stomp(); shake(0.45); punchFov(4);
+      for (let i = 0; i < 10; i++) cubes(p.x + d * rand(0.5, 3), p.y + 0.3, 0xb98a4e, 1, 7, 0.3, false, 1);
+      ring(p.x + d * 1.5, p.y + 0.1, 0.4, 0xe0b070, { r0: 0.3, r1: 3.4, dur: 0.4, flat: true });
+      hitLane(p, 3.6, 38, { stun: 1.3, kx: 13, ky: 4, poise: 140, big: true, color: 0xc08a4b, hitstop: 0.1 });
+    },
+    charged(p, a) { // Boulder Toss
+      sfx.cast('earth'); shake(0.35); punchFov(3);
+      spawnProj({ x: p.x + a.x * 0.9, y: p.y + 1.5, vx: a.x * 14, vy: a.y * 14 + 8, grav: 22, r: 0.95, shape: 'rock', color: 0x9a7448, trailC: 0xd9a05b, trailDust: 0x6e5a3a, life: 2.6, dmg: 0, onHit: () => {},
+        onEnd: (pr) => { explode(pr.x, pr.y, 5.6, 84, { color: 0xc08a4b, stun: 1.8, kx: 10, ky: 9, shake: 0.85, hitstop: 0.14, cubeColor: 0x9a7448 }); cubes(pr.x, pr.y, 0x9a7448, 18, 11, 0.4, false, 1.4); ring(pr.x, pr.y + 0.1, 0.5, 0xe0b070, { r0: 0.5, r1: 8, dur: 0.5, flat: true }); } });
+    },
+    riposte(p, e) { // Rockslide Riposte: the ground erupts under the attacker
+      const gy = groundAt(e.x); sfx.quake(); shake(0.8); punchFov(5); screenFlash(0xe0b070, 0.3);
+      ring(e.x, gy + 0.05, 0.5, 0xe0b070, { r0: 0.4, r1: 7, dur: 0.6, flat: true }); cubes(e.x, gy + 0.5, 0xb98a4e, 28, 12, 0.5, false, 2); puff(e.x, gy + 0.3, 14, 0x8b949e, 2, 1);
+      explode(e.x, gy + 0.8, 4, 60, { color: 0xc08a4b, stun: 2, kx: 6, ky: 13, launch: 13, hitstop: 0.14, noGround: true });
+      for (const d of [-1, 1]) groundWave(e.x, d, { len: 8, speed: 18, dmg: 26, color: 0xc08a4b, stun: 1.5, kx: 5, ky: 8 });
+    },
+  },
+  air: {
+    dsCfg: { dur: 0.34, hitAt: 0.06, cancelAt: 0.22, lunge: 0, clip: 'Sword_Attack' },
+    dashStrike(p) { // Gale Rush: four rapid cuts, and the dash is refunded
+      const d = p.facing; p.vx = d * 14; sfx.swing('air', 2); p.airDash = true; p.cd.dash = 0;
+      for (let i = 0; i < 4; i++) later(i * 0.055, () => {
+        slash(p.x + d * (1.8 + i * 0.5), p.y + 1 + (i % 2 ? 0.3 : -0.2), d, 0xcfe9ff, { radius: 2.6, angle: 2.2, dur: 0.16, rot: i % 2 ? 0.6 : -0.6, flip: i % 2 ? -1 : 1, sweep: 1.1 });
+        sfx.swing('air', i % 3);
+        hitLane(p, 4.5, 9, { kx: 3, ky: 2, color: 0xcfe9ff, hitstop: 0.025, shake: 0.06 });
+      });
+    },
+    charged(p, a) { // Tempest Disc: a travelling whirl that drags enemies in and shreds them
+      sfx.cast('air'); shake(0.25); punchFov(3);
+      let x = p.x + a.x * 1.2, y = p.y + 1.2 + a.y * 1.5, t = 0, tk = 0; const dx = a.x, dy = a.y;
+      addFx((dt) => {
+        t += dt; tk += dt; x += dx * 15 * dt; y += dy * 15 * dt; y = Math.max(y, groundAt(x) + 0.6);
+        for (let i = 0; i < 8; i++) { const an = rand(6.28), r = rand(0.3, 2.2); glow.emit(x + Math.cos(an) * r, y + Math.sin(an) * r * 0.8, -Math.sin(an) * 9, Math.cos(an) * 9, 0, 0, rgb(Math.random() < 0.5 ? 0xcfe9ff : 0x7ff3d6, 1.7), rand(0.2, 0.4), 0, 0.4, 0, 0); }
+        for (const e of G.enemies) if (!e.dead && e.spawnT <= 0 && !e.boss && Math.abs(e.x - x) < 4 && Math.abs(e.y + e.h / 2 - y) < 3) e.vx += Math.sign(x - e.x) * 40 * dt;
+        if (tk >= 0.12) { tk = 0; hitBox(x - 2.2, x + 2.2, y - 2, y + 2, 11, { kind: 'special', kx: 0, ky: 1, color: 0xcfe9ff, hitstop: 0.015, shake: 0.08, poise: 8 }); }
+        if (t >= 1.5) { ring(x, y, 0.5, 0xcfe9ff, { r0: 0.5, r1: 5, dur: 0.4 }); return false; }
+        return true;
+      });
+    },
+    riposte(p, e) { // Zephyr Riposte: reappear behind the attacker and carve it skyward
+      blink(p, e.x + p.facing * 1.4, -p.facing); sfx.swing('air', 2); screenFlash(0xcfe9ff, 0.25);
+      for (let i = 0; i < 3; i++) later(i * 0.06, () => { slash(p.x + p.facing * 1.4, p.y + 1.2, p.facing, 0xcfe9ff, { radius: 3, angle: 2.6, dur: 0.18, rot: i - 1, flip: i % 2 ? -1 : 1 }); if (!e.dead) hitEnemy(e, 16, { kind: 'special', dir: p.facing, kx: 2, ky: i === 2 ? 12 : 3, launch: i === 2 ? 15 : 0, color: 0xcfe9ff, hitstop: 0.04 }); });
+    },
+  },
+};
+
 export const ELEMENTS = { fire, water, earth, air };
 export const KEYS = ['fire', 'water', 'earth', 'air'];

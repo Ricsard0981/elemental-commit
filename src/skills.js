@@ -13,60 +13,62 @@ const n = (id, branch, tier, name, desc, fx, icon, forks) => ({ id, branch, tier
 const fork = (id, name, desc, fx, icon) => ({ id, name, desc, fx, icon });
 
 export const SKILLS = {
+  // Tier 1 of every branch is a NEW MOVE (a new verb, not a number). Tier 2 is a fat power node that bundles what used to be two
+  // small ones. Tier 3 is the mastery (the middle branch's is an either/or fork).
   fire: [
-    n('f1', 0, 0, 'Cinder Brand', 'Every main hit ignites, and burning targets take +40% damage from everything you do.', { brand: true, burnMain: true }, '✦'),
-    n('f2', 0, 1, 'Spreading Embers', 'Enemies that die while burning set everything within 7 m on fire.', { spreadBurn: true }, '♨'),
-    n('f3', 0, 2, 'Inferno Mastery', 'Your 3rd ground hit slams a pillar of fire into the floor that burns for 3 s. Burning kills explode.', { firePillar: true, deathExplode: true }, '✺'),
-    n('f4', 1, 0, 'Phoenix Cadence', 'Phoenix Dash refunds your ranged cooldown and 15 energy for every enemy it ignites.', { cadence: true }, '⁂'),
-    n('f5', 1, 1, 'Wildfire Trail', 'Phoenix Dash: −40% cooldown, +30% distance and a firetrail that keeps burning.', { phoenixWings: true }, '❖'),
+    n('f1', 0, 0, 'Flame Lash', 'NEW MOVE: Attack right after a Dash to carve a 7 m blazing slash through the whole lane, igniting everything in it.', { dashStrike: true }, '⚔'),
+    n('f2', 0, 1, 'Cinder Brand', 'Every hit ignites. Burning enemies take +40% from everything you do, and when one dies it sets everything within 7 m on fire.', { brand: true, burnMain: true, spreadBurn: true }, '✦'),
+    n('f3', 0, 2, 'Inferno Mastery', 'Your 3rd ground hit slams a pillar of fire into the floor that burns for 4 s. Burning kills explode.', { firePillar: true, deathExplode: true }, '✺'),
+    n('f4', 1, 0, 'Ember Cannon', 'NEW MOVE: Hold the Ranged button for 0.7 s, release: a huge fire orb that detonates for massive area damage.', { charge: true }, '◉'),
+    n('f5', 1, 1, 'Phoenix Rising', 'Phoenix Dash: −40% cooldown, +30% distance, a lasting firetrail, and every enemy it ignites refunds your ranged cooldown and 15 energy.', { phoenixWings: true, cadence: true }, '❖'),
     n('f6', 1, 2, 'Meteor Mastery', 'Choose how Meteor Storm ends.', {}, '☄', [
       fork('a', 'Armageddon', 'Meteor Storm rains 9 bigger meteors and shakes the whole map.', { armageddon: true }, '☄'),
       fork('b', 'Solar Flare', 'Meteor Storm becomes ONE colossal meteor: huge blast, 1.4 s stun, burns everything.', { solarFlare: true }, '☀'),
     ]),
-    n('f7', 2, 0, 'Burning Guard', 'Enemies that strike your guard catch fire, and every block erupts in a small fire nova.', { burnGuard: true }, '◈'),
-    n('f8', 2, 1, 'Heat Haze', 'Perfect-parry window +50%. Perfect parries refresh Phoenix Dash.', { parry: 0.5, heatHaze: true }, '◉'),
+    n('f7', 2, 0, 'Flame Riposte', 'NEW MOVE: A perfect parry vanishes you beside the attacker and detonates it in a firestorm.', { riposte: true }, '◈'),
+    n('f8', 2, 1, 'Burning Guard', 'Enemies that hit your guard catch fire and every block erupts in a nova. Perfect-parry window +50%, and parries refresh Phoenix Dash.', { burnGuard: true, parry: 0.5, heatHaze: true }, '◉'),
     n('f9', 2, 2, 'Rebirth', 'Once per run, fatal damage revives you at 50% HP with a fire nova.', { rebirth: true }, '✹'),
   ],
   water: [
-    n('w1', 0, 0, 'Deep Chill', 'Three chilling hits freeze an enemy solid for 0.8 s: stunned, and ready to shatter.', { freeze: true }, '❄'),
-    n('w2', 0, 1, 'Frostbite', 'Chilled enemies take +45% damage and are slowed to 40% speed.', { frostbite: true }, '≈'),
+    n('w1', 0, 0, 'Riptide Slash', 'NEW MOVE: Attack right after a Dash to slash through the lane and drag every enemy in it along with you, chilled.', { dashStrike: true }, '⚔'),
+    n('w2', 0, 1, 'Deep Freeze', 'Three chilling hits freeze an enemy solid for 0.8 s. Chilled enemies take +45% damage and are slowed to 42% speed.', { freeze: true, frostbite: true }, '❄'),
     n('w3', 0, 2, 'Shatter', 'Launchers, finishers, spikes and slams shatter frozen enemies in an icy burst that chills their neighbours.', { shatter: true }, '❂'),
-    n('w4', 1, 0, 'Riptide Pull', 'Water Bolts drag their target 3 m towards you, setting up launchers.', { riptide: true }, '〰'),
-    n('w5', 1, 1, 'Surge', 'Tidal Wave crashes back after reaching its end.', { waveReturn: true }, '☂'),
+    n('w4', 1, 0, 'Frost Lance', 'NEW MOVE: Hold the Ranged button for 0.7 s, release: a piercing lance that freezes everything in a line.', { charge: true }, '➶'),
+    n('w5', 1, 1, 'Riptide Surge', 'Water Bolts drag their target 3 m towards you, and Tidal Wave crashes back after reaching its end.', { riptide: true, waveReturn: true }, '〰'),
     n('w6', 1, 2, 'Tide Mastery', 'Choose the nature of your great wave.', {}, '◉', [
       fork('a', 'Leviathan', 'Tidal Wave becomes ONE colossal tsunami: screen-high, 30 m long, hurls everything skyward. Special cooldowns −25%.', { leviathan: true, cdr: 0.25 }, '◉'),
       fork('b', 'Undertow', 'Tidal Wave drags everything into its centre and freezes it for 5 s of chill.', { undertow: true }, '⟲'),
     ]),
-    n('w7', 2, 0, 'Mirror Tide', 'Perfect blocks heal 18 HP and refund 30 energy.', { mirror: true }, '◈'),
-    n('w8', 2, 1, 'Deluge', 'Healing Rain is larger, lasts +3 s and heals 50% more.', { deluge: true }, '☔'),
+    n('w7', 2, 0, 'Tidal Riposte', 'NEW MOVE: A perfect parry blinks you beside the attacker, heals you and drowns it in a chilling burst.', { riposte: true }, '◈'),
+    n('w8', 2, 1, 'Mirror Tide', 'Perfect blocks heal 18 HP and refund 30 energy. Healing Rain is larger, lasts +3 s and heals 50% more.', { mirror: true, deluge: true }, '☔'),
     n('w9', 2, 2, 'Tsunami Heart', 'Perfect blocks send out a wave. Slowly regenerate HP out of combat.', { tsunamiHeart: true, regen: 1.5 }, '✺'),
   ],
   earth: [
-    n('e1', 0, 0, 'Stonewill', 'While winding up a combo hit you cannot be knocked out of it: you still take damage, but you keep swinging.', { stonewill: true }, '▣'),
-    n('e2', 0, 1, 'Seismic Strikes', 'Every combo hit sends a heavy ground shockwave rolling forward (the third also stuns).', { seismic: true }, '〰'),
+    n('e1', 0, 0, 'Shoulder Charge', 'NEW MOVE: Attack right after a Dash to barge forward, armoured: a huge stagger and stun on everything in your way.', { dashStrike: true }, '⚔'),
+    n('e2', 0, 1, 'Stonewill', 'Combo wind-ups cannot be interrupted (you take damage but keep swinging), and every combo hit sends a heavy shockwave rolling forward.', { stonewill: true, seismic: true }, '▣'),
     n('e3', 0, 2, 'Avalanche', 'Rock Throw shatters into a spray of homing shards.', { avalanche: true }, '⛰'),
-    n('e4', 1, 0, 'Aftershock', 'Quake repeats itself with a second, larger tremor.', { aftershock: true }, '≋'),
-    n('e5', 1, 1, 'Fortress', 'Stone Bastion raises 5 pillars that last twice as long.', { fortress: true }, '▥'),
+    n('e4', 1, 0, 'Boulder Toss', 'NEW MOVE: Hold the Ranged button for 0.7 s, release: a gigantic boulder that crushes and stuns everything it lands on.', { charge: true }, '◉'),
+    n('e5', 1, 1, 'Fortress', 'Quake repeats itself with a second, larger tremor. Stone Bastion raises 5 pillars that last twice as long.', { aftershock: true, fortress: true }, '▥'),
     n('e6', 1, 2, 'Tectonic Mastery', 'Choose what your earthquakes do to enemies.', {}, '⬢', [
       fork('a', 'Crushing Weight', 'Stunned enemies take +80% damage.', { crushing: true }, '⬢'),
       fork('b', 'Mountainfall', 'Quake calls down ONE colossal mountain: a crater-sized blast, 2.5 s stun, and shockwaves that LAUNCH everything they touch.', { mountainfall: true, spire: true }, '⛰'),
     ]),
-    n('e7', 2, 0, 'Rebound', 'Every 3 blocked hits charge your next main attack: double damage and a heavy stagger.', { rebound: true }, '◈'),
-    n('e8', 2, 1, 'Reflective Crust', 'Blocked hits are reflected as a shockwave.', { thorns: true }, '◉'),
+    n('e7', 2, 0, 'Rockslide Riposte', 'NEW MOVE: A perfect parry makes the ground erupt under the attacker and launches it, with shockwaves in both directions.', { riposte: true }, '◈'),
+    n('e8', 2, 1, 'Rebound', 'Every 3 blocked hits charge your next main attack: double damage and a heavy stagger. Blocked hits are also reflected as a shockwave.', { rebound: true, thorns: true }, '◉'),
     n('e9', 2, 2, 'Immovable', 'Guard while walking and regenerate while you keep blocking. Perfect parries grant +40% damage for 4 s.', { immovable: true }, '⬣'),
   ],
   air: [
-    n('a1', 0, 0, 'Skyhook', 'Every air hit refunds your air dash and lifts the target a little higher: the chain never runs out of tools.', { skyhook: true }, '✧'),
-    n('a2', 0, 1, 'Triple Cutter', 'Wind Cutter fires 3 blades in a fan.', { tripleCut: true }, '⋔'),
+    n('a1', 0, 0, 'Gale Rush', 'NEW MOVE: Attack right after a Dash for a four-cut flurry, and the dash is refunded so you can keep moving.', { dashStrike: true }, '⚔'),
+    n('a2', 0, 1, 'Skyhook', 'Every air hit refunds your air dash and lifts the target higher. Wind Cutter fires 3 blades in a fan.', { skyhook: true, tripleCut: true }, '✧'),
     n('a3', 0, 2, 'Hurricane Form', '+25% attack speed, and the 3rd hit unleashes a long-range slash.', { hurricane: true }, '꩜'),
-    n('a4', 1, 0, 'Eye of the Storm', 'Cyclone is bigger, lasts longer and pulls harder.', { stormEye: true }, '◎'),
-    n('a5', 1, 1, 'Wings', 'Sky Dance lasts +3 s and recharges faster.', { wings: true }, '❦'),
+    n('a4', 1, 0, 'Tempest Disc', 'NEW MOVE: Hold the Ranged button for 0.7 s, release: a travelling whirlwind that drags enemies in and shreds them.', { charge: true }, '◎'),
+    n('a5', 1, 1, 'Eye of the Storm', 'Cyclone is bigger, lasts longer and pulls harder. Sky Dance lasts +3 s and recharges faster.', { stormEye: true, wings: true }, '❦'),
     n('a6', 1, 2, 'Storm Mastery', 'Choose how the Cyclone finishes.', {}, '⚡', [
       fork('a', 'Stormcaller', 'Cyclone calls lightning down on nearby enemies.', { cycloneBolts: true }, '⚡'),
-      fork('b', 'Maelstrom', 'Cyclone becomes ONE colossal storm: twice the size, drags everything in, and when it ends flings it all into the air.', { maelstrom: true, jetstream: true }, '🌀'),
+      fork('b', 'Maelstrom', 'Cyclone becomes ONE colossal storm: twice the size, drags everything in, and when it ends flings it all into the air.', { maelstrom: true, jetstream: true }, '꩜'),
     ]),
-    n('a7', 2, 0, 'Light Feet', '+15% move speed and a third jump.', { speed: 0.15, jumps: 1 }, '➶'),
-    n('a8', 2, 1, 'Tailwind Parry', 'Perfect parries give 3 s of haste and restore 30 energy.', { tailwindParry: true }, '◈'),
+    n('a7', 2, 0, 'Zephyr Riposte', 'NEW MOVE: A perfect parry blinks you behind the attacker and carves it into the air.', { riposte: true }, '◈'),
+    n('a8', 2, 1, 'Light Feet', '+15% move speed and a fourth jump. Perfect parries give 3 s of haste and restore 30 energy.', { speed: 0.15, jumps: 1, tailwindParry: true }, '➶'),
     n('a9', 2, 2, 'Vacuum Shield', 'Deflected projectiles deal triple damage and pierce. Dash cooldown −30%.', { vacuum: true, dashCd: 0.3 }, '✺'),
   ],
 };
@@ -111,7 +113,7 @@ let save = { prog: {}, best: {}, train: {} };
 try { save = { ...save, ...JSON.parse(localStorage.getItem(KEY) || '{}') }; } catch { /* ignore */ }
 // v2: the trees were rewritten around mechanics. Old node ids mean different things now, so owned nodes are refunded
 // (points are derived from level, so nothing is lost); level, xp, Resonance pick and records are kept.
-if (save.v !== 2) { for (const el of Object.keys(save.prog || {})) { save.prog[el].owned = []; save.prog[el].temper = {}; save.prog[el].fork = {}; } save.v = 2; try { localStorage.setItem(KEY, JSON.stringify(save)); } catch { /* ignore */ } }
+if (save.v !== 3) { for (const el of Object.keys(save.prog || {})) { save.prog[el].owned = []; save.prog[el].temper = {}; save.prog[el].fork = {}; } save.v = 3; try { localStorage.setItem(KEY, JSON.stringify(save)); } catch { /* ignore */ } }
 function persist() { try { localStorage.setItem(KEY, JSON.stringify(save)); } catch { /* ignore */ } }
 
 export function prog(el) {

@@ -4,7 +4,7 @@ import { scene, glow, dust, sparks, puff, cubes, rgb, ring, slash, flashLight, f
 import { emit } from './events.js';
 import { groundAt, ripple } from './world.js';
 import { sfx } from './audio.js';
-import { ELEMENTS } from './elements.js';
+import { ELEMENTS, MOVES } from './elements.js';
 import { addXP, xpNeed, prog } from './skills.js';
 import { clamp, rand, pick, randi, easeOut } from './util.js';
 import * as UI from './ui.js';
@@ -415,7 +415,7 @@ function damagePlayerInner(amount, src) {
   const dmg = Math.max(1, Math.round(amount * (1 - dr)));
   p.hp -= dmg; G.stats.damageTaken += dmg;
   // Stonewill: while winding up a combo hit you keep swinging (damage is taken, but no stun / knockback / interruption)
-  const stoneArmor = p.state === 'attack' && p.atk && p.atk.kind !== 'slam' && p.atk.t < p.atk.cancelAt && (p.mods.stonewill || (p.key === 'earth' && p.atk.kind === 'ground' && p.atk.i === 2)); // Earth's finisher is armoured by default
+  const stoneArmor = p.state === 'attack' && p.atk && p.atk.kind !== 'slam' && p.atk.t < p.atk.cancelAt && (p.mods.stonewill || (p.key === 'earth' && (p.atk.kind === 'dashStrike' || (p.atk.kind === 'ground' && p.atk.i === 2)))); // Earth's finisher is armoured by default
   p.hurtI = 0.9; p.stun = stoneArmor ? 0 : 0.22; p.blink = 0.9;
   if (stoneArmor) floatText(p.x, p.y + 3, 'STONEWILL', { color: '#e0b070', size: 14, dur: 0.6 });
   // a real hit interrupts whatever you were doing and drops the buffered inputs (no stale actions after the stun)
@@ -467,6 +467,11 @@ function perfectParry(src) {
   p.energy = Math.min(p.energyMax, p.energy + 25);
   comboAdd(3);
   if (src.proj) reflectProj(src.proj, 3, !!p.mods.vacuum);
+  if (p.mods.riposte) { // Riposte: the parry becomes a counter-attack on the attacker (or the nearest enemy)
+    let foe = src.enemy && !src.enemy.dead ? src.enemy : null;
+    if (!foe) { let bd = 9; for (const e of G.enemies) if (!e.dead && e.spawnT <= 0 && !e.boss && Math.abs(e.x - p.x) < bd) { bd = Math.abs(e.x - p.x); foe = e; } }
+    if (foe) { later(0.04, () => { if (!foe.dead && !p.dead) MOVES[p.key].riposte(p, foe); }); proc('RIPOSTE', p.x, p.y + 4.2, '#ffd33d'); }
+  }
   if (src.enemy && !src.enemy.dead) {
     const e = src.enemy;
     if (!e.boss) { e.poise = 0; e.stagger = Math.max(e.stagger, 1.8); e.vulnerable = 3; e.stun = Math.max(e.stun, 0.4); }

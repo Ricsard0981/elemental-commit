@@ -225,9 +225,11 @@ export function renderTree() {
       const n = document.createElement('button');
       n.className = 'node ' + (owned ? 'owned' : buyable ? 'avail' : unlocked ? 'poor' : 'locked');
       n.id = 'node-' + s.id;
+      const mv = s.desc.startsWith('NEW MOVE: ');
+      if (mv) n.classList.add('move');
       const fk = s.forks ? (forkOf(el, s) || (owned ? s.forks[0] : null)) : null;
       if (s.forks) n.classList.add('forky');
-      n.innerHTML = `<div class="ico">${fk ? fk.icon : s.icon}</div><div class="nt"><b>${fk ? s.name + ': ' + fk.name : s.name}</b><span>${fk ? fk.desc : s.desc}</span>${s.forks ? `<em class="fork-tag">${owned ? 'tap to change path' : 'choose a path'}</em>` : ''}</div><div class="cost">${owned ? '✔' : s.cost}</div>`;
+      n.innerHTML = `<div class="ico">${fk ? fk.icon : s.icon}</div><div class="nt"><b>${fk ? s.name + ': ' + fk.name : s.name}</b><span>${mv ? '<em class="move-tag">NEW MOVE</em> ' + s.desc.slice(10) : fk ? fk.desc : s.desc}</span>${s.forks ? `<em class="fork-tag">${owned ? 'tap to change path' : 'choose a path'}</em>` : ''}</div><div class="cost">${owned ? '✔' : s.cost}</div>`;
       n.onclick = () => {
         if (owned && s.forks) { openForkPicker(s); return; }
         if (buy(el, s)) {

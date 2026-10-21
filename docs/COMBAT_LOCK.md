@@ -114,11 +114,18 @@ No attacks while off-screen (more than 8.4 m from the camera) or while you are i
 - Slam fist locks 0.3 s before the drop, so it can be baited.
 
 ## 6. Progression (skills.js)
-- Three mechanic branches + Resonance per element; tier 1 unlocks a mechanic, tier 2 modifies it, tier 3 masters it.
-- One branch per element has a **fork** at tier 3 (two masteries, switch freely while owned).
+- Every branch's **first node is a new move** (marked NEW MOVE in the tree), the second is a fat power node (two old effects bundled), the third is a mastery.
+  - **Dash Strike** (Attack during or right after a Dash; first branch): Fire Flame Lash (7 m burning slash), Water Riptide Slash (drags the lane with you, chills),
+    Earth Shoulder Charge (armoured barge, stun), Air Gale Rush (4 cuts, refunds the dash).
+  - **Charged Shot** (hold Ranged 0.7 s, release; second branch; a tap still fires the normal shot, and holding no longer auto-repeats once unlocked):
+    Fire Ember Cannon, Water Frost Lance (pierces, sets up freeze), Earth Boulder Toss, Air Tempest Disc (drags and shreds). 20 energy.
+  - **Riposte** (third branch): a perfect parry counter-attacks the attacker (or the nearest enemy): Fire detonates it, Water heals 10 HP and bursts,
+    Earth erupts the ground and launches, Air blinks behind it and launches. Not used on the boss.
+- One branch per element has a **fork** at tier 3 (two masteries, switch freely while owned); Fire, Water, Earth and Air each have a colossal single-ability option.
 - **Tempering**: 5 stat tracks × 3 ranks, 1 point each, shared. 15 ranks exist and there are never enough points for everything.
-- Levels cap at 24. Save version 2 refunds owned nodes (level, XP, Resonance and records are kept).
+- Levels cap at 24. Save version 3 refunds owned nodes (level, XP, Resonance and records are kept).
 - Fixed dead nodes: Frostbite (now slows and amplifies), Rebirth (once per run), Immovable (regenerates only while blocking).
+- Nodes that change a hit show a short floating label (`proc()` in combat.js).
 
 ## 7. Training Grounds as a test tool
 - Lab → **Combat debug** shows attack phase / contact / cancel, buffers, guard time vs parry window, hit-stop, time scale,

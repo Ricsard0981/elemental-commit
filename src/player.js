@@ -10,6 +10,7 @@ import * as UI from './ui.js';
 import { acquireHero, heroReady } from './hero.js';
 import { emit } from './events.js';
 import { hitEnemy, enemyBox } from './combat.js';
+import { MOVES } from './elements.js';
 import { haptic, S } from './settings.js';
 import { clamp, damp, lerp, rand, easeOut, sign } from './util.js';
 
@@ -31,7 +32,7 @@ export class Player {
     this.dash = null; this.slam = null; this.fly = 0; this.haste = 0; this.dmgBuff = 1; this.dmgBuffT = 0; this.drBuff = 0;
     this.squash = 0; this.dead = false; this.reborn = false; this.critBonus = 0; this.sinceHurt = 99;
     this.safeX = 4; this.runPhase = 0; this.stepT = 0; this.turn = 0; this.shieldK = 0;
-    this.clock = 0; this.bufStamp = {}; this.guardPresses = []; this.latchT = -9; this.latchUp = this.latchDown = false; this.latchAx = 0; this.lastKind = ''; this.noEnT = -9;
+    this.clock = 0; this.bufStamp = {}; this.guardPresses = []; this.latchT = -9; this.latchUp = this.latchDown = false; this.latchAx = 0; this.lastKind = ''; this.noEnT = -9; this.dashEndT = -9; this.chargeT = 0; this.chargeReady = false;
     this.blink = 0; this.counterT = 0; this.deadT = 0; this.moveIntent = false; this.landK = 0; this.parryBase = 0.18;
     this.castSeq = 0; this.leanT = 0; this.airHits = 0; this.acombo = 0; this.acomboT = 0; this.imbue = null; this.hero = null; this.infEnergy = false; this.noCooldowns = false; this.cheering = false;
     this.refreshMods(true);
@@ -186,7 +187,7 @@ export class Player {
     this.cd.dash = cd; this.cdMax.dash = cd;
     sfx.dash(); haptic('dash');
     const chilled = new Set(); // Water: the dash itself is a control tool, it chills whatever you slip through
-    this.startDash({ dir, speed: D.speed, dur: D.dur, inv: D.inv, tint: this.el.color,
+    this.startDash({ basic: true, dir, speed: D.speed, dur: D.dur, inv: D.inv, tint: this.el.color,
       tick: this.key === 'water' ? (pl) => { for (const e of G.enemies) if (!e.dead && e.spawnT <= 0 && !chilled.has(e) && Math.abs(e.x - pl.x) < 1.3 && Math.abs(e.y - pl.y) < 2) { chilled.add(e); e.chill = Math.max(e.chill, 2.5); e.chillStacks = (e.chillStacks || 0) + (pl.mods.freeze ? 1 : 0); sparks(e.x, e.y + 1, 0x9fe8ff, 8, 6, 0.2, 0.3); } } : null });
     punchFov(2); ring(this.x, this.y + 0.9, 0.5, this.el.color2, { r0: 0.2, r1: 1.6, dur: 0.25 });
     puff(this.x, this.y + 0.1, 5, 0x8b949e, 0.8, 0.4);
@@ -204,6 +205,7 @@ export class Player {
     let kind = 'ground';
     if (air) kind = down ? 'slam' : 'air'; else if (up) kind = 'launcher';
     if (kind === 'air' && this.airHits >= 6) { this.buf.main = 0; return; } // land first: no endless air stall
+    if ((kind === 'ground' || kind === 'air') && this.mods.dashStrike && this.clock - this.dashEndT < 0.3) kind = 'dashStrike'; // Attack right after a Dash
     if (kind !== this.lastKind) { this.comboT = 0; this.acomboT = 0; } // a different move type always starts its own chain at hit 1
     this.lastKind = kind;
     const ramp = this.key === 'fire' ? 1 - Math.min(0.22, G.combo.n * 0.018) : 1; // Fire snowballs: the longer the combo the faster it swings
@@ -216,7 +218,8 @@ export class Player {
     } else if (kind === 'launcher') { cfg = m.launcher; this.combo = 0; this.comboT = 0; }
     else if (kind === 'air') {
       this.acombo = this.acomboT <= 0 ? 0 : (this.acombo + 1) % 3; i = this.acombo; cfg = m.air.hits[i]; this.airHits++;
-    } else { cfg = m.slam; }
+    } else if (kind === 'dashStrike') { cfg = MOVES[this.key].dsCfg; this.combo = 0; this.comboT = 0; this.dashEndT = -9; }
+    else { cfg = m.slam; }
     const toward = this.nearestDir(4.5);
     if (ax) this.facing = sign(ax); else if (toward) this.facing = toward;
     const hitAt = kind === 'slam' ? cfg.windup : cfg.hitAt * k;
@@ -227,6 +230,27 @@ export class Player {
     if (kind === 'slam') { this.vy = 0; this.vx = 0; }
     this.buf.main = 0;
     emit('attack', { kind, i });
+  }
+  // Charged Shot: hold Ranged (the tap still fires its normal shot at once); release after 0.7 s for the element's big shot
+  updateCharge(rdt) {
+    const held = this.mods.charge && In.down('ranged') && !this.guarding && !this.stun && (this.state === 'free' || this.state === 'cast');
+    if (held) {
+      this.chargeT += rdt;
+      if (this.chargeT > 0.2) {
+        const k = Math.min(1, this.chargeT / 0.7), hx = this.x + this.facing * 0.6, hy = this.y + 1.2;
+        for (let i = 0; i < 2; i++) { const an = rand(6.28), r = (1 - k) * 1.6 + 0.3; glow.emit(hx + Math.cos(an) * r, hy + Math.sin(an) * r, -Math.cos(an) * 3, -Math.sin(an) * 3, 0, 0, rgb(this.el.color2, 1.4 + k), 0.2, 0, 0.3, 0, 0); }
+        if (this.chargeT >= 0.7 && !this.chargeReady) { this.chargeReady = true; ring(hx, hy, 0.4, this.el.color2, { r0: 0.2, r1: 2, dur: 0.3 }); sfx.hover(); punchFov(1); }
+      }
+    } else {
+      if (this.chargeT >= 0.7 && this.mods.charge && (this.state === 'free' || this.state === 'cast') && !this.stun && (this.infEnergy || this.energy >= 20)) {
+        if (!this.infEnergy) this.energy -= 20;
+        const a = this.aim(true); if (Math.abs(a.x) > 0.05) this.facing = a.x > 0 ? 1 : -1;
+        this.atk = null; this.state = 'cast'; this.lockT = 0.4; this.castT = 0; this.castSlot = 'ranged'; this.castSeq++;
+        this.cd.ranged = Math.max(this.cd.ranged, 0.8); this.cdMax.ranged = 0.8;
+        MOVES[this.key].charged(this, a); UI.castFlash('ranged');
+      }
+      this.chargeT = 0; this.chargeReady = false;
+    }
   }
   // oldest buffered action that can actually start now (first input wins; failed ones don't block the others)
   oldestBuf() {
@@ -242,7 +266,7 @@ export class Player {
   // after contact an attack can be cancelled into a buffered special / ranged / jump
   tryBufferedCast() {
     for (const k of ['s1', 's2']) if (this.buf[k] > 0 && this.cd[k] <= 0 && this.tryCast(k)) { this.buf[k] = 0; return true; }
-    if ((In.down('ranged') || this.buf.ranged > 0) && this.cd.ranged <= 0 && this.tryCast('ranged')) { this.buf.ranged = 0; return true; }
+    if (((In.down('ranged') && !this.mods.charge) || this.buf.ranged > 0) && this.cd.ranged <= 0 && this.tryCast('ranged')) { this.buf.ranged = 0; return true; }
     return false;
   }
   tryJump() {
@@ -286,6 +310,7 @@ export class Player {
     }
     // Input buffering: runs on REAL time (hit-stop and slow-mo don't stretch it), works during hit-stop (dt = 0), first press wins.
     this.clock += rdt;
+    this.updateCharge(rdt);
     for (const k of ['main', 'jump', 's1', 's2', 'dash']) if (In.hitNow(k)) {
       this.buf[k] = BUF[k]; this.bufStamp[k] = this.clock;
       if (k === 'main') { this.latchT = this.clock; this.latchUp = In.down('up'); this.latchDown = In.down('down'); this.latchAx = In.axis(); }
@@ -333,7 +358,9 @@ export class Player {
       d.tick?.(this, dt);
       // dash afterimages
       for (let i = 0; i < 4; i++) glow.emit(this.x + rand(-0.2, 0.2), this.y + rand(0.2, 1.6), rand(-0.2, 0.2), -d.dir * rand(1, 4), rand(-1, 1), 0, rgb(d.tint ?? el.color, 1.7), rand(0.3, 0.55), 0, 0.35);
-      if (d.t >= d.dur) { this.vx = d.dir * Math.min(d.speed, 8) * 0.5; this.state = 'free'; this.dash = null; d.end?.(this); }
+      if (d.basic && this.mods.dashStrike && d.t >= d.dur * 0.35 && this.buf.main > 0 && !this.stun) { // Attack mid-dash: the dash flows straight into the Dash Strike
+        this.dashEndT = this.clock; this.state = 'free'; this.dash = null; this.dashInv = 0; this.startAttack();
+      } else if (d.t >= d.dur) { this.dashEndT = this.clock; this.vx = d.dir * Math.min(d.speed, 8) * 0.5; this.state = 'free'; this.dash = null; d.end?.(this); }
     } else if (this.state === 'attack') {
       const a = this.atk; a.t += dt;
       if (a.kind === 'slam') {
@@ -357,6 +384,7 @@ export class Player {
           this.vx = this.facing * (a.cfg.lunge ?? 0) * (a.kind === 'ground' ? (this.onGround ? 1 : 0.6) : 1); // the lunge lands WITH the strike
           if (a.kind === 'launcher') el.main.launcher.strike(this);
           else if (a.kind === 'air') el.main.air.strike(this, a.i);
+          else if (a.kind === 'dashStrike') MOVES[this.key].dashStrike(this);
           else el.main.strike(this, a.i);
           this.hero?.kick(this.facing, a.kind === 'launcher' ? 0.4 : a.i === 2 ? 0.34 : 0.22); // hair / cape follow-through
         }
@@ -399,7 +427,7 @@ export class Player {
         if (nb === 'dash') { if (this.tryDash()) this.buf.dash = 0; }
         else if (nb === 'main') this.startAttack();
         else if (nb === 's1' || nb === 's2') { if (this.tryCast(nb)) this.buf[nb] = 0; }
-        else if ((In.down('ranged') || this.buf.ranged > 0) && this.tryCast('ranged')) this.buf.ranged = 0;
+        else if (((In.down('ranged') && !this.mods.charge) || this.buf.ranged > 0) && this.tryCast('ranged')) this.buf.ranged = 0;
       }
     } else if (this.stun > 0) {
       this.vx = damp(this.vx, 0, 5, dt);
