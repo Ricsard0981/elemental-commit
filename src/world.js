@@ -30,8 +30,9 @@ export const checkpoints = [
   { x: 40, name: 'a41f9c2' }, { x: 120, name: '7be03d1' }, { x: 199, name: 'c5d8a40' },
 ];
 export const arenas = [
-  { id: 'A', x0: 70, x1: 100, trigger: 74, waves: [[['bug', 80], ['bug', 92], ['bug', 96]], [['bug', 76], ['pointer', 90, 5], ['bug', 98]], [['brute', 90], ['pointer', 78, 5]]] },
-  { id: 'B', x0: 155, x1: 195, trigger: 160, waves: [[['brute', 185], ['bug', 168], ['bug', 180]], [['pointer', 166, 5], ['pointer', 186, 5], ['bug', 175], ['bug', 176], ['bug', 178]], [['brute', 164], ['brute', 188], ['pointer', 176, 6]]] },
+  // waves are composed by ROLE (see docs/COMBAT_LOCK.md): flankers first, then artillery behind them, then a bruiser with support
+  { id: 'A', x0: 70, x1: 100, trigger: 74, waves: [[['bug', 82], ['bug', 96]], [['bug', 80], ['bug', 98], ['pointer', 90, 4]], [['brute', 92], ['bug', 78], ['pointer', 84, 4]]] },
+  { id: 'B', x0: 155, x1: 195, trigger: 160, waves: [[['brute', 186], ['bug', 166], ['bug', 192]], [['pointer', 168, 4], ['pointer', 190, 4], ['bug', 174], ['bug', 184]], [['brute', 166], ['brute', 190], ['pointer', 178, 5], ['bug', 172]]] },
 ];
 arenas.push({ id: 'C', x0: 218, x1: 266, trigger: 226, boss: true, waves: [] });
 export const roamers = [

@@ -16,6 +16,7 @@ import { S, touchOn, onSetting, qualityLevel, isTouchDevice } from './settings.j
 import { renderSettings } from './settingsUI.js';
 import { applyQuality, adaptResolution, perfStats, Q } from './engine.js';
 import { setVolumes, setSlow, setAmbience } from './audio.js';
+import { clamp } from './util.js';
 import { loadAssets, assets } from './assets.js';
 import { enterArena, leaveArena, updateArena, ARENA_L } from './arena.js';
 import { startMode, stopTraining, updateTraining, showSelect, endlessOver, setTrainHandlers, T as TR } from './training.js';
@@ -59,7 +60,7 @@ let roamState = [];
 function startRun(key) {
   UI.show('menu', false); UI.show('death', false); UI.show('win', false); UI.show('pause', false); UI.show('skills', false);
   if (G.player) G.player.destroy();
-  G.element = key;
+  G.element = key; sfx.setElement(key);
   resetWorldState();
   // reset checkpoint visuals
   for (const cp of checkpoints) { cp.orb.material.color.set(0x8b949e); }
@@ -102,7 +103,7 @@ function startTraining(key, mode, keepFlags = false) {
   const old = G.player, flags = keepFlags && old ? { inf: old.infEnergy, nocd: old.noCooldowns } : null;
   ['menu', 'death', 'win', 'pause', 'skills'].forEach((id) => UI.show(id, false)); showSelect(false);
   if (old) old.destroy();
-  G.element = key; G.training = { mode };
+  G.element = key; G.training = { mode }; sfx.setElement(key);
   clearEnemies(); clearAll(); dyn.length = 0; UI.hideBoss();
   G.combo = { n: 0, t: 0, best: 0, rank: 0 }; G.stats = { kills: 0, commits: 0, time: 0, parries: 0, damageTaken: 0 };
   G.boss = null; G.freeze = 0; G.ts = 1; G.tsTarget = 1; G.tsHold = 0;
@@ -250,7 +251,7 @@ function updateArenas(dt, p) {
       if (a.timer <= 0) {
         a.wave++; const w = a.waves[a.wave];
         UI.banner(`WAVE ${a.wave + 1} / ${a.waves.length}`, `${w.length} issues opened`, '#ffd33d', 1.4, true);
-        w.forEach(([type, x, y], i) => { a.pending++; later(0.15 + i * 0.28, () => { a.pending--; if (a.state === 'active') spawnEnemy(type, x, y || 0, { arena: a.id }); }); });
+        w.forEach(([type, x, y], i) => { a.pending++; later(0.15 + i * 0.28, () => { a.pending--; if (a.state !== 'active') return; let sx = x; if (Math.abs(sx - p.x) < 5) sx = clamp(p.x + (sx < p.x ? -1 : 1) * 7, a.x0 + 2, a.x1 - 2); spawnEnemy(type, sx, y || 0, { arena: a.id }); }); });
       }
     } else if (alive === 0) {
       if (a.wave + 1 < a.waves.length) a.timer = 1.3;

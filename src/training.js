@@ -102,11 +102,14 @@ function spawnNear(type) {
 }
 
 // ---------------------------------------------------------------- endless waves
+// waves are composed by role, not by a random budget: flankers (bugs) always, artillery from wave 3, one bruiser from wave 4
+// (two every 5th wave). The encounter director (tokens) keeps them from all attacking at once.
 function waveList(n) {
-  const list = []; let budget = 2 + n * 1.7;
-  const pool = [['bug', 1]]; if (n >= 2) pool.push(['pointer', 2]); if (n >= 4) pool.push(['brute', 4]);
-  if (n % 5 === 0) { list.push('brute', 'brute'); budget -= 8; }
-  while (budget > 0 && list.length < 16) { const opts = pool.filter(([, c]) => c <= budget); if (!opts.length) break; const [t, c] = pick(opts); list.push(t); budget -= c; }
+  const list = [];
+  const bugs = Math.min(6, 2 + Math.floor(n / 2)), pointers = n >= 3 ? Math.min(2, Math.floor(n / 3)) : 0, brutes = n >= 4 && n % 2 === 0 ? 1 : 0;
+  for (let i = 0; i < bugs; i++) list.push('bug');
+  for (let i = 0; i < pointers; i++) list.push('pointer');
+  for (let i = 0; i < brutes + (n % 5 === 0 ? 1 : 0); i++) list.push('brute');
   return list;
 }
 function startEndless() {

@@ -10,8 +10,39 @@ import { clamp, rand, pick, randi, easeOut } from './util.js';
 import * as UI from './ui.js';
 import { haptic } from './settings.js';
 
+// ----------------------------------------------------------------- feedback hierarchy
+// One profile per kind of event (seconds / trauma / FOV degrees / aberration). Every contact, parry, kill and landing asks
+// fb() for its numbers instead of carrying literals, so the hierarchy stays consistent: light < heavy < finisher < slam < parry.
+// Research (hit-stop ~4 f light ... 12 f slam, ~13 f parry, cap ~18 f): see docs/COMBAT_LOCK.md.
+export const FEEDBACK = {
+  light:    { hs: 0.066, shake: 0.12, fov: 0.6, ab: 0,     flash: 2.0 },
+  airHit:   { hs: 0.05,  shake: 0.09, fov: 0.4, ab: 0,     flash: 1.8 },
+  ranged:   { hs: 0.04,  shake: 0.08, fov: 0.3, ab: 0,     flash: 1.8 },
+  special:  { hs: 0.06,  shake: 0.14, fov: 0.8, ab: 0,     flash: 2.2 },
+  heavy:    { hs: 0.09,  shake: 0.22, fov: 1.2, ab: 0,     flash: 2.8 },
+  finisher: { hs: 0.11,  shake: 0.3,  fov: 1.8, ab: 0.002, flash: 3.2 },
+  crit:     { hs: 0.1,   shake: 0.26, fov: 1.5, ab: 0.003, flash: 3.0 },
+  launcher: { hs: 0.1,   shake: 0.28, fov: 2.0, ab: 0,     flash: 3.0 },
+  spike:    { hs: 0.12,  shake: 0.36, fov: 2.5, ab: 0.004, flash: 3.4 },
+  bounce:   { hs: 0.1,   shake: 0.3,  fov: 2.0, ab: 0.004, flash: 3.0 },
+  slam:     { hs: 0.17,  shake: 0.6,  fov: 4.0, ab: 0.008, flash: 4.5 },
+  stagger:  { hs: 0.08,  shake: 0.2,  fov: 1.0, ab: 0,     flash: 3.0 },
+  block:    { hs: 0.07,  shake: 0.22, fov: 0,   ab: 0,     flash: 2.0 },
+  deflect:  { hs: 0.1,   shake: 0.3,  fov: 2.0, ab: 0.006, flash: 3.0 },
+  parry:    { hs: 0.22,  shake: 0.5,  fov: 5.0, ab: 0.02,  flash: 4.0 },
+  kill:     { hs: 0.08,  shake: 0.3,  fov: 0,   ab: 0.004, flash: 3.0 },
+  bigKill:  { hs: 0.16,  shake: 0.7,  fov: 6.0, ab: 0.012, flash: 4.0 },
+  hurt:     { hs: 0.12,  shake: 0.5,  fov: -2.5, ab: 0.014, flash: 0 },
+};
+export function fb(kind, o = {}) {
+  const T = FEEDBACK[kind];
+  hitstop(o.hitstop ?? T.hs); shake(o.shake ?? T.shake);
+  if (T.fov) punchFov(T.fov);
+  if (T.ab) post.aberr = Math.max(post.aberr, T.ab);
+  return T;
+}
 // ----------------------------------------------------------------- time helpers
-export const hitstop = (s) => { G.freeze = Math.max(G.freeze, s); };
+export const hitstop = (s) => { G.freeze = Math.max(G.freeze, Math.min(s, 0.3)); }; // overlapping hit-stops extend (never stack), hard cap ~18 frames
 export const slowmo = (scale, real) => { G.tsTarget = scale; G.tsHold = Math.max(G.tsHold, real); };
 export const later = (delay, fn) => G.timers.push({ t: delay, fn });
 
@@ -103,7 +134,8 @@ export function hitEnemy(e, base, o = {}) {
   if (e.chill > 0 && m.frostbite) d *= 1.3;
   if (e.stun > 0 && m.crushing) d *= 1.5;
   if (e.vulnerable > 0) d *= 1.25;
-  d = Math.max(1, Math.round(d));
+  d = Math.max(1, Math.round(d)); const dRaw = d;
+  if (e.shield) d = Math.max(1, Math.round(d * 0.3)); // phase-2 shield: damage barely matters, break its poise
   if (p.counterT > 0 && o.kind === 'main') { // the strike right after a perfect parry: a counter
     p.counterT = 0; d = Math.round(d * 1.5); o = { ...o, poise: (o.poise ?? d) * 2, big: true };
     floatText(e.x, e.y + e.h + 1.2, 'COUNTER', { color: '#ffd33d', size: 18, dur: 0.9 }); emit('counter', { e });
@@ -115,8 +147,9 @@ export function hitEnemy(e, base, o = {}) {
     e.vx += dir * (o.kx ?? 5) * (e.kbMul ?? 1); if (o.ky && !e.air) e.vy += o.ky * (e.kbMul ?? 1);
   } else e.vx += dir * (o.kx ?? 5) * 0.12;
   // poise / stagger
-  e.poise -= o.poise ?? d * 0.9;
-  if (e.poise <= 0 && e.stagger <= 0 && !e.boss) { e.stagger = e.staggerTime || 0.45; e.poise = e.poiseMax; e.onStagger?.(); }
+  e.poise -= (o.poise ?? dRaw * 0.9) * (e.shield ? 2 : 1) * (e.state === 'recover' ? 1.6 : 1) * (e.armorT > 0 ? 0.5 : 1);
+  if (e.armorT > 0 && (e.armorMsg ?? 0) < G.time) { e.armorMsg = G.time + 0.5; floatText(e.x, e.y + e.h + 0.9, 'ARMOR', { color: '#9fd0ff', size: 14, dur: 0.6 }); }
+  if (e.poise <= 0 && e.stagger <= 0 && !e.boss) { e.stagger = e.staggerTime || 0.45; e.poise = e.poiseMax; e.onStagger?.(); staggerFx(e); }
   if (e.boss && e.poise <= 0) { e.poise = e.poiseMax; e.onStagger?.(); }
   // statuses
   if (o.burn) { e.burn = Math.max(e.burn, o.burn); e.burnDps = Math.max(e.burnDps || 0, o.burnDps || 8); }
@@ -129,22 +162,24 @@ export function hitEnemy(e, base, o = {}) {
   if (o.launch) launched = launchEnemy(e, o.launch, dir);
   else if (e.air && o.spike) spikeEnemy(e);
   else if (e.air && o.lift) juggleLift(e);
-  else if (o.bounce && !e.air) { e.air = true; e.spiked = true; e.bounced = false; e.vy = -14; e.juggle = 0; e.downT = 0; e.airT = 0; e.maxH = 0; e.onGround = false; e.y += 0.04; }
+  else if (o.bounce && !e.air && !e.boss && (!e.heavy || e.stagger > 0)) { e.air = true; e.spiked = true; e.bounced = false; e.vy = -14; e.juggle = 0; e.downT = 0; e.airT = 0; e.maxH = 0; e.onGround = false; e.y += 0.04; }
   // feedback
   const col = o.color ?? ELEMENTS[G.element].color;
   const big = d > 30 || o.big;
-  hitstop(o.hitstop ?? (crit ? 0.085 : big ? 0.07 : 0.045));
-  shake(o.shake ?? (crit ? 0.3 : big ? 0.25 : 0.14));
+  const fk = crit ? 'crit' : o.launch ? 'launcher' : o.spike ? 'spike' : o.bounce ? 'bounce' : (e.air && o.lift) ? 'airHit' : o.kind === 'ranged' ? 'ranged' : o.kind === 'special' ? 'special' : o.finisher ? 'finisher' : big ? 'heavy' : 'light';
+  const T = FEEDBACK[fk];
+  hitstop(o.hitstop ?? T.hs); shake(o.shake ?? T.shake);
   const hy = e.y + e.h * 0.55;
-  sparks(e.x, hy, col, crit ? 16 : 9, crit ? 11 : 8, 0.26, 0.45, dir, 1, HIT_SPRITE[G.element]);
-  sparks(e.x, hy, 0xffffff, 4, 6, 0.18, 0.25, dir);
+  sparks(e.x, hy, col, crit ? 16 : fk === 'light' ? 7 : 10, crit ? 11 : 8, 0.26, 0.45, dir, 1, HIT_SPRITE[G.element]);
+  sparks(e.x, hy, 0xffffff, fk === 'light' ? 3 : 5, 6, 0.18, 0.25, dir);
   if (!o.quiet) {
-    impactFlash(e.x - dir * 0.2, hy, col, big ? 3 : 2.1);
-    if (o.kind === 'main') punchFov(big ? 1.4 : 0.8);
-    sfx.hit(big, crit, G.combo.n, e.dummy ? 'wood' : 'flesh'); haptic(crit ? 'crit' : 'hit');
+    impactFlash(e.x - dir * 0.2, hy, col, T.flash);
+    if (T.fov) punchFov(T.fov);
+    if (T.ab) post.aberr = Math.max(post.aberr, T.ab);
+    sfx.hit(fk, G.combo.n, e.dummy ? 'wood' : e.heavy || e.boss || e.type === 'pointer' ? 'metal' : 'flesh'); haptic(crit ? 'crit' : 'hit');
   }
   floatText(e.x, e.y + e.h + 0.4, crit ? `${d}!` : String(d), { cls: crit ? 'crit' : '', color: crit ? '#ffd33d' : '#ffffff', size: crit ? 34 : big ? 26 : 20, dur: crit ? 1.1 : 0.8, vy: crit ? 3.4 : 2.6 });
-  if (crit) { ring(e.x, e.y + e.h * 0.5, 0.6, 0xffd33d, { r0: 0.2, r1: 1.8, dur: 0.3 }); punchFov(1.5); }
+  if (crit) ring(e.x, e.y + e.h * 0.5, 0.6, 0xffd33d, { r0: 0.2, r1: 1.8, dur: 0.3 });
   if (!o.noCombo) comboAdd(1);
   if (!o.noEnergy && !p.infEnergy) p.energy = Math.min(p.energyMax, p.energy + (o.kind === 'main' ? 4.5 : 1.5));
   else if (p.infEnergy) p.energy = p.energyMax;
@@ -155,6 +190,15 @@ export function hitEnemy(e, base, o = {}) {
   return d;
 }
 
+// a poise break reads as its own event: gold shield-crack ring, flash, a short freeze and a distinct sound
+function staggerFx(e) {
+  const T = FEEDBACK.stagger, cy = e.y + e.h * 0.55;
+  hitstop(T.hs); shake(T.shake); e.flash = 0.12;
+  ring(e.x, cy, 0.7, 0xffe9a0, { r0: 0.3, r1: e.heavy ? 3.8 : 2.3, dur: 0.3, intensity: 2 });
+  sparks(e.x, cy, 0xffe9a0, 10, 9, 0.22, 0.4, 0, 1);
+  if (e.heavy) floatText(e.x, e.y + e.h + 1.1, 'BREAK', { color: '#ffe9a0', size: 18, dur: 0.9 });
+  sfx.stagger(!!e.heavy); emit('stagger', { e });
+}
 export function killEnemy(e, o = {}) {
   if (e.dead) return;
   e.dead = true;
@@ -162,7 +206,7 @@ export function killEnemy(e, o = {}) {
   G.stats.kills++;
   const cy = e.y + e.h * 0.5;
   sfx.kill(big); haptic(e.boss ? 'boss' : 'kill');
-  hitstop(big ? 0.16 : 0.08); shake(big ? 0.7 : 0.3);
+  fb(big ? 'bigKill' : 'kill');
   ring(e.x, cy, 0.6, e.color, { r0: 0.3, r1: big ? 7 : 3.2, dur: 0.5 });
   ring(e.x, cy, 0.6, 0xffffff, { r0: 0.2, r1: big ? 4 : 1.8, dur: 0.3 });
   flashLight(e.x, cy, 2, e.color, big ? 90 : 40, 0.4);
@@ -171,8 +215,7 @@ export function killEnemy(e, o = {}) {
   cubes(e.x, cy, 0x39d353, big ? 24 : 8, 8, 0.2, true, 1.2);
   puff(e.x, e.y + 0.3, big ? 12 : 5, 0x8b949e, 1.2, 0.8);
   ripple(e.x, big ? 3 : 1.4, e.color, 16, 1.0);
-  if (big) { slowmo(0.28, 0.5); punchFov(6); post.aberr = 0.012; screenFlash(0xffffff, 0.25); }
-  else post.aberr = Math.max(post.aberr, 0.004);
+  if (big) { slowmo(0.28, 0.5); screenFlash(0xffffff, 0.25); }
   floatText(e.x, e.y + e.h + 1, pick(['BUG FIXED', 'RESOLVED', 'MERGED', 'REFACTORED', 'DEPRECATED', 'CLOSED']) + ` #${randi(100, 9999)}`, { color: '#7ee787', size: big ? 26 : 15, dur: 1.2, vy: 1.6 });
   // loot
   const mult = 1 + Math.floor(G.combo.n / 20) * 0.5;
@@ -319,7 +362,7 @@ export function damagePlayer(amount, src = {}) {
     const taken = Math.max(0, Math.round(amount * (1 - Math.min(0.95, red))));
     p.hurtI = Math.max(p.hurtI, 0.12); // one attack can't be blocked twice (brute smash + its wave)
     const late = p.guardT > win && p.guardT < win + 0.18;
-    sfx.block(); haptic('block'); shake(0.22); hitstop(0.05);
+    sfx.block(); haptic('block'); fb('block');
     sparks(p.x + p.facing * 0.7, p.y + 1.1, el.color2, 14, 8, 0.25, 0.4, p.facing);
     ring(p.x + p.facing * 0.7, p.y + 1.1, 0.6, el.color2, { r0: 0.2, r1: 1.6, dur: 0.25 });
     p.vx -= Math.sign(src.x - p.x) * (g.knockback ?? 5);
@@ -343,7 +386,7 @@ export function damagePlayer(amount, src = {}) {
   p.vx = Math.sign(p.x - src.x || 1) * 7; p.vy = Math.max(p.vy, 6);
   p.squash = 0.55;
   comboBreak();
-  sfx.hurt(); haptic('hurt'); hitstop(0.1); shake(0.55); punchFov(-2);
+  sfx.hurt(); haptic('hurt'); fb('hurt');
   post.aberr = 0.014; screenFlash(0xf85149, 0.4); UI.damageVignette();
   sparks(p.x, p.y + 1, 0xff4d4d, 16, 9, 0.28, 0.5);
   floatText(p.x, p.y + 2.5, `-${dmg}`, { color: '#ff6b6b', size: 30, cls: 'hurt' });
@@ -369,8 +412,8 @@ function perfectParry(src) {
   const p = G.player, el = ELEMENTS[G.element];
   G.stats.parries++;
   p.hurtI = 0.5; p.counterT = 0.45; p.guarding = false; p.cd.guard = 0.4; p.guardPresses.length = 0; // guard drops so the counter can start
-  sfx.parry(); haptic('parry'); hitstop(0.16); slowmo(0.22, 0.5);
-  shake(0.55); punchFov(5); post.aberr = 0.02; post.bloomBoost = 0.9; screenFlash(0xffffff, 0.35);
+  sfx.parry(); haptic('parry'); fb('parry'); slowmo(0.22, 0.5);
+  post.bloomBoost = 0.9; screenFlash(0xffffff, 0.35);
   const x = p.x + p.facing * 0.6, y = p.y + 1.1;
   ring(x, y, 0.8, 0xffffff, { r0: 0.2, r1: 6, dur: 0.5, intensity: 2.5 });
   ring(x, y, 0.8, el.color, { r0: 0.2, r1: 9, dur: 0.7, intensity: 2.2 });
@@ -385,7 +428,7 @@ function perfectParry(src) {
   if (src.proj) reflectProj(src.proj, 3, !!p.mods.vacuum);
   if (src.enemy && !src.enemy.dead) {
     const e = src.enemy;
-    e.poise = 0; e.stagger = Math.max(e.stagger, e.boss ? 0 : 1.8); e.vulnerable = 3; e.stun = Math.max(e.stun, 0.4);
+    if (!e.boss) { e.poise = 0; e.stagger = Math.max(e.stagger, 1.8); e.vulnerable = 3; e.stun = Math.max(e.stun, 0.4); }
     e.parried?.();
     spawnCommits(e.x, e.y + e.h / 2, 4);
     floatText(e.x, e.y + e.h + 1, 'STAGGERED', { color: '#ffd33d', size: 20 });

@@ -507,8 +507,11 @@ function updateFloaters(dt) {
 // ---------------------------------------------------------------- camera
 const ZOOM_K = 0.68; // characters are big and readable: the camera sits closer than the original vertical slice
 export const cam = { x: 0, y: 3, trauma: 0, fovKick: 0, zoom: 1, zoomT: 1, look: 0, roll: 0, bx0: 6, bx1: 250, free: false, tx: 0, ty: 0 };
-export function shake(a) { cam.trauma = Math.min(1, cam.trauma + a * S.shake); }
-export function punchFov(v) { cam.fovKick = Math.max(cam.fovKick, v); }
+let frameShake = 0;
+// trauma is capped per FRAME, so a finisher that hits three enemies (and explodes) shakes like one big hit, not like three
+export function shake(a) { const add = Math.min(a * S.shake, Math.max(0, 0.5 - frameShake)); frameShake += add; cam.trauma = Math.min(1, cam.trauma + add); }
+// signed: positive zooms in (impact), negative pulls out (getting hit)
+export function punchFov(v) { if (Math.abs(v) >= Math.abs(cam.fovKick)) cam.fovKick = v; }
 export function updateCamera(dt, tx, ty, facing, t) {
   cam.look = damp(cam.look, facing * 3.2, 2.2, dt);
   const gx = tx + cam.look, gy = ty + 2.0;
@@ -518,8 +521,8 @@ export function updateCamera(dt, tx, ty, facing, t) {
   cam.fovKick = damp(cam.fovKick, 0, 6, dt);
   cam.trauma = Math.max(0, cam.trauma - dt * 1.7);
   const s = cam.trauma * cam.trauma;
-  const sx = (Math.sin(t * 47) + Math.sin(t * 31 + 1)) * 0.5 * s * 0.7;
-  const sy = (Math.sin(t * 53 + 2) + Math.sin(t * 29)) * 0.5 * s * 0.7;
+  const sx = (Math.sin(t * 47) + Math.sin(t * 31 + 1)) * 0.5 * s * 1.5;
+  const sy = (Math.sin(t * 53 + 2) + Math.sin(t * 29)) * 0.5 * s * 1.5;
   const dist = 18.5 * cam.zoom * ZOOM_K;
   camera.position.set(cam.x + sx, Math.max(cam.y, 1.5) + 3.0 * cam.zoom * ZOOM_K + sy, dist);
   camera.lookAt(cam.x + sx * 0.5, Math.max(cam.y, 1.5) + 0.2 + sy * 0.5, 0);
@@ -530,6 +533,7 @@ export function updateCamera(dt, tx, ty, facing, t) {
 
 // ---------------------------------------------------------------- frame
 export function stepEngine(dt, rdt, groundAt) {
+  frameShake = 0;
   // fx run on game dt; particles on blended dt so hit-stop feels crunchy but alive
   for (let i = G.fx.length - 1; i >= 0; i--) {
     const f = G.fx[i];

@@ -3,10 +3,10 @@ import { G } from './state.js';
 import { scene, glow, dust, sparks, puff, cubes, rgb, ring, flashLight, floatText, shake, punchFov, screenFlash, post, addFx } from './engine.js';
 import { groundAt, ripple, worldLen } from './world.js';
 import { toonMaterial, addOutline, outlineHard } from './toon.js';
-import { Q, impactFlash, decal, shockwave } from './engine.js';
+import { Q, impactFlash, decal, shockwave, cam } from './engine.js';
 import { emit } from './events.js';
 import { sfx } from './audio.js';
-import { damagePlayer, spawnProj, killEnemy, hitstop, slowmo, later } from './combat.js';
+import { damagePlayer, spawnProj, killEnemy, hitstop, slowmo, later, fb } from './combat.js';
 import { groundWave } from './elements.js';
 import * as UI from './ui.js';
 import { clamp, damp, rand, lerp, sign, easeOut } from './util.js';
@@ -38,7 +38,11 @@ function base(type, x, y, o) {
   e.group.rotation.order = 'ZYX'; e.group.position.set(x, y, 0); scene.add(e.group);
   e.parried = () => {
     e.tele = 0;
-    if (e.boss) { e.state = 'stunned'; e.st = 0; e.staggerTime = 3; e.vulnerable = 3.2; e.hitDone = false; floatText(e.x, e.y + 7, 'BROKEN!', { color: '#ffd33d', size: 40 }); }
+    if (e.boss) {
+      // parry-lock fix: a parry breaks the boss once, then it resists for 8 s (further parries only chip its poise)
+      if (e.parryImmune > 0) { e.poise = Math.max(0, e.poise - e.poiseMax * 0.35); floatText(e.x, e.y + 7, 'GUARDED', { color: '#9fd0ff', size: 22 }); if (e.poise <= 0) e.onStagger?.(); return; }
+      e.parryImmune = 8; e.shield = false; e.state = 'stunned'; e.st = 0; e.staggerTime = 2.2; e.vulnerable = 2.4; e.hitDone = false; floatText(e.x, e.y + 7, 'BROKEN!', { color: '#ffd33d', size: 40 });
+    }
     else { e.state = 'idle'; e.cd = 1; }
   };
   // hp bar
@@ -50,7 +54,7 @@ function base(type, x, y, o) {
 
 // ----------------------------------------------------------------- builders
 function buildBug(x, y, o) {
-  const e = base('bug', x, y, { name: 'Bug', w: 1.15, h: 0.95, hp: 34, hpMax: 34, poise: 24, poiseMax: 24, xp: 12, commits: 3, speed: 3.6, ...o });
+  const e = base('bug', x, y, { name: 'Bug', w: 1.15, h: 0.95, hp: 22, hpMax: 22, poise: 16, poiseMax: 16, xp: 12, commits: 3, speed: 3.6, ...o });
   const g = e.group;
   e.body = pivot(g, 0, 0.5, 0);
   mk(e, sph, 0x8a2a33, { em: 0x3a0508, ei: 0.7, sx: 0.62, sy: 0.4, sz: 0.5, parent: e.body, rough: 0.35, metal: 0.5 });
@@ -128,7 +132,15 @@ function buildBoss(x, y) {
   for (let i = 0; i < 9; i++) { const c = mk(e, box, 0x161b22, { em: i % 2 ? 0x39d353 : RED, ei: 1.3, sx: 0.28, sy: 0.28, sz: 0.28, parent: g }); c.userData.ph = i * 0.7; c.userData.r = 2.6 + (i % 3) * 0.5; e.crown.push(c); }
   e.legL = pivot(g, 0, 1.5, 0.7); e.legR = pivot(g, 0, 1.5, -0.7);
   for (const l of [e.legL, e.legR]) mk(e, box, 0x38414d, { sx: 1.1, sy: 1.6, sz: 0.9, y: -0.7, parent: l, metal: 0.6 });
-  e.onStagger = () => { if (e.state !== 'stunned') { e.state = 'stunned'; e.st = 0; e.staggerTime = 2.4; e.vulnerable = 2.4; e.hitDone = false; e.tele = 0; sfx.bossRoar(); floatText(e.x, e.y + 7, 'BROKEN!', { color: '#ffd33d', size: 40 }); } };
+  e.shieldM = new THREE.Mesh(new THREE.SphereGeometry(3.7, 18, 12), new THREE.MeshBasicMaterial({ color: new THREE.Color(0x6bd1ff).multiplyScalar(1.4), transparent: true, opacity: 0.22, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, toneMapped: false }));
+  e.shieldM.position.y = 3.2; e.shieldM.visible = false; g.add(e.shieldM);
+  // a poise break stuns it ONCE per window (breakCd) and drops the phase-2 shield
+  e.onStagger = () => {
+    if (e.state === 'stunned' || e.breakCd > 0) return;
+    e.state = 'stunned'; e.st = 0; e.staggerTime = 2.4; e.vulnerable = 2.4; e.hitDone = false; e.tele = 0; e.breakCd = 6;
+    if (e.shield) { e.shield = false; sparks(e.x, e.y + 3, 0x6bd1ff, 30, 12, 0.3, 0.6); ring(e.x, e.y + 3, 0.5, 0x6bd1ff, { r0: 1, r1: 9, dur: 0.5 }); }
+    sfx.bossRoar(); floatText(e.x, e.y + 7, 'BROKEN!', { color: '#ffd33d', size: 40 });
+  };
   e.onDeath = () => { G.onBossDead?.(e); };
   // fists live in world space so they can slam anywhere
   e.fists = [];
@@ -156,6 +168,7 @@ export function spawnEnemy(type, x, yOff = 0, o = {}) {
   return e;
 }
 export function clearEnemies(arenaOnly = false) {
+  resetDirector();
   for (let i = G.enemies.length - 1; i >= 0; i--) {
     const e = G.enemies[i];
     if (arenaOnly && !e.arena) continue;
@@ -188,6 +201,9 @@ function applyStatus(e, dt) {
   }
   if (e.poise < e.poiseMax && e.stagger <= 0) e.poise = Math.min(e.poiseMax, e.poise + (e.boss ? 14 : 6) * dt);
   if (e.lift > 0) e.lift -= dt;
+  if (e.armorT > 0) e.armorT -= dt;
+  if (e.parryImmune > 0) e.parryImmune -= dt;
+  if (e.breakCd > 0) e.breakCd -= dt;
 }
 function physics(e, dt, tm) {
   if (e.flying) {
@@ -216,7 +232,7 @@ function physics(e, dt, tm) {
       e.bounced = true; e.spiked = false; e.vy = 10.5; e.vx *= 0.4; e.juggle = Math.max(e.juggle, 2);
       impactFlash(e.x, gy + 0.3, 0xffd9a0, 3.4); decal('crack', e.x, gy, 3.2, 4, 0xffffff);
       ring(e.x, gy + 0.06, 0.45, 0xe8d2a0, { r0: 0.3, r1: 3.2, dur: 0.4, flat: true }); puff(e.x, gy + 0.2, 8, 0x8b949e, 1.3, 0.7); ripple(e.x, 1.6, 0xe8d2a0, 12, 0.8);
-      shake(0.3); hitstop(0.06); sfx.bounce(); punchFov(2); shockwave(e.x, gy + 0.3, 0.02, 0.4, 0.3);
+      fb('bounce'); sfx.bounce(); shockwave(e.x, gy + 0.3, 0.02, 0.4, 0.3);
       emit('bounce', { e });
       return;
     }
@@ -232,56 +248,98 @@ function physics(e, dt, tm) {
   if (e.y < -18) { e.hp = 0; e.dead = true; scene.remove(e.group); }
 }
 function steer(e, target, dt, tm) { e.vx = damp(e.vx, target * tm, 9, dt); }
-function telegraph(e, secs) { e.tele = secs; e.teleMax = secs; sfx.telegraph(); }
+function telegraph(e, secs, kind) { e.tele = secs; e.teleMax = secs; sfx.telegraph(kind ?? e.type); }
+
+// ----------------------------------------------------------------- encounter director
+// Attack tokens: only ONE melee, ONE ranged and ONE heavy attacker at a time, with a pacing gap between attack starts.
+// Enemies without a token circle at a ring distance instead of queuing up on top of you. Nobody starts an attack from
+// off-screen, or while the player is still reeling from a hit (research: Arkham / Doom / DmC pacing, ~1 attack per 1-2 s overall).
+const TOKENS = { melee: 1, ranged: 1, heavy: 1 }, PACE = { melee: 0.85, ranged: 1.4, heavy: 1.6 };
+const held = { melee: new Map(), ranged: new Map(), heavy: new Map() }; // enemy -> time it took the token
+const lastStart = { melee: -9, ranged: -9, heavy: -9 };
+const kindOf = (e) => (e.type === 'pointer' ? 'ranged' : e.type === 'brute' ? 'heavy' : 'melee');
+const onScreen = (e) => Math.abs(e.x - cam.x) < 8.4;
+function canAttack(e) { const p = P(); return onScreen(e) && !p.dead && p.stun <= 0 && p.hurtI < 0.35; }
+function takeToken(e) {
+  const k = kindOf(e), h = held[k];
+  if (h.has(e)) return true;
+  if (!canAttack(e) || h.size >= TOKENS[k] || G.time - lastStart[k] < PACE[k]) return false;
+  h.set(e, G.time); lastStart[k] = G.time; return true;
+}
+function giveToken(e) { held[kindOf(e)].delete(e); }
+function sweepTokens() { for (const k in held) for (const [e, t] of held[k]) if (e.dead || !G.enemies.includes(e) || G.time - t > 5) held[k].delete(e); }
+export function resetDirector() { for (const k in held) held[k].clear(); }
+export const directorState = () => ({ melee: held.melee.size, ranged: held.ranged.size, heavy: held.heavy.size });
 
 // ----------------------------------------------------------------- per-type AI
+// BUG: a light flanker. It circles at a ring distance, then commits to a readable lunge (0.5 s crouch + chitter) or, when
+// there are several, a pounce that arcs over you and lands behind. A whiffed attack leaves it vulnerable for 0.8 s.
 function aiBug(e, dt, tm) {
   const p = P(), dx = p.x - e.x, ad = Math.abs(dx), dir = sign(dx);
   e.st += dt;
+  if (e.ring === undefined) { e.ring = rand(2.8, 4.4); e.orbit = Math.random() < 0.5 ? 1 : -1; }
   if (e.state === 'idle' || e.state === 'chase') {
     e.state = 'chase'; e.facing = dir; e.canHop = true;
-    steer(e, ad > 1.4 ? dir * e.speed : 0, dt, tm);
+    let sep = 0; // separation, so a group never collapses into one red blob
+    for (const o of G.enemies) if (o !== e && o.type === 'bug' && !o.dead) { const d = e.x - o.x; if (Math.abs(d) < 1.3) sep += sign(d || 0.01) * (1.3 - Math.abs(d)); }
+    const want = ad > e.ring + 0.4 ? dir * e.speed : ad < e.ring - 0.6 ? -dir * e.speed * 0.5 : -dir * e.orbit * e.speed * 0.25;
+    steer(e, want + sep * 2.2, dt, tm);
     e.cd -= dt * tm;
-    if (ad < 2.2 && Math.abs(p.y - e.y) < 1.6 && e.cd <= 0 && !p.dead) { e.state = 'wind'; e.st = 0; telegraph(e, 0.42); e.vx = 0; }
+    if (e.cd <= 0 && ad < 6 && Math.abs(p.y - e.y) < 1.8 && takeToken(e)) {
+      const bugs = G.enemies.filter((x) => x.type === 'bug' && !x.dead).length;
+      e.attack = bugs > 1 && ad > 2 && Math.random() < 0.4 ? 'pounce' : 'lunge';
+      e.state = 'wind'; e.st = 0; e.vx = 0; e.dirLock = dir; telegraph(e, e.attack === 'pounce' ? 0.6 : 0.5);
+    }
   } else if (e.state === 'wind') {
-    e.vx = damp(e.vx, 0, 12, dt); e.facing = dir;
-    if (e.st * tm > 0.42) { e.state = 'lunge'; e.st = 0; e.vx = dir * 12; e.vy = 4.5; e.hitDone = false; e.canHop = false; }
+    e.vx = damp(e.vx, 0, 12, dt); e.facing = e.dirLock;
+    if (e.st * tm > (e.attack === 'pounce' ? 0.6 : 0.5)) {
+      e.state = 'lunge'; e.st = 0; e.hitDone = false; e.canHop = false;
+      if (e.attack === 'pounce') { e.vx = e.dirLock * Math.min(11, Math.abs(p.x - e.x) * 1.7 + 4); e.vy = 9; } else { e.vx = e.dirLock * 12; e.vy = 4.5; }
+    }
   } else if (e.state === 'lunge') {
     if (!e.hitDone && Math.abs(p.x - e.x) < 0.95 && p.y < e.y + 1.4 && p.y + p.h > e.y && !p.dead) {
       e.hitDone = true; const r = damagePlayer(9, { x: e.x, y: e.y + 0.5, enemy: e, kind: 'melee' });
-      if (r === 'parry' || r === 'blocked') { e.vx = -dir * 4; }
+      if (r === 'parry' || r === 'blocked') e.vx = -e.dirLock * 4;
     }
-    if (e.st > 0.32) { e.state = 'recover'; e.st = 0; }
+    if (e.st > (e.attack === 'pounce' ? 0.7 : 0.34) && (e.onGround || e.st > 1.0)) { e.state = 'recover'; e.st = 0; e.vulnerable = Math.max(e.vulnerable, 0.8); giveToken(e); }
   } else if (e.state === 'recover') {
     e.vx = damp(e.vx, 0, 8, dt);
-    if (e.st > 0.7) { e.state = 'chase'; e.cd = rand(0.5, 1.3); }
+    if (e.st > 0.8) { e.state = 'chase'; e.cd = rand(0.8, 1.8); }
   }
 }
+// NULL POINTER: an artillery sniper. 0.9 s charge with converging particles and a dotted aim line that locks 0.25 s before
+// the shot; the orb leads you slightly, travels at 9 u/s, and there are never more than 2 enemy orbs alive.
 function aiPointer(e, dt, tm) {
-  const p = P(), dx = p.x - e.x;
+  const p = P(), dx = p.x - e.x, ad = Math.abs(dx);
   e.st += dt;
-  const side = e.side ?? (e.side = e.x < p.x ? -1 : 1);
-  if (Math.abs(dx) < 4) e.side = -sign(dx) || 1;
-  const tx = p.x + (e.side ?? side) * 9.5, ty = Math.max(groundAt(clamp(e.x, 2, worldLen() - 2)), groundAt(p.x), 0) + (e.hoverY || 4) + Math.sin(G.time * 1.6 + e.anim) * 0.35;
+  if (e.side === undefined) e.side = e.x < p.x ? -1 : 1;
+  if (ad < 3.2) e.side = -sign(dx) || 1; // too close: retreat to the other side rather than flying through you
+  const tx = p.x + e.side * 5.8, ty = Math.max(groundAt(clamp(e.x, 2, worldLen() - 2)), groundAt(p.x), 0) + (e.hoverY || 3.6) + Math.sin(G.time * 1.6 + e.anim) * 0.35;
   e.facing = sign(dx);
   if (e.state === 'idle' || e.state === 'chase') {
     e.state = 'chase';
     e.vx = damp(e.vx, clamp((tx - e.x) * 1.3, -4.5, 4.5) * tm, 3, dt);
     e.vy = damp(e.vy, clamp((ty - e.y) * 2, -4, 4) * tm, 3, dt);
     e.cd -= dt * tm;
-    if (e.cd <= 0 && Math.abs(dx) < 17 && !p.dead) { e.state = 'charge'; e.st = 0; telegraph(e, 0.7); }
+    const orbs = G.projectiles.filter((q) => q.owner === 'enemy' && !q.dead).length;
+    if (e.cd <= 0 && ad < 12 && orbs < 2 && takeToken(e)) { e.state = 'charge'; e.st = 0; telegraph(e, 0.9); }
   } else if (e.state === 'charge') {
     e.vx = damp(e.vx, 0, 5, dt); e.vy = damp(e.vy, 0, 5, dt);
-    const k = e.st / 0.7;
-    if (Math.random() < 0.7) { const a = rand(6.28), r = lerp(1.8, 0.3, k); glow.emit(e.x + Math.cos(a) * r, e.y + 0.6 + Math.sin(a) * r, 0, -Math.cos(a) * 3, -Math.sin(a) * 3, 0, rgb(0xff4d6d, 2), 0.25, 0, 0.3); }
-    if (e.st * tm >= 0.7) {
-      const ox = e.x + e.facing * 0.5, oy = e.y + 0.6, tx2 = p.x, ty2 = p.y + 1.1, l = Math.hypot(tx2 - ox, ty2 - oy) || 1;
-      spawnProj({ x: ox, y: oy, vx: (tx2 - ox) / l * 11, vy: (ty2 - oy) / l * 11, r: 0.3, owner: 'enemy', color: 0xff4d6d, trailC: 0xff4d6d, dmg: 10, life: 4, src: e });
-      sfx.shoot('fire'); sparks(ox, oy, 0xff4d6d, 10, 7);
-      e.state = 'chase'; e.cd = rand(2, 3.2); e.vx -= e.facing * 2.5;
+    const k = e.st / 0.9, ox = e.x + e.facing * 0.5, oy = e.y + 0.6;
+    if (Math.random() < 0.7) { const a = rand(6.28), r = lerp(1.8, 0.3, k); glow.emit(e.x + Math.cos(a) * r, e.y + 0.6 + Math.sin(a) * r, 0, -Math.cos(a) * 3, -Math.sin(a) * 3, 0, rgb(0xb26bff, 2), 0.25, 0, 0.3); }
+    if (e.st * tm < 0.65) { e.aimX = p.x + p.vx * 0.3; e.aimY = p.y + 1.1; } // tracks, then locks: a dodgeable, readable shot
+    const l = Math.hypot(e.aimX - ox, e.aimY - oy) || 1, ux = (e.aimX - ox) / l, uy = (e.aimY - oy) / l;
+    for (let i = 1; i <= 7; i++) glow.emit(ox + ux * i * 1.4, oy + uy * i * 1.4, 0.2, 0, 0, 0, rgb(0xb26bff, e.st * tm < 0.65 ? 1.0 : 2.0), 0.16, 0.06, 0.06); // the aim line
+    if (e.st * tm >= 0.9) {
+      spawnProj({ x: ox, y: oy, vx: ux * 9, vy: uy * 9, r: 0.3, owner: 'enemy', color: 0xb26bff, trailC: 0xd7a8ff, dmg: 10, life: 4.5, src: e });
+      sfx.enemyShoot('pointer'); sparks(ox, oy, 0xb26bff, 10, 7);
+      e.state = 'chase'; e.cd = rand(2.4, 3.6); e.vx -= e.facing * 2.5; giveToken(e);
     }
   }
 }
+// LEGACY BOT: an armoured bruiser. 1.0 s wind-up with a red danger zone on the floor and hyper-armour (light hits do not
+// interrupt it; a parry, a slam or a poise break does). Smash + ground wave are ONE parry-able attack. Then a 1.3 s vent
+// where poise breaks 60 % faster. Launchable only when staggered.
 function aiBrute(e, dt, tm) {
   const p = P(), dx = p.x - e.x, ad = Math.abs(dx), dir = sign(dx);
   e.st += dt;
@@ -289,22 +347,25 @@ function aiBrute(e, dt, tm) {
     e.state = 'chase'; e.facing = dir; e.canHop = false;
     steer(e, ad > 2.6 ? dir * e.speed : 0, dt, tm);
     e.cd -= dt * tm;
-    if (ad < 3.4 && e.cd <= 0 && !p.dead && Math.abs(p.y - e.y) < 2.2) { e.state = 'wind'; e.st = 0; telegraph(e, 0.85); e.dirLock = dir; }
+    if (ad < 3.6 && e.cd <= 0 && Math.abs(p.y - e.y) < 2.2 && takeToken(e)) {
+      e.state = 'wind'; e.st = 0; telegraph(e, 1.0); e.dirLock = dir; e.armorT = 1.0;
+      const fx = e.x + dir * 2.1; ring(fx, groundAt(fx) + 0.06, 0.5, RED, { r0: 2.0, r1: 2.0, dur: 1.0, flat: true, intensity: 1.5 }); // smash zone
+    }
   } else if (e.state === 'wind') {
     e.vx = damp(e.vx, 0, 10, dt);
-    if (e.st * tm > 0.5 && !e.tele2) { e.tele2 = true; sfx.telegraph(); }
-    if (e.st * tm >= 0.85) {
-      e.state = 'smash'; e.st = 0; e.tele2 = false;
+    if (e.st * tm >= 1.0) {
+      e.state = 'smash'; e.st = 0; e.armorT = 0;
       const fx = e.x + e.dirLock * 2.1;
       sfx.stomp(); shake(0.45); puff(fx, groundAt(fx) + 0.2, 8, 0x8b949e, 1.4, 0.7); cubes(fx, groundAt(fx) + 0.4, 0x4d5866, 8, 8, 0.3); ripple(fx, 1.8, RED, 14, 0.8);
       ring(fx, groundAt(fx) + 0.05, 0.5, RED, { r0: 0.3, r1: 3.4, dur: 0.4, flat: true }); flashLight(fx, groundAt(fx) + 1, 2, RED, 40, 0.3);
       if (Math.abs(p.x - fx) < 2.0 && p.y - groundAt(p.x) < 2.4 && !p.dead) damagePlayer(22, { x: e.x, y: p.y, enemy: e, kind: 'melee' });
-      groundWave(fx, e.dirLock, { len: 6, speed: 12, dmg: 12, color: RED, owner: 'enemy', height: 1.1 });
+      groundWave(fx, e.dirLock, { len: 6, speed: 12, dmg: 12, color: RED, owner: 'enemy', height: 1.1, src: e });
     }
   } else if (e.state === 'smash') {
-    if (e.st > 0.25) { e.state = 'recover'; e.st = 0; e.vulnerable = 1.4; }
+    if (e.st > 0.25) { e.state = 'recover'; e.st = 0; e.vulnerable = 1.5; giveToken(e); }
   } else if (e.state === 'recover') {
-    if (e.st * tm > 1.3) { e.state = 'chase'; e.cd = rand(1, 2); }
+    if (Math.random() < 0.5) glow.emit(e.x + rand(-0.6, 0.6), e.y + 3.0, rand(-0.3, 0.3), rand(-0.5, 0.5), rand(1.5, 3), 0, rgb(0xcfd8e3, 1.0), 0.5, 1.0, 0.7); // venting steam
+    if (e.st * tm > 1.3) { e.state = 'chase'; e.cd = rand(1.4, 2.4); }
   }
 }
 
@@ -313,36 +374,42 @@ function aiDummy(e, dt, tm) {
   if (e.idleT > 1.2 && Math.abs(dx) > 0.4) e.vx = damp(e.vx, Math.sign(dx) * 3.2, 8, dt); else if (Math.abs(dx) <= 0.4) e.vx = damp(e.vx, 0, 10, dt);
 }
 
-// ----- boss
-const BOSS_ATTACKS = ['slam', 'barrage', 'summon', 'slam', 'barrage'];
+// ----- boss: fixed, learnable attack orders per phase (no pure randomness)
+const BOSS_P1 = ['slam', 'barrage', 'slam', 'summon'];
+const BOSS_P2 = ['sweep', 'slam2', 'barrage', 'rain', 'slam2', 'summon', 'sweep', 'rain'];
+function bossRecover(e, vul, cd) { e.state = 'idle'; e.hitDone = false; e.st = 0; e.vulnerable = vul; e.cd = cd; e.fists.forEach((f) => (f.k = 8)); }
 function aiBoss(e, dt, tm) {
   const p = P(), dx = p.x - e.x, ad = Math.abs(dx), dir = sign(dx);
   const rage = e.hp < e.hpMax * 0.5;
-  if (rage && !e.rage) {
-    e.rage = true; sfx.bossRoar(); shake(1); screenFlash(0xff4d4d, 0.4); punchFov(6); slowmo(0.35, 0.7);
-    UI.banner('PHASE 2', 'SPAGHETTI MODE ENGAGED', '#ff7b72');
+  if (rage && !e.rage) { // phase 2 is entered exactly once; any half-finished attack is cleanly abandoned
+    e.rage = true; e.phase = 2; e.seq = 0; e.hitDone = false; e.marks = []; e.shield = true; e.poise = e.poiseMax; e.parryImmune = 0;
+    sfx.bossRoar(); shake(1); screenFlash(0xff4d4d, 0.4); punchFov(6); slowmo(0.35, 0.7);
+    UI.banner('PHASE 2', 'SHIELD UP: break its poise', '#ff7b72');
     ring(e.x, e.y + 3, 0.5, RED, { r0: 1, r1: 18, dur: 0.9, intensity: 2.5 });
-    e.state = 'idle'; e.st = -1.2;
+    e.state = 'idle'; e.st = -1.4; e.cd = 0.4; e.fists.forEach((f) => (f.k = 8));
   }
   e.st += dt;
   e.facing = dir;
-  const speed = rage ? 2.6 : 1.8;
+  const speed = rage ? 2.6 : 1.8, B0 = e.bx0 ?? 222, B1 = e.bx1 ?? 262;
   if (e.state === 'idle') {
     steer(e, ad > 7 ? dir * speed : ad < 3.5 ? -dir * speed * 0.7 : 0, dt, tm);
     e.cd -= dt * tm;
     if (e.cd <= 0 && e.st > 0 && !p.dead) {
-      const list = rage ? [...BOSS_ATTACKS, 'rain', 'rain'] : BOSS_ATTACKS;
-      let nxt; do { nxt = list[Math.floor(Math.random() * list.length)]; } while (nxt === e.last && list.length > 1);
-      if (nxt === 'summon' && G.enemies.filter((x) => !x.boss && !x.dead).length > 3) nxt = 'barrage';
-      e.last = nxt; e.state = nxt; e.st = 0; e.aStep = 0;
-      if (nxt === 'slam') { e.slamX = p.x; telegraph(e, 1.0); }
-      if (nxt === 'barrage') { telegraph(e, 0.9); }
+      const list = rage ? BOSS_P2 : BOSS_P1;
+      let nxt = list[(e.seq = (e.seq || 0) + 1) % list.length];
+      if (nxt === 'summon' && G.enemies.filter((x) => !x.boss && !x.dead).length >= (rage ? 3 : 2)) nxt = 'barrage';
+      e.last = nxt; e.state = nxt; e.st = 0; e.aStep = 0; e.hitDone = false;
+      if (nxt === 'slam' || nxt === 'slam2') { e.slamX = p.x; telegraph(e, 1.0); }
+      else if (nxt === 'barrage') telegraph(e, 0.9, 'boss');
+      else if (nxt === 'summon') { telegraph(e, 0.7, 'summon'); e.spawnXs = [clamp(e.x - 5, B0, B1), clamp(e.x + 5, B0, B1), clamp(p.x, B0, B1)].slice(0, rage ? 3 : 2); for (const sx of e.spawnXs) ring(sx, groundAt(sx) + 0.06, 0.5, 0x39d353, { r0: 1.2, r1: 1.2, dur: 0.75, flat: true, intensity: 1.4 }); }
+      else if (nxt === 'sweep') telegraph(e, 0.95, 'boss');
     }
-  } else if (e.state === 'slam') {
+  } else if (e.state === 'slam' || e.state === 'slam2') {
     e.vx = damp(e.vx, 0, 8, dt);
-    const f = e.fists[0];
-    const t = e.st * tm;
-    if (t < 0.9) { e.slamX = lerp(e.slamX, p.x, Math.min(1, dt * 3)); f.tx = e.slamX; f.ty = groundAt(e.slamX) + 8; f.z = 0.4; f.k = 6; }
+    const f = e.fists[0], t = e.st * tm;
+    // the fist tracks you until 0.3 s before it drops: stay put and you get hit, move at the last moment and it misses
+    if (t < 0.7) { e.slamX = lerp(e.slamX, p.x, Math.min(1, dt * 3)); f.tx = e.slamX; f.ty = groundAt(e.slamX) + 8; f.z = 0.4; f.k = 6; }
+    else if (t < 0.95) { f.tx = e.slamX; f.ty = groundAt(e.slamX) + 8; f.k = 12; }
     else if (t < 1.0) { f.k = 40; f.ty = groundAt(e.slamX) + 0.9; }
     if (t >= 1.0 && !e.hitDone) {
       e.hitDone = true; const x = e.slamX, gy = groundAt(x);
@@ -350,9 +417,25 @@ function aiBoss(e, dt, tm) {
       ring(x, gy + 0.05, 0.5, RED, { r0: 0.5, r1: 7, dur: 0.6, flat: true }); ring(x, gy + 1, 0.5, 0xffffff, { r0: 0.5, r1: 4, dur: 0.35 });
       puff(x, gy + 0.3, 14, 0x8b949e, 2, 1); cubes(x, gy + 1, 0x464f5c, 18, 11, 0.45); cubes(x, gy + 1, RED, 10, 9, 0.3, true); ripple(x, 3.4, RED, 18, 1.2); flashLight(x, gy + 1, 2, RED, 90, 0.5);
       if (Math.abs(p.x - x) < 2.4 && p.y - gy < 2.5 && !p.dead) damagePlayer(26, { x, y: p.y, enemy: e, kind: 'melee' });
-      for (const d of [-1, 1]) groundWave(x, d, { len: rage ? 20 : 14, speed: rage ? 14 : 11, dmg: 15, color: RED, owner: 'enemy', height: 1.2 });
+      for (const d of [-1, 1]) groundWave(x, d, { len: rage ? 20 : 14, speed: rage ? 14 : 11, dmg: 15, color: RED, owner: 'enemy', height: 1.2, src: e });
+      if (e.state === 'slam2') { // phase 2: a delayed second wave pair, so the first jump is not enough
+        for (const d of [-1, 1]) ring(x + d * 2.5, gy + 0.07, 0.4, RED, { r0: 1.5, r1: 1.5, dur: 0.45, flat: true, intensity: 1.6 });
+        later(0.45, () => { if (e.dead) return; sfx.quake(); shake(0.5); for (const d of [-1, 1]) groundWave(x, d, { len: 18, speed: 15, dmg: 15, color: RED, owner: 'enemy', height: 1.2, src: e }); });
+      }
     }
-    if (t > 1.9) { e.state = 'idle'; e.hitDone = false; e.cd = rage ? 0.8 : 1.5; e.st = 0; e.vulnerable = 1.6; f.k = 8; }
+    if (t > (e.state === 'slam2' ? 2.2 : 1.9)) bossRecover(e, 1.6, rage ? 0.8 : 1.5);
+  } else if (e.state === 'sweep') { // phase 2: a low fist sweep along the floor: jump it, or parry it
+    e.vx = damp(e.vx, 0, 8, dt);
+    const t = e.st * tm, f = e.fists[0], gy = groundAt(e.x);
+    if (t < 0.95) {
+      f.tx = e.x - e.facing * 1.5; f.ty = gy + 4.5; f.z = 0.4; f.k = 8; // arm drawn back and up
+      for (let i = 1; i <= 5; i++) ring(e.x + e.facing * i * 1.5, groundAt(e.x + e.facing * i * 1.5) + 0.07, 0.4, RED, { r0: 0.8, r1: 0.8, dur: 0.05, flat: true, intensity: 1.4 });
+    } else if (!e.hitDone) {
+      e.hitDone = true; f.tx = e.x + e.facing * 6; f.ty = gy + 0.9; f.k = 30;
+      sfx.stomp(); shake(0.5); puff(e.x + e.facing * 3, gy + 0.3, 10, 0x8b949e, 1.6, 0.8);
+      groundWave(e.x + e.facing * 1.6, e.facing, { len: 8, speed: 22, dmg: 20, color: RED, owner: 'enemy', height: 0.9, thick: 0.9, src: e });
+    }
+    if (t > 1.7) bossRecover(e, 1.5, 0.8);
   } else if (e.state === 'barrage') {
     e.vx = damp(e.vx, 0, 8, dt);
     const t = e.st * tm, shots = rage ? 9 : 6;
@@ -362,22 +445,22 @@ function aiBoss(e, dt, tm) {
       while (e.aStep <= idx && e.aStep < shots) {
         const ox = e.x + e.facing * 1.5, oy = e.y + 5.7, tx = p.x + rand(-2.5, 2.5), ty = p.y + 1 + rand(-0.5, 1.2), l = Math.hypot(tx - ox, ty - oy);
         spawnProj({ x: ox, y: oy, vx: (tx - ox) / l * (rage ? 12 : 10), vy: (ty - oy) / l * (rage ? 12 : 10), r: 0.4, owner: 'enemy', color: 0xff4d4d, trailC: 0xff7b72, dmg: 11, life: 4, src: e });
-        sfx.shoot('fire'); sparks(ox, oy, 0xff7b72, 8, 7); shake(0.1); e.aStep++;
+        sfx.enemyShoot('boss'); sparks(ox, oy, 0xff7b72, 8, 7); shake(0.1); e.aStep++;
       }
-      if (e.aStep >= shots && t > 0.9 + shots * 0.14 + 0.4) { e.state = 'idle'; e.cd = rage ? 0.7 : 1.4; e.st = 0; e.vulnerable = 1.4; }
+      if (e.aStep >= shots && t > 0.9 + shots * 0.14 + 0.4) bossRecover(e, 1.4, rage ? 0.7 : 1.4);
     }
   } else if (e.state === 'summon') {
     e.vx = damp(e.vx, 0, 8, dt);
     const t = e.st * tm;
     if (t > 0.7 && !e.hitDone) {
       e.hitDone = true; sfx.bossRoar(); shake(0.5); ring(e.x, e.y + 4, 0.5, 0x39d353, { r0: 0.5, r1: 8, dur: 0.6 });
-      for (let i = 0; i < (rage ? 4 : 3); i++) { const sx = clamp(p.x + (i - 1) * 6 + rand(-2, 2), e.bx0 ?? 222, e.bx1 ?? 262); const b = spawnEnemy('bug', sx, 0, { arena: 'boss' }); }
+      for (const sx of e.spawnXs || []) spawnEnemy('bug', sx, 0, { arena: 'boss', cd: 1.2 });
     }
-    if (t > 1.6) { e.state = 'idle'; e.hitDone = false; e.cd = 1.8; e.st = 0; e.vulnerable = 1.2; }
-  } else if (e.state === 'rain') {
+    if (t > 1.6) bossRecover(e, 1.2, 1.8);
+  } else if (e.state === 'rain') { // phase 2: falling blocks in marked lanes
     const t = e.st * tm;
     if (!e.hitDone) {
-      e.hitDone = true; sfx.telegraph(); e.marks = [];
+      e.hitDone = true; sfx.telegraph('boss'); e.marks = [];
       const n = 6;
       for (let i = 0; i < n; i++) {
         const mx = clamp(p.x + (i - (n - 1) / 2) * 4 + rand(-1.2, 1.2), e.bx0 ?? 220, e.bx1 ?? 263);
@@ -392,17 +475,27 @@ function aiBoss(e, dt, tm) {
       for (let j = 0; j < 8; j++) glow.emit(m.x + rand(-0.8, 0.8), gy + rand(0, 14), 0, 0, -rand(10, 20), 0, rgb(RED, 1.8), 0.3, 0.1, 0.4);
       if (Math.abs(p.x - m.x) < 1.8 && p.y - gy < 4 && !p.dead) damagePlayer(18, { x: m.x, y: p.y, enemy: e, kind: 'melee' });
     }
-    if (t > 2.4) { e.state = 'idle'; e.hitDone = false; e.cd = 1.2; e.st = 0; e.vulnerable = 1.2; }
+    if (t > 2.4) bossRecover(e, 1.2, 1.2);
   } else if (e.state === 'stunned') {
     e.vx = damp(e.vx, 0, 8, dt);
     if (e.st > e.staggerTime) { e.state = 'idle'; e.cd = 1.0; e.st = 0; e.fists.forEach((f) => (f.k = 8)); }
   }
-  if (e.state !== 'slam') { // idle fists follow the body
+  if (e.state !== 'slam' && e.state !== 'slam2' && e.state !== 'sweep') { // idle fists follow the body
     e.fists.forEach((f, i) => { f.tx = e.x + e.facing * (2.6 + i * 0.4); f.ty = e.y + 3.3 + Math.sin(G.time * 1.5 + i * 2) * 0.35; f.z = i ? -1.9 : 1.9; f.k = 6; });
     e.fists[1].tx = e.x - e.facing * 2.4;
   } else e.fists[1].tx = e.x - e.facing * 2.4, e.fists[1].ty = e.y + 3.3, e.fists[1].z = -1.9;
-  // contact push
-  if (!p.dead && Math.abs(p.x - e.x) < 2.2 && p.y < e.y + 5) damagePlayer(10, { x: e.x, y: p.y, enemy: e, kind: 'melee' });
+  // body check: standing inside the boss for 0.3 s gets you shoved (10 damage, 1.4 s cooldown). It can no longer re-trigger every frame.
+  e.bodyCd = Math.max(0, (e.bodyCd || 0) - dt);
+  const near = !p.dead && Math.abs(p.x - e.x) < 2.4 && p.y < e.y + 4.5;
+  if (near && e.bodyCd <= 0) {
+    e.contactT = (e.contactT || 0) + dt;
+    if (e.contactT > 0.3) {
+      e.contactT = 0; e.bodyCd = 1.4;
+      damagePlayer(10, { x: e.x, y: p.y, enemy: e, kind: 'melee' });
+      p.vx = sign(p.x - e.x || 1) * 10; p.vy = Math.max(p.vy, 5);
+      ring(e.x + sign(p.x - e.x) * 1.8, e.y + 1.2, 0.5, RED, { r0: 0.3, r1: 2.2, dur: 0.3 });
+    }
+  } else if (!near) e.contactT = 0;
 }
 
 // ----------------------------------------------------------------- animation
@@ -423,9 +516,11 @@ function animate(e, dt, tm) {
     g.rotation.z = -e.tiltZ;
     g.position.y = e.y + (Math.abs(e.tiltZ) > 0.6 ? Math.min(0.55, e.h * 0.2) * (Math.abs(e.tiltZ) / 1.45) : 0);
     if (e.spawnT <= 0) g.scale.set(1 + e.recoil * 0.07, 1 - e.recoil * 0.09, 1 + e.recoil * 0.07);
+    // victim shake during hit-stop (Sakurai): the target vibrates while the world is frozen, horizontally on the ground, vertically in the air
+    if (G.freeze > 0 && e.recoil > 0.4) { const j = e.recoil * 0.1 * Math.sin(performance.now() * 0.13); if (e.air) g.position.y += j; else g.position.x += j; }
   }
   // telegraph pulse
-  if (e.tele > 0) e.tele -= dt;
+  if (e.tele > 0) e.tele -= dt * tm; // tells slow down with the enemy (chill), so they never run ahead of the attack
   const tele = e.tele > 0 ? (0.5 + 0.5 * Math.sin(t * 35)) : 0;
   for (const m of e.mats) {
     const b = m.userData.base;
@@ -445,7 +540,7 @@ function animate(e, dt, tm) {
   } else if (e.type === 'pointer') {
     e.r1.rotation.x += dt * 2; e.r1.rotation.y += dt * 1.3; e.r2.rotation.z += dt * 2.2; e.r2.rotation.y -= dt;
     e.bits.forEach((b, i) => { const a = t * 2 + b.userData.ph; b.position.set(Math.cos(a) * 0.75, 0.6 + Math.sin(a * 1.3) * 0.2, Math.sin(a) * 0.75); b.rotation.x += dt * 3; });
-    const s = e.state === 'charge' ? 1 + (e.st / 0.7) * 0.5 : 1;
+    const s = e.state === 'charge' ? 1 + (e.st / 0.9) * 0.5 : 1;
     e.core.scale.setScalar(0.4 * s + Math.sin(t * 8) * 0.02); e.core.rotation.y += dt * 2;
     e.group.rotation.y = 0;
     e.eye.position.x = 0.26 * e.facing;
@@ -474,6 +569,7 @@ function animate(e, dt, tm) {
     }
     if (e.state === 'slam' && e.st < 0.9) { const k = e.st / 0.9; ring(e.slamX, groundAt(e.slamX) + 0.07, 0.4, RED, { r0: lerp(3, 2.2, k), r1: lerp(3, 2.2, k), dur: 0.05, flat: true, intensity: 1.6 }); }
   }
+  if (e.shieldM) { e.shieldM.visible = !!e.shield; if (e.shield) { e.shieldM.rotation.y += dt * 0.8; e.shieldM.material.opacity = 0.2 + 0.08 * Math.sin(t * 6); } }
   // hp bar
   const showBar = !e.boss && e.hurtT > 0 && !e.dead;
   e.bar.visible = showBar;
@@ -488,10 +584,11 @@ function animate(e, dt, tm) {
 // ----------------------------------------------------------------- update
 export function updateEnemies(dt) {
   const p = P();
+  sweepTokens();
   for (let i = G.enemies.length - 1; i >= 0; i--) {
     const e = G.enemies[i];
     if (e.dead) { removeEnemy(e); G.enemies.splice(i, 1); if (G.boss === e) G.boss = null; continue; }
-    const tm = e.chill > 0 ? 0.55 : 1;
+    const tm = e.chill > 0 ? (e.boss ? 0.8 : 0.55) : 1; // chill slows a boss far less
     // spawn glitch
     if (e.spawnT > 0) {
       e.spawnT -= dt;
@@ -518,7 +615,7 @@ export function updateEnemies(dt) {
     else if (e.getUp > 0) e.getUp -= dt;
     if (e.recoil > 0) e.recoil = Math.max(0, e.recoil - dt * 7);
     const busy = e.stagger > 0 || e.stun > 0 || e.air || e.downT > 0 || e.getUp > 0;
-    if (busy && e.state !== 'stunned' && !e.boss) { if (e.state !== 'recover') { e.state = 'idle'; e.cd = Math.max(e.cd, 0.4); } e.tele = 0; }
+    if (busy && e.state !== 'stunned' && !e.boss) { if (e.state !== 'recover') { e.state = 'idle'; e.cd = Math.max(e.cd, 0.4); } e.tele = 0; e.armorT = 0; giveToken(e); }
     if (!busy && !p.dead && (G.trainAttack !== false || e.dummy)) {
       ({ bug: aiBug, pointer: aiPointer, brute: aiBrute, boss: aiBoss, dummy: aiDummy }[e.type])(e, dt, tm);
     } else if (!busy && p.dead) e.vx = damp(e.vx, 0, 5, dt);

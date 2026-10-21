@@ -4,7 +4,7 @@ import { scene, glow, dust, sparks, puff, cubes, rgb, ring, slash, flashLight, f
 import { emit } from './events.js';
 import { groundAt, ripple, dyn } from './world.js';
 import { sfx } from './audio.js';
-import { hitBox, hitEnemy, explode, spawnProj, endProj, hitstop, slowmo, later, damagePlayer, enemyBox, imbueBurst } from './combat.js';
+import { hitBox, hitEnemy, explode, spawnProj, endProj, hitstop, slowmo, later, damagePlayer, enemyBox, imbueBurst, fb } from './combat.js';
 import { rand, clamp, easeOut, lerp } from './util.js';
 
 // ================================================================= helpers
@@ -20,7 +20,7 @@ export function melee(p, { range = 2.2, h = 2, y0 = 0, back = 0.3, dmg = 10, ...
 }
 
 // A shockwave rolling along the ground. owner 'player' hurts enemies, 'enemy' hurts the player.
-export function groundWave(x, dir, { len = 8, speed = 16, dmg = 20, color = 0xb98a4e, owner = 'player', height = 1.3, stun = 0, kx = 8, ky = 6, thick = 1.2, hitOpts = {} } = {}) {
+export function groundWave(x, dir, { len = 8, speed = 16, dmg = 20, color = 0xb98a4e, owner = 'player', height = 1.3, stun = 0, kx = 8, ky = 6, thick = 1.2, hitOpts = {}, src = null } = {}) {
   const hit = new Set(); let d = 0;
   const c = rgb(color, 1.5);
   addFx((dt) => {
@@ -44,7 +44,7 @@ export function groundWave(x, dir, { len = 8, speed = 16, dmg = 20, color = 0xb9
     } else {
       const p = G.player;
       if (!hit.has(p) && Math.abs(p.x - fx) < thick + p.w / 2 && p.y - groundAt(p.x) < height) {
-        hit.add(p); damagePlayer(dmg, { x: fx - dir * 0.5, y: p.y, kind: 'wave' });
+        hit.add(p); damagePlayer(dmg, { x: fx - dir * 0.5, y: p.y, kind: 'wave', enemy: src });
       }
     }
     return d < len;
@@ -86,7 +86,7 @@ const fire = {
       sfx.swing('fire', i);
       sparks(cx + p.facing, cy, 0xffc233, 8, 7, 0.22, 0.4, p.facing);
       flashLight(cx, cy, 2, 0xff6a2b, 35, 0.25);
-      melee(p, { range: i === 2 ? 3.1 : 2.5, h: 2.2, y0: -0.1, dmg: [11, 11, 18][i], kx: i === 2 ? 11 : 5, ky: i === 2 ? 5 : 0, color: 0xff6a2b, big: i === 2, ...burn });
+      melee(p, { range: i === 2 ? 3.1 : 2.5, h: 2.2, y0: -0.1, dmg: [11, 11, 18][i], kx: i === 2 ? 11 : 5, ky: i === 2 ? 5 : 0, color: 0xff6a2b, big: i === 2, finisher: i === 2, ...burn });
       if (i === 2) explode(p.x + p.facing * 2.4, p.y + 0.9, 2.3, 8, { color: 0xff6a2b, burn: 2, shake: 0.35 });
     },
   },
@@ -181,7 +181,7 @@ const water = {
       slash(cx, cy, p.facing, i === 2 ? 0x9fe8ff : 0x2ea8ff, { radius: i === 2 ? 3.6 : 3, angle: 2.7, rot: i === 1 ? 0.6 : -0.6, flip: i === 1 ? -1 : 1, dur: 0.3, sweep: 1.8 });
       sfx.swing('water', i);
       for (let k = 0; k < 14; k++) { const a = rand(-1.2, 1.2); glow.emit(cx + Math.cos(a) * 2 * p.facing, cy + Math.sin(a) * 1.5, 0, p.facing * rand(2, 8), rand(-2, 4), 0, rgb(0x9fe8ff, 1.5), rand(0.2, 0.4), 0, 0.5, 14, 1); }
-      melee(p, { range: 3.3, h: 2.4, y0: -0.2, dmg: [9, 9, 14][i], kx: 4, ky: 2, color: 0x2ea8ff, chill: 2.2, big: i === 2 });
+      melee(p, { range: 3.3, h: 2.4, y0: -0.2, dmg: [9, 9, 14][i], kx: 4, ky: 2, color: 0x2ea8ff, chill: 2.2, big: i === 2, finisher: i === 2 });
       if (i === 2) {
         groundWave(p.x + p.facing * 1, p.facing, { len: 7, speed: 15, dmg: 10, color: 0x2ea8ff, kx: 8, ky: 5, hitOpts: { chill: 2.5, kind: 'main' } });
         sfx.wave();
@@ -289,7 +289,7 @@ const earth = {
       sfx.swing('earth', i);
       cubes(cx + p.facing * 0.7, cy, 0xc08a4b, 5, 6, 0.22, false, 1);
       const seis = p.mods.seismic;
-      melee(p, { range: 2.1, h: 2.2, y0: -0.2, dmg: [14, 14, 26][i], kx: i === 2 ? 12 : 7, ky: i === 2 ? 7 : 1, color: 0xc08a4b, big: true, poise: 60, hitstop: 0.075, shake: 0.28 });
+      melee(p, { range: 2.1, h: 2.2, y0: -0.2, dmg: [14, 14, 26][i], kx: i === 2 ? 12 : 7, ky: i === 2 ? 7 : 1, color: 0xc08a4b, big: true, finisher: i === 2, poise: 60 });
       if (seis || i === 2) groundWave(p.x + p.facing * 1.5, p.facing, { len: i === 2 ? 7 : 5, speed: 16, dmg: i === 2 ? 14 : 7, color: 0xc08a4b, stun: i === 2 ? 0.8 : 0, kx: 5, ky: 3 });
       if (i === 2) {
         const gx = p.x + p.facing * 1.8;
@@ -392,7 +392,7 @@ const air = {
       slash(cx, cy, p.facing, i === 2 ? 0x7ff3d6 : 0xcfe9ff, { radius: i === 2 ? 3.3 : 2.7, angle: 2.4, rot: i === 1 ? 0.4 : -0.5, flip: i === 1 ? -1 : 1, dur: 0.17, sweep: 1.6 });
       sfx.swing('air', i);
       for (let k = 0; k < 8; k++) glow.emit(cx + rand(-1, 1) * p.facing, cy + rand(-1, 1), 0, -p.facing * rand(3, 9), rand(-1, 1), 0, rgb(0xcfe9ff, 1.5), rand(0.2, 0.35), 0, 0.35, 0, 3);
-      melee(p, { range: 3.0, h: 2.2, y0: -0.1, dmg: [8, 8, 13][i], kx: i === 2 ? 9 : 4, ky: i === 2 ? 5 : 1, color: 0xcfe9ff, big: i === 2 });
+      melee(p, { range: 3.0, h: 2.2, y0: -0.1, dmg: [8, 8, 13][i], kx: i === 2 ? 9 : 4, ky: i === 2 ? 5 : 1, color: 0xcfe9ff, big: i === 2, finisher: i === 2 });
       if (i === 2 && p.mods.hurricane) {
         spawnProj({ x: p.x + p.facing, y: p.y + 1.1, vx: p.facing * 26, vy: 0, r: 0.5, shape: 'blade', color: 0x7ff3d6, trailC: 0xcfe9ff, dmg: 14, life: 0.75, pierce: 99, ghost: true,
           onHit: (pr, e) => hitEnemy(e, 14, { kind: 'ranged', dir: Math.sign(pr.vx), color: 0x7ff3d6, kx: 5 }) });
@@ -505,9 +505,9 @@ export function launcherStrike(p) {
   sfx.swing(k, 1, 'launcher'); launcherFx[k](p, fx);
   ring(fx, groundAt(fx) + 0.06, 0.4, c, { r0: 0.3, r1: 3, dur: 0.4, flat: true });
   const dmg = { fire: 16, water: 13, earth: 22, air: 12 }[k];
-  const hit = hitBox(x0, x1, p.y - 0.3, p.y + 3.4, dmg, { kind: 'main', dir: f, launch: 17, kx: 1.5, ky: 0, big: true, color: c, hitstop: 0.075, shake: 0.28, ...MAIN_EXTRA[k] });
+  const hit = hitBox(x0, x1, p.y - 0.3, p.y + 3.4, dmg, { kind: 'main', dir: f, launch: 17, kx: 1.5, ky: 0, big: true, color: c, ...MAIN_EXTRA[k] });
   p.vy = Math.max(p.vy, 7); p.onGround = false; p.y += 0.03; p.squash = -0.3;
-  if (hit.length) { imbueBurst(p, fx, p.y + 1.4); punchFov(2); }
+  if (hit.length) imbueBurst(p, fx, p.y + 1.4);
   emit('launcher', { hits: hit.length });
 }
 export function airStrike(p, i) {
@@ -517,7 +517,7 @@ export function airStrike(p, i) {
   sparks(cx + f, cy, c, 7, 7, 0.2, 0.35, f, 1, SPRITE_OF[k]);
   const dmg = [{ fire: 9, water: 8, earth: 13, air: 7 }, { fire: 9, water: 8, earth: 13, air: 7 }, { fire: 14, water: 12, earth: 20, air: 11 }][i][k];
   const hit = hitBox(f > 0 ? p.x - 0.4 : p.x - 2.6, f > 0 ? p.x + 2.6 : p.x + 0.4, p.y - 0.9, p.y + 2.4, dmg, { kind: 'main', dir: f, lift: !spike, spike, kx: spike ? 1.5 : 2.5, ky: 0, color: c, big: spike, ...MAIN_EXTRA[k] });
-  if (spike && hit.length) { imbueBurst(p, cx, cy - 0.5); punchFov(2.5); shake(0.3); }
+  if (spike && hit.length) imbueBurst(p, cx, cy - 0.5);
   emit('airSwing', { i, hits: hit.length });
 }
 const slamFx = {
@@ -528,7 +528,7 @@ const slamFx = {
 };
 export function slamImpact(p) {
   const x = p.x, gy = groundAt(x), k = p.key, c = colOf(p);
-  sfx.slam(k); shake(0.6); punchFov(4); post.aberr = Math.max(post.aberr, 0.008);
+  sfx.slam(k); fb('slam');
   ring(x, gy + 0.06, 0.5, c, { r0: 0.4, r1: 7, dur: 0.55, flat: true, intensity: 2 }); ring(x, gy + 0.7, 0.5, 0xffffff, { r0: 0.3, r1: 3.4, dur: 0.3 });
   slamFx[k](x, gy); impactFlash(x, gy + 0.4, c, 4.5); ripple(x, 2.6, c, 16, 1.2); flashLight(x, gy + 1, 2, c, 80, 0.4); shockwave(x, gy + 0.5, 0.04, 0.55, 0.45);
   const base = { kind: 'main', color: c, bounce: true, big: true, hitstop: 0.07, ...MAIN_EXTRA[k] };
