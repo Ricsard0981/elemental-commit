@@ -44,6 +44,12 @@ export function fb(kind, o = {}) {
 // ----------------------------------------------------------------- time helpers
 export const hitstop = (s) => { G.freeze = Math.max(G.freeze, Math.min(s, 0.3)); }; // overlapping hit-stops extend (never stack), hard cap ~18 frames
 export const slowmo = (scale, real) => { G.tsTarget = scale; G.tsHold = Math.max(G.tsHold, real); };
+// every skill node that changes a hit announces itself (throttled per name), so you can SEE your build working
+const procAt = {};
+export function proc(name, x, y, color = '#ffd33d') {
+  if ((procAt[name] || 0) > G.time) return; procAt[name] = G.time + 0.45;
+  floatText(x, y, name, { color, size: 15, dur: 0.7 });
+}
 export const later = (delay, fn) => G.timers.push({ t: delay, fn });
 
 export const enemyBox = (e) => ({ x0: e.x - e.w / 2, x1: e.x + e.w / 2, y0: e.y, y1: e.y + e.h });
@@ -131,9 +137,9 @@ export function hitEnemy(e, base, o = {}) {
   let d = base * (1 + m.allDmg) * (p.dmgBuff || 1) * p.el.prof.dmg;
   const crit = !o.noCrit && Math.random() < 0.1 + (p.critBonus || 0);
   if (crit) d *= 1.75;
-  if (e.chill > 0 && m.frostbite) d *= 1.3;
-  if (e.burn > 0 && m.brand) d *= 1.25;
-  if (e.stun > 0 && m.crushing) d *= 1.5;
+  if (e.chill > 0 && m.frostbite) { d *= 1.45; proc('FROSTBITE +45%', e.x, e.y + e.h + 0.6, '#9fe8ff'); }
+  if (e.burn > 0 && m.brand) { d *= 1.4; proc('BRANDED +40%', e.x, e.y + e.h + 0.6, '#ffb347'); }
+  if (e.stun > 0 && m.crushing) { d *= 1.8; proc('CRUSHED +80%', e.x, e.y + e.h + 0.6, '#e0b070'); }
   if (e.vulnerable > 0) d *= 1.25;
   d = Math.max(1, Math.round(d)); const dRaw = d;
   if (e.shield) d = Math.max(1, Math.round(d * 0.3)); // phase-2 shield: damage barely matters, break its poise
@@ -196,7 +202,7 @@ export function hitEnemy(e, base, o = {}) {
   }
   floatText(e.x, e.y + e.h + 0.4, crit ? `${d}!` : String(d), { cls: crit ? 'crit' : '', color: crit ? '#ffd33d' : '#ffffff', size: crit ? 34 : big ? 26 : 20, dur: crit ? 1.1 : 0.8, vy: crit ? 3.4 : 2.6 });
   if (crit) ring(e.x, e.y + e.h * 0.5, 0.6, 0xffd33d, { r0: 0.2, r1: 1.8, dur: 0.3 });
-  if (m.skyhook && !p.onGround && o.kind === 'main') { p.airDash = true; p.cd.dash = Math.min(p.cd.dash, 0.1); } // Skyhook: air hits refund the air dash
+  if (m.skyhook && !p.onGround && o.kind === 'main') { proc('SKYHOOK', p.x, p.y + 3, '#7ff3d6'); p.airDash = true; p.cd.dash = Math.min(p.cd.dash, 0.1); } // Skyhook: air hits refund the air dash
   if (!o.noCombo) comboAdd(1);
   if (!o.noEnergy && !p.infEnergy) p.energy = Math.min(p.energyMax, p.energy + (o.kind === 'main' ? 4.5 : 1.5));
   else if (p.infEnergy) p.energy = p.energyMax;
@@ -240,10 +246,10 @@ export function killEnemy(e, o = {}) {
   if (Math.random() < (e.heart ?? 0.1) && p.hp < p.hpMax * 0.9) spawnHeart(e.x, cy);
   giveXP(e.xp, e.x, e.y + e.h);
   // fire passive
-  if (e.burn > 0 && p.mods.deathExplode) later(0.12, () => explode(e.x, cy, 3.6, 38, { color: 0xff6a2b, burn: 3, chain: true }));
+  if (e.burn > 0 && p.mods.deathExplode) later(0.12, () => explode(e.x, cy, 4.4, 60, { color: 0xff6a2b, burn: 3, chain: true }));
   if (e.burn > 0 && p.mods.spreadBurn) { // Spreading Embers
-    ring(e.x, cy, 0.5, 0xff6a2b, { r0: 0.4, r1: 5, dur: 0.4 });
-    for (const o2 of G.enemies) if (o2 !== e && !o2.dead && Math.hypot(o2.x - e.x, o2.y - e.y) < 5) { o2.burn = Math.max(o2.burn, 3); o2.burnDps = Math.max(o2.burnDps || 0, 8); }
+    ring(e.x, cy, 0.5, 0xff6a2b, { r0: 0.4, r1: 7, dur: 0.4 }); proc('EMBERS SPREAD', e.x, cy + 1, '#ff9a4d');
+    for (const o2 of G.enemies) if (o2 !== e && !o2.dead && Math.hypot(o2.x - e.x, o2.y - e.y) < 7) { o2.burn = Math.max(o2.burn, 3); o2.burnDps = Math.max(o2.burnDps || 0, 8); }
   }
   e.onDeath?.();
   emit('kill', { e });
@@ -397,7 +403,7 @@ function damagePlayerInner(amount, src) {
     ring(p.x + p.facing * 0.7, p.y + 1.1, 0.6, el.color2, { r0: 0.2, r1: 1.6, dur: 0.25 });
     p.vx -= Math.sign(src.x - p.x) * (g.knockback ?? 5);
     p.guardFlash = 0.15;
-    if (p.mods.thorns) explode(p.x + p.facing * 0.5, p.y + 1, 3, amount * 2.2, { color: el.color, kx: 8, stun: 0.6 });
+    if (p.mods.thorns) { explode(p.x + p.facing * 0.5, p.y + 1, 3.6, amount * 3.5, { color: el.color, kx: 9, stun: 0.9 }); proc('REFLECTED', p.x, p.y + 3.2, '#e0b070'); }
     floatText(p.x, p.y + 2.4, (late ? 'LATE ' : '') + (taken > 0 ? `-${taken}` : 'BLOCKED'), { color: taken > 0 ? '#ffa657' : '#9ecbff', size: 18 });
     if (taken > 0) { p.hp -= taken; G.stats.damageTaken += taken; if (p.hp <= 0) return playerDown(src); }
     if (src.proj) endProj(src.proj, true);

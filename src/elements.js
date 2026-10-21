@@ -4,7 +4,7 @@ import { scene, glow, dust, sparks, puff, cubes, rgb, ring, slash, flashLight, f
 import { emit } from './events.js';
 import { groundAt, ripple, dyn } from './world.js';
 import { sfx } from './audio.js';
-import { hitBox, hitEnemy, explode, spawnProj, endProj, hitstop, slowmo, later, damagePlayer, enemyBox, imbueBurst, fb } from './combat.js';
+import { proc, hitBox, hitEnemy, explode, spawnProj, endProj, hitstop, slowmo, later, damagePlayer, enemyBox, imbueBurst, fb } from './combat.js';
 import { rand, clamp, easeOut, lerp } from './util.js';
 
 // ================================================================= helpers
@@ -92,8 +92,9 @@ const fire = {
       if (i === 2 && m.firePillar) { // Inferno Mastery: a pillar of fire stays in the floor
         const px = p.x + p.facing * 2.6, py = groundAt(px);
         ring(px, py + 0.05, 0.5, 0xffc233, { r0: 0.3, r1: 2, dur: 0.4, flat: true });
-        zone(0, 0, { dur: 3, tick: 0.3, onFrame: () => { for (let j = 0; j < 3; j++) glow.emit(px + rand(-0.6, 0.6), py + 0.1, rand(-0.3, 0.3), 0, rand(4, 8), 0, rgb(Math.random() < 0.5 ? 0xff6a2b : 0xffc233, 1.8), rand(0.5, 0.9), 0, 0.6, -2); },
-          onTick: () => hitBox(px - 1.1, px + 1.1, py - 0.3, py + 4, 6, { kind: 'special', burn: 2, burnDps: 9, kx: 0, noCombo: true, quiet: true, hitstop: 0, shake: 0, color: 0xff6a2b, poise: 1 }) });
+        proc('INFERNO', px, py + 4, '#ff9a4d');
+        zone(0, 0, { dur: 4, tick: 0.3, onFrame: () => { for (let j = 0; j < 6; j++) glow.emit(px + rand(-0.9, 0.9) - px + px + rand(-0.6, 0.6), py + 0.1, rand(-0.3, 0.3), 0, rand(4, 8), 0, rgb(Math.random() < 0.5 ? 0xff6a2b : 0xffc233, 1.8), rand(0.5, 0.9), 0, 0.6, -2); },
+          onTick: () => hitBox(px - 1.8, px + 1.8, py - 0.3, py + 5.5, 9, { kind: 'special', burn: 2, burnDps: 9, kx: 0, noCombo: true, quiet: true, hitstop: 0, shake: 0, color: 0xff6a2b, poise: 1 }) });
       }
     },
   },
@@ -304,7 +305,7 @@ const earth = {
       cubes(cx + p.facing * 0.7, cy, 0xc08a4b, 5, 6, 0.22, false, 1);
       const seis = p.mods.seismic;
       melee(p, { range: 2.1, h: 2.2, y0: -0.2, dmg: [14, 14, 26][i], kx: i === 2 ? 12 : 7, ky: i === 2 ? 7 : 1, color: 0xc08a4b, big: true, finisher: i === 2, poise: 60 });
-      if (seis || i === 2) groundWave(p.x + p.facing * 1.5, p.facing, { len: i === 2 ? 7 : 5, speed: 16, dmg: i === 2 ? 14 : 7, color: 0xc08a4b, stun: i === 2 ? 0.8 : 0, kx: 5, ky: 3 });
+      if (seis || i === 2) groundWave(p.x + p.facing * 1.5, p.facing, { len: i === 2 ? 9 : 7, speed: 16, dmg: i === 2 ? 20 : 14, color: 0xc08a4b, stun: i === 2 ? 0.8 : 0.3, kx: 5, ky: 3 });
       if (i === 2) {
         const gx = p.x + p.facing * 1.8;
         ring(gx, groundAt(gx) + 0.05, 0.5, 0xe0b070, { r0: 0.3, r1: 4, dur: 0.5, flat: true }); ring(gx, groundAt(gx) + 0.5, 0.5, 0xe0b070, { r0: 0.3, r1: 3, dur: 0.35 });
@@ -322,9 +323,9 @@ const earth = {
         onEnd: (pr) => {
           explode(pr.x, pr.y, 2.5, 27, { color: 0xc08a4b, stun: 0.7, kx: 9, ky: 6, shake: 0.4, cubeColor: 0x9a7448 });
           cubes(pr.x, pr.y, 0x9a7448, 8, 9, 0.3, false, 1.2);
-          if (m.avalanche) for (let i = 0; i < 6; i++) { const an = rand(0.4, Math.PI - 0.4);
-            spawnProj({ x: pr.x, y: pr.y + 0.3, vx: Math.cos(an) * 11 + rand(-6, 6), vy: Math.sin(an) * 12 + 4, grav: 18, r: 0.22, color: 0xc08a4b, trailC: 0xe0b070, dmg: 10, life: 1.2, homing: { turn: 8, range: 8 },
-              onHit: (q, e) => { hitEnemy(e, 10, { kind: 'ranged', color: 0xc08a4b, kx: 4, poise: 20 }); sparks(q.x, q.y, 0xe0b070, 6, 5); } }); }
+          if (m.avalanche) for (let i = 0; i < 10; i++) { const an = rand(0.4, Math.PI - 0.4);
+            spawnProj({ x: pr.x, y: pr.y + 0.3, vx: Math.cos(an) * 11 + rand(-6, 6), vy: Math.sin(an) * 12 + 4, grav: 18, r: 0.22, color: 0xc08a4b, trailC: 0xe0b070, dmg: 14, life: 1.2, homing: { turn: 8, range: 8 },
+              onHit: (q, e) => { hitEnemy(e, 14, { kind: 'ranged', color: 0xc08a4b, kx: 4, poise: 20 }); sparks(q.x, q.y, 0xe0b070, 6, 5); } }); }
         } });
       puff(p.x + a.x, p.y + 1.2, 3, 0x8b949e, 0.7, 0.4);
     },
@@ -375,7 +376,7 @@ const earth = {
         for (const d of [-1, 1]) groundWave(x, d, { len: (10 + (sp ? 6 : 0)) * mult, speed: 18, dmg: 38 * mult, color: 0xc08a4b, stun: sp ? 2.5 : 1.6, kx: sp ? 3 : 10, ky: sp ? 12 : 9, thick: 1.4, height: 2.4, hitOpts: sp ? { launch: 14 } : {} });
         explode(x, gy + 0.6, 3.4 * mult, 18, { color: 0xc08a4b, stun: 1.2, noGround: true, shake: 0 });
       };
-      later(0.22, () => { p.vy = -36; p.slam = () => { impact(1); if (p.mods.aftershock) later(0.5, () => impact(1.25)); }; });
+      later(0.22, () => { p.vy = -36; p.slam = () => { impact(1); if (p.mods.aftershock) { later(0.5, () => impact(1.7)); proc('AFTERSHOCK', p.x, p.y + 3, '#e0b070'); } }; });
     },
   },
   s2: {
@@ -432,7 +433,8 @@ const air = {
       melee(p, { range: 3.0, h: 2.2, y0: -0.1, dmg: [8, 8, 13][i], kx: i === 2 ? 9 : 4, ky: i === 2 ? 5 : 1, color: 0xcfe9ff, big: i === 2, finisher: i === 2 });
       if (i === 2 && p.mods.hurricane) {
         spawnProj({ x: p.x + p.facing, y: p.y + 1.1, vx: p.facing * 26, vy: 0, r: 0.5, shape: 'blade', color: 0x7ff3d6, trailC: 0xcfe9ff, dmg: 14, life: 0.75, pierce: 99, ghost: true,
-          onHit: (pr, e) => hitEnemy(e, 14, { kind: 'ranged', dir: Math.sign(pr.vx), color: 0x7ff3d6, kx: 5 }) });
+          onHit: (pr, e) => hitEnemy(e, 24, { kind: 'ranged', dir: Math.sign(pr.vx), color: 0x7ff3d6, kx: 5 }) });
+        proc('HURRICANE', p.x, p.y + 3, '#7ff3d6');
       }
     },
   },

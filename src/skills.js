@@ -14,8 +14,8 @@ const fork = (id, name, desc, fx, icon) => ({ id, name, desc, fx, icon });
 
 export const SKILLS = {
   fire: [
-    n('f1', 0, 0, 'Cinder Brand', 'Every main hit ignites, and burning targets take +25% damage from everything you do.', { brand: true, burnMain: true }, '✦'),
-    n('f2', 0, 1, 'Spreading Embers', 'Enemies that die while burning set everything within 5 m on fire.', { spreadBurn: true }, '♨'),
+    n('f1', 0, 0, 'Cinder Brand', 'Every main hit ignites, and burning targets take +40% damage from everything you do.', { brand: true, burnMain: true }, '✦'),
+    n('f2', 0, 1, 'Spreading Embers', 'Enemies that die while burning set everything within 7 m on fire.', { spreadBurn: true }, '♨'),
     n('f3', 0, 2, 'Inferno Mastery', 'Your 3rd ground hit slams a pillar of fire into the floor that burns for 3 s. Burning kills explode.', { firePillar: true, deathExplode: true }, '✺'),
     n('f4', 1, 0, 'Phoenix Cadence', 'Phoenix Dash refunds your ranged cooldown and 15 energy for every enemy it ignites.', { cadence: true }, '⁂'),
     n('f5', 1, 1, 'Wildfire Trail', 'Phoenix Dash: −40% cooldown, +30% distance and a firetrail that keeps burning.', { phoenixWings: true }, '❖'),
@@ -29,7 +29,7 @@ export const SKILLS = {
   ],
   water: [
     n('w1', 0, 0, 'Deep Chill', 'Three chilling hits freeze an enemy solid for 0.8 s: stunned, and ready to shatter.', { freeze: true }, '❄'),
-    n('w2', 0, 1, 'Frostbite', 'Chilled enemies take +30% damage and are slowed to 40% speed.', { frostbite: true }, '≈'),
+    n('w2', 0, 1, 'Frostbite', 'Chilled enemies take +45% damage and are slowed to 40% speed.', { frostbite: true }, '≈'),
     n('w3', 0, 2, 'Shatter', 'Launchers, finishers, spikes and slams shatter frozen enemies in an icy burst that chills their neighbours.', { shatter: true }, '❂'),
     n('w4', 1, 0, 'Riptide Pull', 'Water Bolts drag their target 3 m towards you, setting up launchers.', { riptide: true }, '〰'),
     n('w5', 1, 1, 'Surge', 'Tidal Wave crashes back after reaching its end.', { waveReturn: true }, '☂'),
@@ -43,12 +43,12 @@ export const SKILLS = {
   ],
   earth: [
     n('e1', 0, 0, 'Stonewill', 'While winding up a combo hit you cannot be knocked out of it: you still take damage, but you keep swinging.', { stonewill: true }, '▣'),
-    n('e2', 0, 1, 'Seismic Strikes', 'Every combo hit sends a ground shockwave rolling forward.', { seismic: true }, '〰'),
+    n('e2', 0, 1, 'Seismic Strikes', 'Every combo hit sends a heavy ground shockwave rolling forward (the third also stuns).', { seismic: true }, '〰'),
     n('e3', 0, 2, 'Avalanche', 'Rock Throw shatters into a spray of homing shards.', { avalanche: true }, '⛰'),
     n('e4', 1, 0, 'Aftershock', 'Quake repeats itself with a second, larger tremor.', { aftershock: true }, '≋'),
     n('e5', 1, 1, 'Fortress', 'Stone Bastion raises 5 pillars that last twice as long.', { fortress: true }, '▥'),
     n('e6', 1, 2, 'Tectonic Mastery', 'Choose what your earthquakes do to enemies.', {}, '⬢', [
-      fork('a', 'Crushing Weight', 'Stunned enemies take +50% damage.', { crushing: true }, '⬢'),
+      fork('a', 'Crushing Weight', 'Stunned enemies take +80% damage.', { crushing: true }, '⬢'),
       fork('b', 'Mountainfall', 'Quake calls down ONE colossal mountain: a crater-sized blast, 2.5 s stun, and shockwaves that LAUNCH everything they touch.', { mountainfall: true, spire: true }, '⛰'),
     ]),
     n('e7', 2, 0, 'Rebound', 'Every 3 blocked hits charge your next main attack: double damage and a heavy stagger.', { rebound: true }, '◈'),
