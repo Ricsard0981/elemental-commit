@@ -21,8 +21,16 @@ def rot_about_head(pb, axis, deg):
 
 if arm and pose == 'stand':                      # arms down a bit, knees slightly bent: a readable idle
     P = arm.pose.bones
-    rot_about_head(P['upperarm_l'], 'Y', 68); rot_about_head(P['upperarm_r'], 'Y', -68)
-    rot_about_head(P['lowerarm_l'], 'Z', -25); rot_about_head(P['lowerarm_r'], 'Z', 25)
+    for s, sf in ((1, '_l'), (-1, '_r')):
+        rot_about_head(P['upperarm' + sf], 'Y', s * 74)          # arms down, elbows a touch out
+        rot_about_head(P['upperarm' + sf], 'X', 6)
+        rot_about_head(P['lowerarm' + sf], 'X', -22)             # elbows bend forward
+        rot_about_head(P['lowerarm' + sf], 'Y', -s * 8)          # forearms angle in
+        rot_about_head(P['hand' + sf], 'Y', -s * 14)             # wrists turn in
+        rot_about_head(P['thigh' + sf], 'Y', -s * 4)             # relaxed, slightly wide stance
+        rot_about_head(P['calf' + sf], 'Y', s * 4)
+    rot_about_head(P['spine_02'], 'X', 3)
+    rot_about_head(P['neck_01'], 'X', -4)
 
 sc = bpy.context.scene
 sc.render.engine = 'BLENDER_WORKBENCH'

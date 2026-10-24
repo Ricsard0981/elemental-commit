@@ -81,6 +81,16 @@ def ring(c, u, v, ru, rv, n, amp=0.0, ph=0.0):
     return out
 
 
+def sring(c, u, v, ru, rv, n, p=4.0):
+    """a superellipse (p=2 ellipse, p>2 squarer): flat-bottomed soles"""
+    out = []
+    for k in range(n):
+        a = 2 * math.pi * k / n
+        ca, sa = math.cos(a), math.sin(a)
+        out.append(c + u * (ru * math.copysign(abs(ca) ** (2 / p), ca)) + v * (rv * math.copysign(abs(sa) ** (2 / p), sa)))
+    return out
+
+
 def loft(rings, wrap=False, cap0=True, cap1=True):
     n = len(rings[0])
     vr = [[bm.verts.new(p) for p in r] for r in rings]
@@ -117,12 +127,12 @@ def tube(axis, specs, n=12, s=1, caps=True):
 
 
 def lerp_spec(specs, t):
-    if t <= specs[0][0]: return specs[0][1:]
+    if t <= specs[0][0]: return specs[0][1:5]
     for a, b in zip(specs, specs[1:]):
         if t <= b[0]:
             k = (t - a[0]) / (b[0] - a[0])
             return tuple(a[i] + (b[i] - a[i]) * k for i in range(1, 5))
-    return specs[-1][1:]
+    return specs[-1][1:5]
 
 
 def decal(cell, pts, uvrect=None, quad=True):
@@ -225,7 +235,8 @@ HC, HR = (0.0, 0.03, 1.728), (0.114, 0.13, 0.124)               # helmet shell
 
 # --- torso profiles (z, c1, c2, r1, r2) ---------------------------------------------------
 HOODIE = [(.93, 0, .04, .2, .145), (1.05, 0, .03, .184, .134), (1.17, 0, .02, .176, .126), (1.32, 0, .0, .228, .145), (1.43, 0, .008, .25, .15), (1.5, 0, .03, .2, .12), (1.56, 0, .04, .1, .085)]
-VEST = [(1.0, 0, .025, .212, .156), (1.15, 0, .016, .196, .142), (1.31, 0, .0, .242, .162), (1.43, 0, .008, .265, .164), (1.505, 0, .03, .226, .132)]
+VEST = [(.995, 0, .02, .222, .164, .025), (1.06, 0, .018, .205, .15, .02), (1.14, 0, .016, .194, .14, .012), (1.23, 0, .008, .214, .15, .01), (1.31, 0, .0, .24, .162, .008),
+        (1.39, 0, .002, .258, .165, .006), (1.45, 0, .01, .262, .16), (1.5, 0, .028, .232, .138), (1.525, 0, .036, .2, .122)]
 TORSO_BONES = ['pelvis', 'spine_01', 'spine_02', 'spine_03', 'clavicle_l', 'clavicle_r']
 
 
@@ -252,17 +263,19 @@ for s in (1, -1):
     finish(cube((s * .038, -.152, 1.335), (.014, .014, .03)), 'silver', ['spine_02'], 0.05, smooth=False)
 
 # denim vest: open front, sleeveless, frayed hem and armholes, placket with buttons, chest flap pockets, collar
-vs = tube('z', VEST, n=18, caps=False)
+vs = tube('z', VEST, n=24, caps=False)
 slit = [f for f in {f for v in vs for f in v.link_faces} if f.calc_center_median().y < 0.0 and abs(f.calc_center_median().x) < 0.06]
 bmesh.ops.delete(bm, geom=slit, context='FACES_ONLY')
 finish([v for v in vs if v.is_valid], 'denim', TORSO_BONES, 0.07)
-for k in range(-5, 6):                                                    # ripped hem
-    x = k * 0.04
-    c1, c2, r1, r2 = vest_prof(1.0)
-    for sy in (-1, 1):
-        if sy < 0 and abs(x) < 0.07: continue
-        y = c2 + sy * r2 * math.sqrt(max(0, 1 - (x / r1) ** 2))
-        finish(cone((x, y, .985 - (k % 2) * .01), 0.02, 0.0, 0.045 + (k % 3) * .018, rot=(math.pi, 0, 0), seg=4), 'denim', TORSO_BONES, 0.07, smooth=False)
+import random
+RNG = random.Random(7)
+for k in range(64):                                                       # frayed hem: short uneven threads, a few longer tatters
+    a = 2 * math.pi * k / 64
+    c1, c2, r1, r2 = vest_prof(.995)
+    x, y = r1 * math.cos(a), c2 + r2 * math.sin(a)
+    if y < 0 and abs(x) < .07: continue
+    ln = RNG.uniform(.012, .03) if k % 5 else RNG.uniform(.035, .055)
+    finish(cone((x * 1.01, y + (y - c2) * .01, .995 - ln / 2), RNG.uniform(.005, .009), 0.0, ln, rot=(math.pi + RNG.uniform(-.25, .25), RNG.uniform(-.25, .25), a), seg=3), 'denimDark' if k % 3 == 0 else 'denim', TORSO_BONES, 0.07, smooth=False)
 for s in (1, -1):
     sf = '_l' if s > 0 else '_r'
     for z in (1.42, 1.31, 1.2, 1.09):                                     # placket + buttons
@@ -334,15 +347,20 @@ def tongue(base, h, w, th, bend, side, col, segs=5, wave=0.0):
 
 
 top = HC[2] + HR[2] - .012
+flame_from = len(PARTS)
 finish(sphere((0, .0, top), (.04, .1, .03), u=8, v=6), 'flame', ['Head'], 0.02, mat=FLAME, smooth=False)       # where it bursts out of the shell
 #      y,    x,    h,    w,    bend, side, wave
-CREST = [(-.02, 0, .38, .08, .45, 0, .5), (.05, 0, .25, .065, .65, 0, -.4), (-.08, 0, .17, .05, .15, 0, .6), (.1, 0, .16, .045, .9, 0, .3),
-         (.0, .03, .19, .045, .45, .55, .4), (.0, -.03, .19, .045, .45, -.55, -.4), (.07, .025, .14, .038, .7, .6, 0), (.07, -.025, .14, .038, .7, -.6, 0),
-         (-.06, .02, .11, .03, .1, .5, .3), (-.06, -.02, .11, .03, .1, -.5, -.3)]
+CREST = [(-.04, 0, .36, .08, 1.0, 0, .5), (.04, 0, .27, .068, 1.3, 0, -.4), (-.09, 0, .2, .055, .7, 0, .6), (.11, 0, .18, .05, 1.5, 0, .3),
+         (-.01, .03, .2, .048, 1.0, .9, .4), (-.01, -.03, .2, .048, 1.0, -.9, -.4), (.07, .028, .16, .04, 1.3, 1.0, 0), (.07, -.028, .16, .04, 1.3, -1.0, 0),
+         (-.07, .022, .13, .034, .7, .8, .3), (-.07, -.022, .13, .034, .7, -.8, -.3), (.13, .015, .12, .035, 1.6, .7, .2), (.13, -.015, .12, .035, 1.6, -.7, -.2)]
 for y, x, h, w, bend, side, wave in CREST:
     base = (x, y, top - .015)
+    bend *= .62
     tongue(base, h, w, .022, bend, side, 'flame', wave=wave)
     tongue((x, y - .008, top - .01), h * .62, w * .55, .03, bend * .9, side, 'yellow', segs=4, wave=wave)
+FP, FR = Vector((0, -.02, top)), Matrix.Rotation(-.24, 3, 'X')                   # lean the whole crest back from its root
+for v in {v for p in PARTS[flame_from:] for v in p[0]}:
+    v.co = FP + FR @ (v.co - FP)
 for v in {v for p in PARTS[head_from:] for v in p[0]}:
     v.co = HEAD_PIVOT + (v.co - HEAD_PIVOT) * HEAD_SCALE
 
@@ -388,9 +406,9 @@ for s in (1, -1):
     lb = ['pelvis', 'thigh' + sf, 'calf' + sf, 'foot' + sf]
     X = lambda x: s * x
     #                 z     cx         cy    rx    ry    folds
-    LEG = [(.99, X(.112), .036, .112, .124, .0), (.84, X(.12), .036, .116, .126, .03), (.68, X(.128), .04, .124, .13, .05), (.55, X(.13), .046, .128, .134, .07),
-           (.42, X(.126), .056, .118, .126, .06), (.33, X(.122), .066, .106, .114, .05), (.27, X(.118), .074, .094, .1, .08), (.235, X(.116), .08, .106, .11, .1),
-           (.205, X(.115), .084, .094, .098, .08), (.175, X(.114), .088, .104, .108, .06), (.15, X(.114), .09, .108, .112, .03)]
+    LEG = [(.99, X(.112), .036, .112, .124, .0), (.84, X(.122), .036, .118, .128, .03), (.68, X(.13), .04, .124, .132, .05), (.55, X(.134), .046, .126, .136, .07),
+           (.43, X(.136), .054, .128, .14, .07), (.33, X(.134), .06, .13, .142, .08), (.255, X(.13), .064, .134, .148, .1), (.2, X(.126), .058, .142, .158, .11),
+           (.155, X(.122), .046, .15, .172, .09), (.12, X(.12), .036, .152, .182, .06), (.1, X(.12), .032, .146, .178, .03)]
     finish(tube('z', LEG, n=14), 'cargo', lb, 0.06)
     # big cargo pocket with depth, flap, button
     px = X(.128 + .118 - .004)
@@ -402,17 +420,22 @@ for s in (1, -1):
     # --- chunky 2000s high-top skate shoe
     cx = X(.114)
     sb = ['calf' + sf, 'foot' + sf, 'ball' + sf]
-    finish(tube('y', [(.17, cx, .115, .072, .095), (.10, cx, .15, .086, .125), (0, cx, .125, .094, .1), (-.12, cx, .095, .096, .072), (-.24, cx, .078, .09, .056), (-.31, cx, .068, .07, .042)], n=14), 'shoe', sb, 0.05)
+    finish(tube('y', [(.175, cx, .11, .074, .085), (.11, cx, .14, .088, .118), (0, cx, .122, .096, .094), (-.12, cx, .096, .102, .07), (-.23, cx, .082, .108, .058),
+                      (-.3, cx, .074, .094, .046), (-.335, cx, .07, .066, .034)], n=16), 'shoe', sb, 0.05)
     finish(tube('z', [(.08, cx, .09, .086, .09), (.19, cx, .086, .082, .082)], n=14), 'shoe', sb, 0.05)
-    finish(tube('z', [(.18, cx, .086, .09, .09), (.21, cx, .087, .087, .087)], n=14), 'shoeGrey', sb, 0.05)                         # padded collar
-    finish(tube('y', [(.195, cx, .032, .098, .032), (.1, cx, .03, .106, .036), (-.1, cx, .03, .11, .036), (-.26, cx, .033, .102, .036), (-.34, cx, .04, .075, .034)], n=10), 'sole', sb, 0.05)
-    finish(tube('y', [(.19, cx, .066, .1, .007), (-.335, cx, .066, .078, .007)], n=10), 'white', sb, 0.05)                           # midsole stripe
-    finish(sphere((cx, -.275, .072), (.088, .07, .054), u=12, v=8), 'shoeGrey', sb, 0.05)                                              # toe cap
-    finish(sphere((cx, -.02, .2), (.06, .034, .07), rot=(.6, 0, 0), u=10, v=6), 'shoeGrey', sb, 0.05)                           # fat tongue
+    finish(sphere((cx, .17, .1), (.078, .035, .07), u=10, v=6), 'shoeGrey', sb, 0.05)                                                # heel counter
+    #            y      cz     rx     rz      (squared-off cupsole: flat bottom, raised arch, toe kick)
+    SOLE = [(.205, .036, .094, .036), (.15, .034, .104, .034), (.07, .038, .1, .03), (-.02, .046, .094, .026), (-.1, .036, .108, .034), (-.2, .034, .114, .034),
+            (-.29, .04, .108, .032), (-.345, .054, .084, .026), (-.37, .064, .05, .018)]
+    finish(loft([sring(Vector((cx, y, cz)), X3, Z3, rx, rz, 16, 4.0) for y, cz, rx, rz in SOLE]), 'white', sb, 0.05)
+    finish(loft([sring(Vector((cx, y, cz - rz + .007)), X3, Z3, rx + .003, .009, 16, 4.0) for y, cz, rx, rz in SOLE[:-1]]), 'sole', sb, 0.05)   # gum outsole
+    finish(loft([sring(Vector((cx, y, cz + rz * .35)), X3, Z3, rx + .002, .006, 16, 4.0) for y, cz, rx, rz in SOLE[:-1]]), 'sole', sb, 0.05)   # orange stripe
+    finish(sphere((cx, -.28, .078), (.1, .072, .05), u=12, v=8), 'white', sb, 0.05)                                                     # rubber toe cap
+    finish(sphere((cx, -.025, .195), (.064, .036, .07), rot=(.6, 0, 0), u=10, v=6), 'shoeGrey', sb, 0.05)                             # fat tongue
     for k in range(4):
         finish(cube((cx, -.055 - k * .04, .175 - k * .022), (.1, .013, .012), rot=(.5, 0, 0)), 'black', sb, 0.05, smooth=False)
     for side in (1, -1):                                                                                                              # flames on both sides
-        flat_decal('p_flame', (cx + X(side * .1), -.07, .1), .28, .085, s * side, bones=sb)
+        flat_decal('p_flame', (cx + X(side * .108), -.08, .1), .28, .08, s * side, bones=sb)
 
 # ================================================================ weights
 def seg_dist(p, a, b):
