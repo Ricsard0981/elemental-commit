@@ -46,6 +46,9 @@ Touch controls switch on automatically on touch screens (or force them in **Sett
 ### Performance
 Quality presets (Low / Medium / High) scale pixel ratio, shadows, bloom, particle budget, the number of animated skyline rows and the flash-light count. **Auto** (the default) picks Medium on phones and High on desktops. It then runs **dynamic resolution**: when frames run long it lowers the render scale to 55%, and if that's still not enough it drops bloom, then shadows, then particles. Benchmarks are in [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md).
 
+## v2: the "Slasher" update (this branch)
+Slice deaths and cut-line hit streaks · a **Style meter** (D to SSS) that rewards variety · **perfect dodge** with witch time · **executions** on poise-broken enemies · **Revert**, a limited rewind charged by perfect parries · six **elemental reactions** (steam, thermal shock, magma, firestorm, mud, sandstorm) · new enemies (Shieldling, Rammer, Hotfix medic, elite affixes, the Gatekeeper mini-boss) · **Room Run**, a roguelite mode with Patches, shops and the boss · gamepad, key remapping, difficulty and colour-blind-safe tells. Details and how to test: [`docs/V2_SLASHER.md`](docs/V2_SLASHER.md). The previous version is playable in [`backup/prototype-v1/`](backup/prototype-v1/).
+
 ## Elements
 
 Each element has **1 main attack, 1 ranged attack, 1 defence, 2 specials**, its own tempo (Air fastest and light, Fire and Water fast, Earth slow and crushing), and a **skill tree of three move branches + Resonance** (see below).

@@ -607,3 +607,12 @@ That's the project. It's small, it's loud, and it's mine. Go hit something. ✦
 
 ## Addendum: Combat Lock
 See `docs/COMBAT_LOCK.md` for the combat rules, `src/dbg.js` for the debug overlay (Lab → Combat debug) and `skills.js` for the move-based trees.
+
+## 12. v2 additions (module notes)
+- `style.js`: event-bus driven; `G.style {pts, rank}`; `styleMult/styleEnergy/styleLoot` are read in `combat.js`. Add a point source by calling `addStyle(n, label)` or emitting a bus event it listens to.
+- `revert.js`: `updateRevert(gdt, rdt)` runs every frame from `main.js`; snapshots at 10 Hz; `tryRevert()/autoRevert()`; `REV.charges`. Anything that must survive a rewind (kills, enemy HP) is simply not part of the snapshot.
+- `reactions.js`: `react(e, p, o)` is called from `hitEnemy` before statuses are applied. Add a reaction by adding a function and a line in the table in `react()`. Merge patches read `PM` (the player's mods).
+- `run.js` / `patches.js`: `G.run`; rooms reuse the Training Grounds arena (`G.training = {mode: 'run'}`); screens are plain DOM in `#runui` (the world is paused with `G.mode = 'ui'`). Patches are `fx` flags merged by `Player.refreshMods` through `applyPatches`; add one by adding a `P(...)` entry and checking its flag where it matters.
+- `enemies.js`: Shieldling / Rammer / Hotfix (`buildShield/aiShield` etc.), `makeElite()` + `AFFIX`, `sliceEnemy()`. New-enemy checklist is unchanged (§8) plus `kindOf()` for the attack token.
+- Perf rules added: pool effect materials (rings, slashes, orbs); never create a material per effect; particle buffers upload only the used range.
+

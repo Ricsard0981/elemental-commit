@@ -92,3 +92,10 @@ Main-level reskin and world overhaul, new levels and bosses, perfect dodge, ulti
 - **Later in the same drop (owner feedback):** per-element tempo/power profiles (`prof`), colossal ability forks, and a skill-tree rebuild where tier 1 of each
   branch is a new move (Dash Strike, Charged Shot, Riposte). Save version 3. Skill ids from before are refunded.
 - **Next:** `docs/NEXT_STEPS.md` holds the researched gap analysis and a proposed roadmap. `docs/MILESTONE_2_PLAN.md` is historical.
+
+## v2 "Slasher" (branch `v2-slasher`, not merged)
+- Owner asked for a huge step up from the prototype, "a satisfying slasher", unique features, research, optimisation without quality loss, and to work in the background (headless, low priority, separate branch). Choices: branch + merge on approval, **randomised room runs**, **Revert + Reactions** as the signature, headless-only testing.
+- Backup of the old game: `backup/prototype-v1/` on main and the git tag `prototype-v1`.
+- Everything is documented in `docs/V2_SLASHER.md` (what changed, how to test, what is NOT verified). Test tooling lives outside the repo in `C:\programok\_v2_tools` (Playwright scripts: `t_all.mjs` smoke suite, `t_run.mjs` full Room Run through the real UI, `t_perf.mjs`, `t_prof.mjs`).
+- **Do not merge to main without the owner's go-ahead.**
+

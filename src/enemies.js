@@ -306,7 +306,7 @@ function makeElite(e, key) {
   e.xp *= 3; e.commits *= 3; e.heart = Math.max(e.heart || 0, 0.5); e.name = a.name + ' ' + e.name;
   e.group.scale.setScalar(1.18);
   const crown = mk(e, new THREE.OctahedronGeometry(1, 0), a.color, { em: a.color, ei: 2.4, y: e.h + 0.55, sx: 0.2, sy: 0.3, sz: 0.2 });
-  e.crown = crown;
+  e.eliteCrown = crown;
   if (e.volatile) e.onDeath = () => { // a delayed blast: the ring on the floor shows where it will go off
     const x = e.x, gy = groundAt(e.x);
     ring(x, gy + 0.06, 0.5, 0xff6a2b, { r0: 3.4, r1: 0.4, dur: 0.7, flat: true, intensity: 2 }); sfx.telegraph('bug');
@@ -326,7 +326,7 @@ function applyStatus(e, dt) {
   if (e.stun > 0) { e.stun -= dt; if (Math.random() < 0.3) glow.emit(e.x + rand(-0.5, 0.5), e.y + e.h + 0.2, 0, 0, 1, 0, rgb(0xffd33d, 1.6), 0.2, 0, 0.4); }
   if (e.chill > 0) { e.chill -= dt; if (Math.random() < 0.3) glow.emit(e.x + rand(-0.5, 0.5), e.y + rand(0, e.h), 0, 0, -1, 0, rgb(0x9fe8ff, 1.6), 0.2, 0, 0.5); }
   if (e.frozen > 0) { e.frozen -= dt; if (Math.random() < 0.4) glow.emit(e.x + rand(-0.5, 0.5), e.y + rand(0, e.h), 0, 0, 0, 0, rgb(0xcfeeff, 1.8), 0.15, 0, 0.3); }
-  if (e.crown) { e.crown.rotation.y += dt * 2.4; e.crown.position.y = e.h + 0.55 + Math.sin(G.time * 3) * 0.08; }
+  if (e.eliteCrown) { e.eliteCrown.rotation.y += dt * 2.4; e.eliteCrown.position.y = e.h + 0.55 + Math.sin(G.time * 3) * 0.08; }
   if (e.mire > 0) e.mire -= dt;
   if (e.blind > 0) e.blind -= dt;
   if (e.vulnerable > 0) e.vulnerable -= dt;
