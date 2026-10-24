@@ -16,6 +16,7 @@ import { S, touchOn, onSetting, qualityLevel, isTouchDevice } from './settings.j
 import { renderSettings } from './settingsUI.js';
 import { applyQuality, adaptResolution, perfStats, Q } from './engine.js';
 import { setVolumes, setSlow, setAmbience } from './audio.js';
+import { initStyle, updateStyle, resetStyle } from './style.js';
 import { clamp } from './util.js';
 import { loadAssets, assets } from './assets.js';
 import { enterArena, leaveArena, updateArena, ARENA_L } from './arena.js';
@@ -50,7 +51,7 @@ function resetWorldState() {
   for (const cp of checkpoints) if (cp.active) { cp.active = false; }
   hintIdx = 0; bossStarted = false; winTimer = 0;
   G.checkpointX = 4;
-  G.combo = { n: 0, t: 0, best: 0, rank: 0 };
+  G.combo = { n: 0, t: 0, best: 0, rank: 0 }; resetStyle();
   G.stats = { kills: 0, commits: 0, time: 0, parries: 0, damageTaken: 0 };
   G.boss = null; G.freeze = 0; G.ts = 1; G.tsTarget = 1; G.tsHold = 0;
   // collectible commits along the route
@@ -106,7 +107,7 @@ function startTraining(key, mode, keepFlags = false) {
   if (old) old.destroy();
   G.element = key; G.training = { mode }; sfx.setElement(key);
   clearEnemies(); clearAll(); dyn.length = 0; UI.hideBoss();
-  G.combo = { n: 0, t: 0, best: 0, rank: 0 }; G.stats = { kills: 0, commits: 0, time: 0, parries: 0, damageTaken: 0 };
+  G.combo = { n: 0, t: 0, best: 0, rank: 0 }; resetStyle(); G.stats = { kills: 0, commits: 0, time: 0, parries: 0, damageTaken: 0 };
   G.boss = null; G.freeze = 0; G.ts = 1; G.tsTarget = 1; G.tsHold = 0;
   enterArena(); setAmbience('arena');
   const p = new Player(key); G.player = p; p.x = 12;
@@ -308,7 +309,7 @@ G.onBossDead = () => {
   audio.combat = 0;
   const a = arenas.find((x) => x.boss);
   a.state = 'done'; a.gates.forEach((g) => setGate(g, false, true));
-  for (const e of G.enemies.slice()) if (!e.dead && !e.boss) killEnemy(e, {});
+  for (const e of G.enemies.slice()) if (!e.dead && !e.boss) killEnemy(e, { noSlice: true });
   UI.hideBoss(); sfx.win();
   if (G.player) G.player.cheering = true;
   UI.banner('MERGED ✔', 'The Legacy Monolith has been refactored', '#7ee787', 3.2);
@@ -363,7 +364,7 @@ function frame(now) {
   G.dt = gdt; G.rdt = rdt;
   setSlow(G.ts); audio.lowHp = !!(p && !p.dead && G.mode === 'play' && p.hp / p.hpMax < 0.3);
   G.time += gdt;
-  updateCombatDebug(rdt);
+  updateCombatDebug(rdt); updateStyle(gdt);
   In.updateAim();
 
   if (active && p) {
@@ -414,6 +415,7 @@ addEventListener('keydown', (e) => {
   initAudio();
 });
 // iOS only unlocks audio inside a real user gesture — try on every tap until it's running
+initStyle();
 for (const ev of ['pointerdown', 'pointerup', 'touchend']) addEventListener(ev, () => initAudio(), { passive: true });
 
 document.getElementById('loading').classList.add('done');

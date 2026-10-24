@@ -83,7 +83,7 @@ export function deriveQuality(t = gfxTiers()) {
     shadows: t.shadows !== 'off', shadowMap: { off: 512, low: 512, medium: 1024, high: 2048, ultra: 4096 }[t.shadows], shadowType: { off: 'basic', low: 'basic', medium: 'pcf', high: 'soft', ultra: 'soft' }[t.shadows],
     bloom: t.bloom !== 'off', bloomRes: t.bloom === 'half' ? 0.5 : 1, aa: t.aa,
     outlines: t.outlines, particles: p, glowMax: Math.round(7000 * p), dustMax: Math.round(1200 * p), debris: Math.round(800 * Math.max(0.4, p)),
-    ribbonN: { off: 0, low: 5, high: 9, ultra: 12 }[t.ribbons], trailN: { off: 0, short: 8, long: 14 }[t.trails],
+    ribbonN: { off: 0, low: 5, high: 9, ultra: 12 }[t.ribbons], trailN: { off: 0, short: 10, long: 20 }[t.trails],
     decals: t.decals ? (t.detail === 'ultra' ? 20 : 12) : 0, distort: t.distort, lights: t.lights,
     rows: { low: 8, medium: 14, high: 28, ultra: 28 }[t.detail], farRows: t.detail !== 'low', props: { low: 0.4, medium: 0.7, high: 1, ultra: 1 }[t.detail],
   };

@@ -1,3 +1,4 @@
+import { STYLE_NAMES, STYLE_COL, styleProgress } from './style.js';
 import { G } from './state.js';
 import { ELEMENTS, KEYS } from './elements.js';
 import { SKILLS, TREE_BRANCHES, prog, pointsLeft, spent, xpNeed, canBuy, isUnlocked, buy, respec, MAX_LEVEL, bestRun, setResonance, TEMPER, temperRank, buyTemper, setFork, forkOf } from './skills.js';
@@ -144,6 +145,13 @@ export function updateHUD(dt) {
     $('combo-n').style.color = col; $('combo-rank').style.color = col; $('combo-rank').textContent = RANKS[Math.min(c.rank, RANKS.length - 1)];
   }
   put('combo-bar', 'transform', `scaleX(${clamp(c.t / 3.4, 0, 1).toFixed(3)})`);
+  // style meter
+  const st = G.style, showS = st && (st.pts > 1 || st.rank > 0);
+  if (_w.get('sshow') !== !!showS) { _w.set('sshow', !!showS); $('style').classList.toggle('show', !!showS); }
+  if (st) {
+    if (_w.get('srank') !== st.rank) { _w.set('srank', st.rank); const el = $('style-rank'); el.textContent = STYLE_NAMES[st.rank]; $('style').style.setProperty('--sc', STYLE_COL[st.rank]); }
+    put('style-fill', 'transform', `scaleX(${clamp(styleProgress(), 0, 1).toFixed(3)})`);
+  }
   put('commit-n', 'text', String(G.stats.commits));
   // level progress strip
   const pgs = $('progress').children, prog_ = clamp(p.x / 268, 0, 1);
@@ -313,3 +321,5 @@ function burst(x, y) {
     document.body.appendChild(d); setTimeout(() => d.remove(), 900);
   }
 }
+
+export function styleRankUp(r) { const el = $('style-rank'); if (el) restart(el, 'pop'); if (r >= 3) banner(`STYLE ${STYLE_NAMES[r]}`, ['', '', '', 'Nice', 'Stylish', 'Brilliant', 'UNREAL'][r], STYLE_COL[r], 1.1); }

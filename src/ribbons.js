@@ -93,7 +93,9 @@ export class Trail extends Ribbon {
   constructor(n, width, style, a, b) { super(n, width, style, a, b, { alpha: 1.1, z: 0.3 }); this.age = 0; this.hist = Array.from({ length: n }, () => ({ x: 0, y: 0 })); this.on = 0; this.fade = 0; }
   push(x, y, active, dt) {
     this.fade = damp(this.fade, active ? 1 : 0, active ? 30 : 9, dt);
-    for (let i = this.n - 1; i > 0; i--) { this.hist[i].x = this.hist[i - 1].x; this.hist[i].y = this.hist[i - 1].y; }
+    // sampled on TIME, not frames, so the trail is the same length in seconds at 30 or 165 fps
+    this.acc = (this.acc || 0) + dt;
+    if (this.acc >= 0.011 || !this.on) { this.acc = 0; for (let i = this.n - 1; i > 0; i--) { this.hist[i].x = this.hist[i - 1].x; this.hist[i].y = this.hist[i - 1].y; } }
     this.hist[0].x = x; this.hist[0].y = y;
     if (!this.on && active) for (const h of this.hist) { h.x = x; h.y = y; }
     this.on = active ? 1 : this.on;

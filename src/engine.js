@@ -304,6 +304,15 @@ export function cubes(x, y, color, n = 8, speed = 8, size = 0.28, glowy = false,
 }
 
 // ---------------------------------------------------------------- generic timed fx (rings, slashes, lights, ...)
+// bright streaks racing outwards along a cut line (the "something was sliced" read of a melee hit)
+export function cutLines(x, y, ang, color, n = 6, speed = 18) {
+  if (Q.budget < 1) return;
+  const lx = Math.cos(ang), ly = Math.sin(ang);
+  for (let i = 0; i < n; i++) {
+    const s = (i % 2 ? 1 : -1) * speed * (0.5 + Math.random() * 0.7);
+    glow.emit(x, y, 0.45, lx * s, ly * s, 0, rgb(i % 3 ? color : 0xffffff, 2.5), 0.34, 0.02, 0.2 + Math.random() * 0.12, 0, 2.5, SPRITE.streak);
+  }
+}
 export function addFx(update) { const f = { update, dead: false }; G.fx.push(f); return f; }
 
 const ringGeo = new THREE.RingGeometry(0.88, 1, 64);

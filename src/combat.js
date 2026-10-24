@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { G } from './state.js';
-import { scene, glow, dust, sparks, puff, cubes, rgb, ring, slash, flashLight, floatText, shake, punchFov, screenFlash, post, addFx, impactFlash, decal, shockwave, SPRITE } from './engine.js';
+import { scene, glow, dust, sparks, puff, cubes, rgb, ring, slash, flashLight, floatText, shake, punchFov, screenFlash, post, addFx, impactFlash, decal, shockwave, SPRITE, cutLines } from './engine.js';
 import { emit } from './events.js';
 import { groundAt, ripple } from './world.js';
 import { sfx } from './audio.js';
@@ -9,6 +9,8 @@ import { addXP, xpNeed, prog } from './skills.js';
 import { clamp, rand, pick, randi, easeOut } from './util.js';
 import * as UI from './ui.js';
 import { haptic } from './settings.js';
+import { sliceEnemy } from './enemies.js';
+import { styleMult, styleEnergy, styleLoot } from './style.js';
 
 // ----------------------------------------------------------------- feedback hierarchy
 // One profile per kind of event (seconds / trauma / FOV degrees / aberration). Every contact, parry, kill and landing asks
@@ -134,7 +136,7 @@ export function imbueBurst(p, x, y) {
 export function hitEnemy(e, base, o = {}) {
   if (e.dead || e.spawnT > 0) return 0;
   const p = G.player, m = p.mods;
-  let d = base * (1 + m.allDmg) * (p.dmgBuff || 1) * p.el.prof.dmg;
+  let d = base * (1 + m.allDmg) * (p.dmgBuff || 1) * p.el.prof.dmg * styleMult();
   const crit = !o.noCrit && Math.random() < 0.1 + (p.critBonus || 0);
   if (crit) d *= 1.75;
   if (e.chill > 0 && m.frostbite) { d *= 1.45; proc('FROSTBITE +45%', e.x, e.y + e.h + 0.6, '#9fe8ff'); }
@@ -196,6 +198,7 @@ export function hitEnemy(e, base, o = {}) {
   sparks(e.x, hy, 0xffffff, fk === 'light' ? 3 : 5, 6, 0.18, 0.25, dir);
   if (!o.quiet) {
     impactFlash(e.x - dir * 0.2, hy, col, T.flash);
+    if (o.kind === 'main' || o.kind === 'special') cutLines(e.x, hy, o.spike ? Math.PI / 2 : o.launch ? dir * 1.1 : dir * (0.3 + Math.random() * 0.5) * (Math.random() < 0.35 ? -1 : 1), col, fk === 'light' || fk === 'airHit' ? 4 : 8, big ? 24 : 18);
     if (T.fov) punchFov(T.fov);
     if (T.ab) post.aberr = Math.max(post.aberr, T.ab);
     sfx.hit(fk, G.combo.n, e.dummy ? 'wood' : e.heavy || e.boss || e.type === 'pointer' ? 'metal' : 'flesh'); haptic(crit ? 'crit' : 'hit');
@@ -204,7 +207,7 @@ export function hitEnemy(e, base, o = {}) {
   if (crit) ring(e.x, e.y + e.h * 0.5, 0.6, 0xffd33d, { r0: 0.2, r1: 1.8, dur: 0.3 });
   if (m.skyhook && !p.onGround && o.kind === 'main') { proc('SKYHOOK', p.x, p.y + 3, '#7ff3d6'); p.airDash = true; p.cd.dash = Math.min(p.cd.dash, 0.1); } // Skyhook: air hits refund the air dash
   if (!o.noCombo) comboAdd(1);
-  if (!o.noEnergy && !p.infEnergy) p.energy = Math.min(p.energyMax, p.energy + (o.kind === 'main' ? 4.5 : 1.5));
+  if (!o.noEnergy && !p.infEnergy) p.energy = Math.min(p.energyMax, p.energy + (o.kind === 'main' ? 4.5 : 1.5) * styleEnergy());
   else if (p.infEnergy) p.energy = p.energyMax;
   e.onHurt?.(d, o);
   emit('hit', { e, d, crit, o, dir, launched });
@@ -230,6 +233,7 @@ export function killEnemy(e, o = {}) {
   const cy = e.y + e.h * 0.5;
   sfx.kill(big); haptic(e.boss ? 'boss' : 'kill');
   fb(big ? 'bigKill' : 'kill');
+  if (!o.noSlice && !e.boss) sliceEnemy(e, o, big);
   ring(e.x, cy, 0.6, e.color, { r0: 0.3, r1: big ? 7 : 3.2, dur: 0.5 });
   ring(e.x, cy, 0.6, 0xffffff, { r0: 0.2, r1: big ? 4 : 1.8, dur: 0.3 });
   flashLight(e.x, cy, 2, e.color, big ? 90 : 40, 0.4);
@@ -241,7 +245,7 @@ export function killEnemy(e, o = {}) {
   if (big) { slowmo(0.28, 0.5); screenFlash(0xffffff, 0.25); }
   floatText(e.x, e.y + e.h + 1, pick(['BUG FIXED', 'RESOLVED', 'MERGED', 'REFACTORED', 'DEPRECATED', 'CLOSED']) + ` #${randi(100, 9999)}`, { color: '#7ee787', size: big ? 26 : 15, dur: 1.2, vy: 1.6 });
   // loot
-  const mult = 1 + Math.floor(G.combo.n / 20) * 0.5;
+  const mult = (1 + Math.floor(G.combo.n / 20) * 0.5) * styleLoot();
   spawnCommits(e.x, cy, Math.round(e.commits * mult));
   if (Math.random() < (e.heart ?? 0.1) && p.hp < p.hpMax * 0.9) spawnHeart(e.x, cy);
   giveXP(e.xp, e.x, e.y + e.h);

@@ -175,6 +175,66 @@ export function clearEnemies(arenaOnly = false) {
     removeEnemy(e); G.enemies.splice(i, 1);
   }
 }
+// ----------------------------------------------------------------- slice death
+// A kill cuts the enemy along the swing: its parts are split into two halves by a plane, flung apart, and fade into glow shards,
+// with a bright seam where the cut was. No new materials (parts keep theirs and shrink away), so it costs no shader programs.
+const _sv = new THREE.Vector3(), _sq = new THREE.Quaternion(), _ss = new THREE.Vector3(), _cc = new THREE.Vector3();
+const seamGeo = new THREE.PlaneGeometry(1, 1);
+const seamMats = new Map();
+function seamMat(color) {
+  let m = seamMats.get(color);
+  if (!m) { m = new THREE.MeshBasicMaterial({ color: new THREE.Color(color).multiplyScalar(2.6), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }); seamMats.set(color, m); }
+  return m;
+}
+export function sliceEnemy(e, o = {}, big = false) {
+  if (e.sliced) return; e.sliced = true;
+  const dir = o.dir || e.kdir || 1;
+  let a;
+  if (o.spike || o.kind === 'slam') a = Math.PI / 2;
+  else if (o.launch || o.kind === 'launcher') a = dir * 1.1;
+  else a = dir * (0.3 + Math.random() * 0.5) * (Math.random() < 0.35 ? -1 : 1);
+  const lx = Math.cos(a), ly = Math.sin(a), nx = -ly, ny = lx;
+  const cx = e.x, cy = e.y + e.h * 0.5;
+  e.group.updateWorldMatrix(true, true);
+  const parts = [];
+  e.group.traverse((m) => { if (m.isMesh && !m.userData.outline && e.mats.includes(m.material)) parts.push(m); });
+  const pcs = [], budget = Math.max(6, Math.min(parts.length, Math.round((big ? 34 : 14) * Math.max(0.4, Q.particles))));
+  const step = parts.length / budget;
+  for (let i = 0; i < parts.length; i++) {
+    const m = parts[i];
+    m.getWorldPosition(_sv); const px = _sv.x, py = _sv.y;
+    scene.attach(m); // keeps the world transform
+    const side = ((px - cx) * nx + (py - cy) * ny) >= 0 ? 1 : -1;
+    const sp = (3 + Math.random() * 3) * (big ? 1.5 : 1);
+    pcs.push({ m, vx: nx * side * sp + dir * (2 + Math.random() * 4), vy: ny * side * sp + 2 + Math.random() * 4, wx: (Math.random() - 0.5) * 12, wz: (Math.random() - 0.5) * 12, s0: m.scale.clone(), keep: i >= 0 && (i % Math.max(1, Math.round(step)) === 0) });
+  }
+  // the seam
+  const len = Math.max(e.w, e.h) * (big ? 2.4 : 1.9);
+  const seam = new THREE.Mesh(seamGeo, seamMat(e.color));
+  seam.position.set(cx, cy, 0.6); seam.rotation.z = a; seam.scale.set(len, 0.09, 1); scene.add(seam);
+  for (let i = 0; i < (big ? 26 : 14); i++) {
+    const t = (Math.random() - 0.5) * len, sp = 4 + Math.random() * 10, sgn = Math.random() < 0.5 ? -1 : 1;
+    glow.emit(cx + lx * t, cy + ly * t, 0.5, lx * sp * sgn, ly * sp * sgn + 1, 0, rgb(i % 3 ? 0xffffff : e.color, 2.2), 0.28, 0.02, 0.35 + Math.random() * 0.2, 0, 1.5, 1);
+  }
+  let t = 0;
+  addFx((dt) => {
+    t += dt;
+    seam.scale.x = len * Math.max(0, 1 - t / 0.32); seam.scale.y = 0.09 * Math.max(0, 1 - t / 0.32);
+    for (const p of pcs) {
+      const m = p.m;
+      p.vy -= 24 * dt; m.position.x += p.vx * dt; m.position.y += p.vy * dt;
+      const gy = groundAt(m.position.x) + 0.12;
+      if (m.position.y < gy) { m.position.y = gy; p.vy = Math.abs(p.vy) * 0.3; p.vx *= 0.7; p.wx *= 0.6; p.wz *= 0.6; }
+      m.rotation.x += p.wx * dt; m.rotation.z += p.wz * dt;
+      const k = t < 0.5 ? 1 : Math.max(0, 1 - (t - 0.5) / 0.4);
+      m.scale.set(p.s0.x * k, p.s0.y * k, p.s0.z * k);
+      if (t > 0.5 && p.keep && Math.random() < 0.5) glow.emit(m.position.x, m.position.y, 0.2, rand(-1, 1), rand(1, 3), 0, rgb(e.color, 1.8), 0.16, 0, 0.3, 0, 0);
+    }
+    if (t >= 0.9) { for (const p of pcs) scene.remove(p.m); scene.remove(seam); return false; }
+    return true;
+  });
+}
+
 function removeEnemy(e) {
   scene.remove(e.group); scene.remove(e.bar);
   e.fists?.forEach((f) => scene.remove(f.g));
