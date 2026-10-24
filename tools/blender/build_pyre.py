@@ -71,8 +71,14 @@ def cone(loc, r1, r2, depth, sc=(1, 1, 1), rot=(0, 0, 0), seg=8):
     return bmesh.ops.create_cone(bm, cap_ends=True, cap_tris=False, segments=seg, radius1=r1, radius2=r2, depth=depth, matrix=mtx(loc, rot, sc))['verts']
 
 
-def ring(c, u, v, ru, rv, n):
-    return [c + u * (ru * math.cos(2 * math.pi * k / n)) + v * (rv * math.sin(2 * math.pi * k / n)) for k in range(n)]
+def ring(c, u, v, ru, rv, n, amp=0.0, ph=0.0):
+    """an ellipse; amp > 0 ripples the radius (cloth folds)"""
+    out = []
+    for k in range(n):
+        a = 2 * math.pi * k / n
+        f = 1 + amp * (math.sin(3 * a + ph) + .5 * math.sin(5 * a + 2 * ph)) / 1.5
+        out.append(c + u * (ru * f * math.cos(a)) + v * (rv * f * math.sin(a)))
+    return out
 
 
 def loft(rings, wrap=False, cap0=True, cap1=True):
@@ -94,13 +100,15 @@ def axis_rings(axis, specs, n=12, s=1):
     """specs: (t, c1, c2, r1, r2). z: centre (c1, c2, t), r1 on x, r2 on y.  x: centre (s*t, c1, c2), r1 on y, r2 on z.  y: centre (c1, t, c2), r1 on x, r2 on z."""
     out = []
     X, Y, Z = Vector((1, 0, 0)), Vector((0, 1, 0)), Vector((0, 0, 1))
-    for t, c1, c2, r1, r2 in specs:
+    for sp in specs:
+        t, c1, c2, r1, r2 = sp[:5]
+        amp, ph = (sp[5] if len(sp) > 5 else 0.0), (sp[6] if len(sp) > 6 else t * 37.0)
         if axis == 'z':
-            out.append(ring(Vector((c1, c2, t)), X, Y, r1, r2, n))
+            out.append(ring(Vector((c1, c2, t)), X, Y, r1, r2, n, amp, ph))
         elif axis == 'x':
-            out.append(ring(Vector((s * t, c1, c2)), Y, Z, r1, r2, n) if s > 0 else ring(Vector((s * t, c1, c2)), Z, Y, r2, r1, n))
+            out.append(ring(Vector((s * t, c1, c2)), Y, Z, r1, r2, n, amp, ph) if s > 0 else ring(Vector((s * t, c1, c2)), Z, Y, r2, r1, n, amp, ph))
         else:
-            out.append(ring(Vector((c1, t, c2)), X, Z, r1, r2, n))
+            out.append(ring(Vector((c1, t, c2)), X, Z, r1, r2, n, amp, ph))
     return out
 
 
@@ -208,167 +216,203 @@ def flat_decal(cell, loc, w, h, nx, rot=0.0, bones=('Head',), mat=MAIN):
 
 
 # ================================================================ PYRE
-HEAD_C, HEAD_R = (0.0, 0.02, 1.715), (0.098, 0.112, 0.125)
-L_ARM = [('upperarm_%s', 'lowerarm_%s')]
+# Proportions follow the concept sheet: big round skate helmet, broad shoulders tapering to a narrow waist, bare muscular arms,
+# baggy cargo pants that balloon at the knee and bunch over chunky high-top skate shoes.
+X3, Y3, Z3 = Vector((1, 0, 0)), Vector((0, 1, 0)), Vector((0, 0, 1))
+HEAD_SCALE, HEAD_PIVOT = 1.32, Vector((0, .02, 1.585))          # the whole head group (face, helmet, flame) is built at body scale, then blown up
+HEAD_C, HEAD_R = (0.0, 0.02, 1.715), (0.094, 0.106, 0.122)
+HC, HR = (0.0, 0.03, 1.728), (0.114, 0.13, 0.124)               # helmet shell
 
 # --- torso profiles (z, c1, c2, r1, r2) ---------------------------------------------------
-HOODIE = [(.93, 0, .04, .205, .15), (1.05, 0, .03, .195, .14), (1.2, 0, .015, .18, .126), (1.34, 0, .0, .21, .14), (1.45, 0, .01, .222, .14), (1.52, 0, .035, .14, .1), (1.575, 0, .04, .085, .08)]
-VEST = [(1.02, 0, .02, .207, .148), (1.16, 0, .012, .197, .137), (1.32, 0, .0, .224, .152), (1.44, 0, .01, .237, .152), (1.505, 0, .03, .207, .117)]
+HOODIE = [(.93, 0, .04, .2, .145), (1.05, 0, .03, .184, .134), (1.17, 0, .02, .176, .126), (1.32, 0, .0, .228, .145), (1.43, 0, .008, .25, .15), (1.5, 0, .03, .2, .12), (1.56, 0, .04, .1, .085)]
+VEST = [(1.0, 0, .025, .212, .156), (1.15, 0, .016, .196, .142), (1.31, 0, .0, .242, .162), (1.43, 0, .008, .265, .164), (1.505, 0, .03, .226, .132)]
 TORSO_BONES = ['pelvis', 'spine_01', 'spine_02', 'spine_03', 'clavicle_l', 'clavicle_r']
 
 
 def vest_prof(z): return lerp_spec(VEST, z)
 
 
-# hoodie
-vs = tube('z', HOODIE, n=16)
-finish(vs, 'hoodie', TORSO_BONES, 0.07)
-# hood bundled behind the neck + drawstring
-finish(sphere((0, .075, 1.565), (.118, .09, .07), u=12, v=8), 'hoodie', ['spine_03', 'neck_01'], 0.06)
+def vest_front_y(x, z, out=0.0):
+    c1, c2, r1, r2 = vest_prof(z)
+    return c2 - r2 * math.sqrt(max(0.0, 1 - ((x - c1) / r1) ** 2)) - out
 
-# denim vest: open at the front, sleeveless, ripped hem
-vs = tube('z', VEST, n=16, caps=False)
-slit = [f for f in {f for v in vs for f in v.link_faces} if f.calc_center_median().y < 0.0 and abs(f.calc_center_median().x) < 0.058]
+
+def patch(cell, z, x, size, rot=0.0, front=True):
+    """a sewn patch: a black backing a bit larger than the art, both lifted off the denim so they read as separate pieces"""
+    torso_decal('black', vest_prof, z, x, size * 1.2, size * 1.2, front=front, inset=.007, rot=rot)
+    torso_decal(cell, vest_prof, z, x, size, size, front=front, inset=.011, rot=rot)
+
+
+# hoodie body + neckline + hood draped behind the neck + drawstrings
+finish(tube('z', HOODIE, n=18), 'hoodie', TORSO_BONES, 0.07)
+finish(tube('z', [(1.49, 0, .03, .125, .108, .05), (1.565, 0, .035, .112, .098, .05)], n=14), 'hoodie', ['spine_03', 'neck_01'], 0.06)
+finish(sphere((0, .085, 1.55), (.16, .115, .085), u=12, v=8), 'hoodie', ['spine_03', 'neck_01'], 0.06)
+for s in (1, -1):
+    finish(tube('z', [(1.5, s * .036, -.13, .006, .006), (1.42, s * .04, -.145, .006, .006), (1.35, s * .038, -.15, .006, .006)], n=5), 'tape', ['spine_03', 'spine_02'], 0.05)
+    finish(cube((s * .038, -.152, 1.335), (.014, .014, .03)), 'silver', ['spine_02'], 0.05, smooth=False)
+
+# denim vest: open front, sleeveless, frayed hem and armholes, placket with buttons, chest flap pockets, collar
+vs = tube('z', VEST, n=18, caps=False)
+slit = [f for f in {f for v in vs for f in v.link_faces} if f.calc_center_median().y < 0.0 and abs(f.calc_center_median().x) < 0.06]
 bmesh.ops.delete(bm, geom=slit, context='FACES_ONLY')
-vs = [v for v in vs if v.is_valid]
-finish(vs, 'denim', TORSO_BONES, 0.07)
-for k in range(-4, 5):                                              # ripped hem along the bottom edge
-    x = k * 0.043
-    c1, c2, r1, r2 = vest_prof(1.02)
-    if abs(x) < 0.058: pass
-    for side, sy in ((0, -1), (1, 1)):
-        if side == 0 and abs(x) < 0.062: continue
+finish([v for v in vs if v.is_valid], 'denim', TORSO_BONES, 0.07)
+for k in range(-5, 6):                                                    # ripped hem
+    x = k * 0.04
+    c1, c2, r1, r2 = vest_prof(1.0)
+    for sy in (-1, 1):
+        if sy < 0 and abs(x) < 0.07: continue
         y = c2 + sy * r2 * math.sqrt(max(0, 1 - (x / r1) ** 2))
-        finish(cone((x, y, 1.0 - (k % 2) * .012), 0.02, 0.0, 0.055 + (k % 3) * .018, rot=(math.pi, 0, 0), seg=4), 'denim', TORSO_BONES, 0.07)
-# patches on the vest
-torso_decal('p_mushroom', vest_prof, 1.40, .115, .075, .075, rot=.12)
-torso_decal('p_skull', vest_prof, 1.40, -.115, .07, .07, rot=-.1)
-torso_decal('p_heart', vest_prof, 1.29, .15, .06, .06, rot=-.2)
-torso_decal('p_bolt', vest_prof, 1.27, -.15, .06, .06, rot=.15)
-torso_decal('p_star', vest_prof, 1.12, .13, .05, .05, rot=.3)
-torso_decal('p_x', vest_prof, 1.13, -.13, .05, .05, rot=.2)
-torso_decal('p_sticker1', vest_prof, 1.47, -.17, .045, .045, rot=.2)
-torso_decal('p_sticker2', vest_prof, 1.20, .175, .05, .05, rot=-.15)
-torso_decal('p_crash', vest_prof, 1.30, 0.0, .27, .27, front=False, inset=.004)
-torso_decal('p_sticker3', vest_prof, 1.08, .09, .05, .05, front=False, rot=.2)
+        finish(cone((x, y, .985 - (k % 2) * .01), 0.02, 0.0, 0.045 + (k % 3) * .018, rot=(math.pi, 0, 0), seg=4), 'denim', TORSO_BONES, 0.07, smooth=False)
+for s in (1, -1):
+    sf = '_l' if s > 0 else '_r'
+    for z in (1.42, 1.31, 1.2, 1.09):                                     # placket + buttons
+        finish(sphere((s * .07, vest_front_y(s * .07, z, .012), z), (.011, .008, .011), u=6, v=4), 'silver', TORSO_BONES, 0.07)
+    finish(cube((s * .07, vest_front_y(s * .07, 1.25, .004) + .004, 1.25), (.026, .012, .5)), 'denimDark', TORSO_BONES, 0.07, smooth=False)
+    # chest pocket: flap + button
+    finish(cube((s * .15, vest_front_y(s * .15, 1.355, .006), 1.355), (.1, .014, .04), rot=(0, 0, s * .03)), 'denimDark', TORSO_BONES, 0.07, smooth=False)
+    finish(sphere((s * .15, vest_front_y(s * .15, 1.345, .017), 1.345), (.009, .006, .009), u=6, v=4), 'silver', TORSO_BONES, 0.07)
+    # collar: folded lapels around the hood
+    finish(cube((s * .095, -.098, 1.47), (.055, .02, .1), rot=(-.45, 0, s * .55)), 'denimDark', ['spine_03', 'clavicle' + sf], 0.07, smooth=False)
+    # shoulder spikes flaring outward + frayed armhole threads
+    for k, (dx, dz, ang) in enumerate(((.205, 1.52, .75), (.235, 1.505, 1.0), (.258, 1.48, 1.25))):
+        for dy in (-.035, .045):
+            finish(cone((s * dx, dy, dz), .017, .0, .06, rot=(0, s * ang, 0), seg=5), 'silver' if dy < 0 else 'denimDark', ['clavicle' + sf, 'spine_03'], 0.06, smooth=False)
+    for k in range(7):
+        a = -1.2 + k * .4
+        finish(cone((s * .262, .01 + math.sin(a) * .075, 1.42 + math.cos(a) * .05), .009, 0, .035, rot=(0, s * 1.7, 0), seg=3), 'denim', ['clavicle' + sf, 'spine_03'], 0.06, smooth=False)
+# patches front + the CRASH back patch
+patch('p_mushroom', 1.445, -.13, .055, rot=.12)
+patch('p_skull', 1.27, -.15, .06, rot=-.1)
+patch('p_bolt', 1.15, -.13, .055, rot=.15)
+patch('p_sticker1', 1.05, -.17, .045, rot=.2)
+patch('p_heart', 1.445, .13, .055, rot=-.2)
+patch('p_x', 1.27, .155, .055, rot=.2)
+patch('p_star', 1.15, .13, .05, rot=.3)
+patch('p_sticker2', 1.05, .17, .045, rot=-.15)
+patch('p_crash', 1.28, 0.0, .29, front=False)
+patch('p_sticker3', 1.07, .12, .05, rot=.2, front=False)
 
-# --- neck, head ---------------------------------------------------------------------------
-finish(tube('z', [(1.50, 0, .04, .052, .052), (1.63, 0, .02, .05, .05)], n=10), 'skin', ['spine_03', 'neck_01', 'Head'], 0.05)
-finish(sphere(HEAD_C, HEAD_R, u=18, v=12), 'face', ['Head'], 0.02)
+# --- neck ---------------------------------------------------------------------------------
+finish(tube('z', [(1.49, 0, .035, .056, .056), (1.64, 0, .02, .054, .054)], n=10), 'skin', ['spine_03', 'neck_01', 'Head'], 0.05)
 
-# helmet: a dome that wraps the back and top of the skull, brow line slopes down at the back
-hv = sphere((HEAD_C[0], HEAD_C[1] + .006, HEAD_C[2] + .008), (HEAD_R[0] + .016, HEAD_R[1] + .018, HEAD_R[2] + .014), u=18, v=12)
+# --- head group (built at 1x, scaled at the end of the block) -----------------------------
+head_from = len(PARTS)
+fv = sphere(HEAD_C, HEAD_R, u=18, v=12)                                           # blank oval face: the jaw tapers
+for v in fv:
+    t = max(0.0, (HEAD_C[2] - v.co.z) / HEAD_R[2])
+    v.co.x *= 1 - .22 * t
+    v.co.y = HEAD_C[1] + (v.co.y - HEAD_C[1]) * (1 - .1 * t)
+finish(fv, 'face', ['Head'], 0.02)
+# skate helmet: round shell that covers the top, sides and back; the face opening starts at the brow
+hv = sphere(HC, HR, u=20, v=14)
 for v in hv:
-    thr = HEAD_C[2] + (-(v.co.y - HEAD_C[1]) * .35 - .045) + .008
+    d = Vector(((v.co.x - HC[0]) / HR[0], (v.co.y - HC[1]) / HR[1], (v.co.z - HC[2]) / HR[2]))
+    f = max(0.0, min(1.0, (-d.y - .2) / .5))
+    f = f * f * (3 - 2 * f)
+    thr = HC[2] + (-.075 + (.012 + .075) * f) * (HR[2] / .124)
     if v.co.z < thr: v.co.z = thr
 finish(hv, 'helmet', ['Head'], 0.02)
-finish(cube((0, -.122, 1.79), (.17, .075, .012), rot=(-.28, 0, 0)), 'black', ['Head'], 0.02, smooth=False)         # peak
-for s in (1, -1):
-    finish(sphere((s * .106, .028, 1.712), (.026, .052, .056), u=8, v=6), 'helmetLight', ['Head'], 0.02)               # ear covers
-    finish(sphere((s * .108, .028, 1.712), (.01, .03, .032), u=8, v=6), 'black', ['Head'], 0.02)
-    finish(tube('z', [(1.675, s * .1, .03, .006, .006), (1.64, s * .075, -.02, .006, .006), (1.62, s * .03, -.07, .006, .006)], n=4, caps=True), 'black', ['Head'], 0.02)  # chin strap
-# cracks + stickers on the helmet (cracks are flame orange)
-HC, HR = (HEAD_C[0], HEAD_C[1] + .006, HEAD_C[2] + .008), (HEAD_R[0] + .016, HEAD_R[1] + .018, HEAD_R[2] + .014)
-for p0, p1, wd in (((.02, -.07, 1.85), (.07, .0, 1.80), .008), ((.07, .0, 1.80), (.11, .01, 1.76), .007), ((.07, .0, 1.80), (.05, .06, 1.82), .007),
-                   ((-.05, -.03, 1.85), (-.09, .02, 1.80), .008), ((-.09, .02, 1.80), (-.12, .0, 1.77), .007)):
+# cracks radiating from where the flame erupts + stickers
+for p0, p1, wd in (((.0, -.05, 1.85), (.05, -.1, 1.8), .008), ((.05, -.1, 1.8), (.09, -.08, 1.76), .007), ((.0, .06, 1.85), (.07, .1, 1.79), .008),
+                   ((-.01, -.03, 1.85), (-.07, -.06, 1.82), .008), ((-.07, -.06, 1.82), (-.11, -.03, 1.77), .007), ((-.01, .07, 1.85), (-.08, .11, 1.8), .007)):
     ellipsoid_decal('flame', HC, HR, p0, p1, wd, inset=.003)
-ellipsoid_decal('p_sticker1', HC, HR, (.108, -.02, 1.73), (.112, -.02, 1.77), .05, inset=.003)
-ellipsoid_decal('p_sticker2', HC, HR, (-.108, .04, 1.74), (-.108, .04, 1.78), .05, inset=.003)
-ellipsoid_decal('p_star', HC, HR, (0.0, .13, 1.76), (0.0, .13, 1.80), .045, inset=.003)
+ellipsoid_decal('p_sticker1', HC, HR, (.11, -.03, 1.72), (.112, -.03, 1.77), .055, inset=.003)
+ellipsoid_decal('p_sticker3', HC, HR, (-.11, .03, 1.73), (-.112, .03, 1.775), .05, inset=.003)
+ellipsoid_decal('p_skull', HC, HR, (.06, .1, 1.72), (.06, .105, 1.77), .045, inset=.003)
+ellipsoid_decal('p_star', HC, HR, (-.04, .12, 1.69), (-.04, .125, 1.735), .04, inset=.003)
 
-# flame mohawk: a row of faceted blades along the ridge (own material so the game can make it glow)
-heights = [.07, .11, .15, .19, .22, .19, .15, .11, .07]
-for i, hh in enumerate(heights):
-    y = -.085 + i * .02
-    dz = HC[2] + HR[2] * math.sqrt(max(0.0, 1 - ((y - HC[1]) / HR[1]) ** 2)) - .01
-    for lay, (col, k) in enumerate((('flame', 1.0), ('yellow', .62))):
-        bv = cone((0, y, dz + hh * k * .5 - .01 + lay * .004), 0.5, 0.0, hh * k, sc=(.034 - lay * .01, .075 - lay * .018, 1), seg=4, rot=(0, 0, math.pi / 4))
-        for v in bv:
-            if v.co.z > dz + hh * k - .02: v.co.y += .035 + hh * .12
-        finish(bv, col, ['Head'], 0.02, mat=FLAME, smooth=False)
-for i in range(3):                                                                          # loose licks of flame at the side
-    for s in (1, -1):
-        bv = cone((s * .03, .03 + i * .03, 1.86 + .05 - i * .01), .5, 0, .09 + i * .02, sc=(.025, .05, 1), seg=4, rot=(0, .25 * s, math.pi / 4))
-        finish(bv, 'flame' if i % 2 else 'yellow', ['Head'], 0.02, mat=FLAME, smooth=False)
 
-# --- arms (per side) -----------------------------------------------------------------------
+def tongue(base, h, w, th, bend, side, col, segs=5, wave=0.0):
+    """one tongue of flame: a lofted blade, thin across X, wide along Y, curling back (+Y) and sideways as it rises"""
+    rings = []
+    for i in range(segs + 1):
+        t = i / segs
+        c = Vector(base) + Vector((side * t * t * h * .45, bend * t * t * h + wave * w * math.sin(t * math.pi * 1.6), h * t))
+        r = max(.003, w * (1 - t) ** 0.85)
+        rings.append(ring(c, X3, Y3, max(.003, th * (1 - .75 * t)), r, 6))
+    finish(loft(rings), col, ['Head'], 0.02, mat=FLAME, smooth=False)
+
+
+top = HC[2] + HR[2] - .012
+finish(sphere((0, .0, top), (.04, .1, .03), u=8, v=6), 'flame', ['Head'], 0.02, mat=FLAME, smooth=False)       # where it bursts out of the shell
+#      y,    x,    h,    w,    bend, side, wave
+CREST = [(-.02, 0, .38, .08, .45, 0, .5), (.05, 0, .25, .065, .65, 0, -.4), (-.08, 0, .17, .05, .15, 0, .6), (.1, 0, .16, .045, .9, 0, .3),
+         (.0, .03, .19, .045, .45, .55, .4), (.0, -.03, .19, .045, .45, -.55, -.4), (.07, .025, .14, .038, .7, .6, 0), (.07, -.025, .14, .038, .7, -.6, 0),
+         (-.06, .02, .11, .03, .1, .5, .3), (-.06, -.02, .11, .03, .1, -.5, -.3)]
+for y, x, h, w, bend, side, wave in CREST:
+    base = (x, y, top - .015)
+    tongue(base, h, w, .022, bend, side, 'flame', wave=wave)
+    tongue((x, y - .008, top - .01), h * .62, w * .55, .03, bend * .9, side, 'yellow', segs=4, wave=wave)
+for v in {v for p in PARTS[head_from:] for v in p[0]}:
+    v.co = HEAD_PIVOT + (v.co - HEAD_PIVOT) * HEAD_SCALE
+
+# --- arms: bare, muscular, stacked wristbands, bare hands ----------------------------------
 for s in (1, -1):
     sf = '_l' if s > 0 else '_r'
     ab = ['clavicle' + sf, 'upperarm' + sf, 'lowerarm' + sf, 'hand' + sf]
-    # hoodie sleeve to the elbow, rolled cuff
-    finish(tube('x', [(.19, .066, 1.456, .084, .084), (.34, .07, 1.456, .08, .08), (.49, .073, 1.456, .076, .076), (.53, .073, 1.456, .082, .082)], n=10, s=s), 'hoodie', ab[:3], 0.05)
-    # bare forearm
-    finish(tube('x', [(.5, .073, 1.456, .046, .046), (.61, .07, 1.456, .042, .042), (.71, .065, 1.456, .037, .037)], n=9, s=s), 'skin', ab[1:], 0.04)
-    for xt in (.56, .60):                                                                       # tape wraps
-        finish(tube('x', [(xt, .071, 1.456, .05, .05), (xt + .022, .071, 1.456, .05, .05)], n=9, s=s), 'tape', ab[1:3], 0.03)
-    finish(tube('x', [(.655, .068, 1.456, .052, .052), (.695, .067, 1.456, .052, .052)], n=9, s=s), 'pink', ab[1:], 0.03)   # wristband
-    # fingerless glove + skin fingertips
-    finish(sphere((s * .765, .06, 1.452), (.06, .05, .05), rot=(0, 0, 0), u=10, v=7), 'black', ab[2:], 0.03)
-    finish(cube((s * .83, .055, 1.448), (.075, .05, .04)), 'skin', ab[3:], 0.03, smooth=False)
-    finish(sphere((s * .765, .02, 1.425), (.04, .025, .025), u=8, v=6), 'black', ab[3:], 0.03)                              # thumb
-    # spiked denim shoulder
-    for k, (dx, dy, ang) in enumerate(((0.205, .035, .1), (.235, .05, .7), (.255, .08, 1.15))):
-        sp = cone((s * dx, dy, 1.535 + (0.02 if k == 0 else 0.0) - k * .012), .026, .0, .085, rot=(0, s * ang, 0), seg=5)
-        finish(sp, 'denimDark', ['clavicle' + sf, 'spine_03'], 0.06, smooth=False)
-    finish(tube('x', [(.17, .04, 1.505, .05, .028), (.26, .045, 1.5, .05, .028)], n=8, s=s), 'denim', ['clavicle' + sf, 'spine_03'], 0.06)  # shoulder strap
+    #                t     cy    cz     ry    rz
+    finish(tube('x', [(.16, .06, 1.462, .07, .066), (.24, .064, 1.466, .08, .078), (.31, .067, 1.458, .066, .064), (.39, .07, 1.455, .07, .064),
+                      (.46, .073, 1.456, .047, .045), (.53, .073, 1.456, .058, .053), (.63, .069, 1.456, .043, .039), (.705, .065, 1.456, .035, .032)], n=12, s=s), 'skin', ab, 0.05)
+    for k, (xt, col) in enumerate(((.63, 'black'), (.652, 'black'), (.674, 'pink'))):
+        finish(tube('x', [(xt, .067, 1.456, .045, .042), (xt + .016, .067, 1.456, .045, .042)], n=10, s=s), col, ab[2:], 0.03)
+    finish(sphere((s * .765, .066, 1.452), (.06, .05, .024), u=10, v=6), 'skin', ab[2:], 0.03)                                     # palm
+    finish(sphere((s * .835, .062, 1.446), (.05, .046, .02), rot=(0, s * .25, 0), u=10, v=6), 'skin', ab[3:], 0.03)                 # fingers (curled a little)
+    finish(sphere((s * .775, .018, 1.44), (.034, .03, .019), rot=(0, 0, s * .5), u=8, v=6), 'skin', ab[3:], 0.03)                  # thumb
 
-# --- pelvis + belt + chain -----------------------------------------------------------------
-finish(tube('z', [(1.03, 0, .03, .178, .13), (.95, 0, .035, .198, .142), (.86, 0, .035, .192, .136)], n=16), 'cargo', ['pelvis', 'spine_01', 'thigh_l', 'thigh_r'], 0.07)
-finish(tube('z', [(1.005, 0, .03, .193, .144), (1.04, 0, .03, .193, .144)], n=16), 'black', ['pelvis', 'spine_01'], 0.05)
-finish(cube((0, -.172, 1.022), (.05, .02, .036)), 'silver', ['pelvis'], 0.03, smooth=False)                                     # buckle
-# hip chain
-for i in range(11):
-    t = i / 10
-    p = Vector((-.15 - .075 * math.sin(math.pi * t * .9) , -.125 + .13 * t, .995 - .24 * math.sin(math.pi * t * .55)))
-    rot = (math.pi / 2 if i % 2 else 0, 0.0, 0.0)
-    rr = [ring(Vector((0.0, 0.0, 0.0)), Vector((1, 0, 0)), Vector((0, 1, 0)), .02, .026, 8)]
-    ln = []
-    for a in range(8):
-        ang = 2 * math.pi * a / 8
-        c = Vector((math.cos(ang) * .02, 0, math.sin(ang) * .026))
-        rg = []
-        for b in range(5):
-            bb = 2 * math.pi * b / 5
-            rg.append(Matrix.Rotation(rot[0], 3, 'Z') @ (c + Vector((math.cos(bb) * .005, math.sin(bb) * .005, 0)) + Vector((0, 0, 0))) + p)
-        ln.append(rg)
-    lv = loft(ln, wrap=True)
-    finish(lv, 'silver', ['pelvis', 'thigh_r'], 0.05)
-# chain across the chest
-for i in range(9):
-    t = i / 8
-    p = Vector((.17 - .34 * t, -.158 + .0, 1.43 - .05 * math.sin(math.pi * t) - .06 * t))
-    c2, _, r1, r2 = vest_prof(p.z)[0], 0, vest_prof(p.z)[2], vest_prof(p.z)[3]
-    ln = []
-    for a in range(8):
-        ang = 2 * math.pi * a / 8
-        c = Vector((math.cos(ang) * .018, 0, math.sin(ang) * .018))
-        ln.append([Matrix.Rotation(math.pi / 2 if i % 2 else 0, 3, 'Z') @ (c + Vector((math.cos(bb) * .0045, math.sin(bb) * .0045, 0))) + Vector((p.x, vest_prof(p.z)[1] - vest_prof(p.z)[3] * math.sqrt(max(0, 1 - (p.x / vest_prof(p.z)[2]) ** 2)) - .012, p.z)) for bb in [2 * math.pi * b / 5 for b in range(5)]])
-    finish(loft(ln, wrap=True), 'silver', ['spine_03', 'spine_02'], 0.05)
+# --- pelvis, belt, hip chain --------------------------------------------------------------
+finish(tube('z', [(1.03, 0, .03, .19, .14), (.95, 0, .035, .208, .15), (.86, 0, .035, .205, .145)], n=18), 'cargo', ['pelvis', 'spine_01', 'thigh_l', 'thigh_r'], 0.07)
+finish(tube('z', [(1.0, 0, .03, .203, .152), (1.035, 0, .03, .203, .152)], n=18), 'black', ['pelvis', 'spine_01'], 0.05)
+finish(cube((0, -.183, 1.018), (.055, .02, .038)), 'silver', ['pelvis'], 0.03, smooth=False)
+for k in range(10):                                                                       # studs on the belt
+    a = -2.6 + k * .58
+    finish(cube((math.sin(a) * .206, .03 - math.cos(a) * .155, 1.018), (.014, .014, .014), rot=(0, 0, a)), 'silver', ['pelvis'], 0.04, smooth=False)
 
-# --- legs + shoes (per side) ---------------------------------------------------------------
+
+def link(p, ang_z, alt, R=.024, Rz=.03, r=.0075):
+    rows = []
+    for a in range(8):
+        aa = 2 * math.pi * a / 8
+        c = Vector((math.cos(aa) * R, 0, math.sin(aa) * Rz))
+        rows.append([Matrix.Rotation(ang_z + (math.pi / 2 if alt else 0), 3, 'Z') @ (c + Vector((math.cos(2 * math.pi * b / 5) * r * math.cos(aa), math.sin(2 * math.pi * b / 5) * r, math.cos(2 * math.pi * b / 5) * r * math.sin(aa)))) + p for b in range(5)])
+    return loft(rows, wrap=True)
+
+
+for i in range(14):                                                                       # heavy hip chain: front belt loop -> back pocket
+    t = i / 13
+    p = Vector((-.15 - .09 * math.sin(math.pi * t), -.15 + .3 * t, .99 - .21 * math.sin(math.pi * t)))
+    finish(link(p, math.atan2(.3, -.09 * math.pi * math.cos(math.pi * t)), i % 2), 'silver', ['pelvis', 'thigh_r'], 0.05)
+
+# --- legs: baggy cargos (widest at the knee, gathering into folds over the shoes) ----------
 for s in (1, -1):
     sf = '_l' if s > 0 else '_r'
-    cx = s * .114
     lb = ['pelvis', 'thigh' + sf, 'calf' + sf, 'foot' + sf]
-    finish(tube('z', [(.99, cx, .036, .108, .118), (.78, cx, .04, .106, .114), (.55, cx, .045, .1, .108), (.34, cx, .06, .104, .112), (.17, cx, .082, .112, .118)], n=12), 'cargo', lb, 0.06)
-    finish(tube('z', [(.175, cx, .082, .12, .124), (.13, cx, .085, .124, .128)], n=12), 'cargoDark', lb[2:], 0.04)                  # rolled cuff
-    # cargo pocket + flap + strap
-    finish(cube((s * (.114 + .108), .03, .70), (.058, .17, .19)), 'cargoDark', lb[:3], 0.05, smooth=False)
-    finish(cube((s * (.114 + .112), .03, .775), (.062, .175, .06)), 'cargo', lb[:3], 0.05, smooth=False)
-    finish(cube((s * (.114 + .115), .03, .745), (.064, .02, .12)), 'black', lb[:3], 0.05, smooth=False)
-    # high-top sneaker: toe-to-heel loft, fat orange sole, grey toe cap, tongue + laces, flame decal on the outside
+    X = lambda x: s * x
+    #                 z     cx         cy    rx    ry    folds
+    LEG = [(.99, X(.112), .036, .112, .124, .0), (.84, X(.12), .036, .116, .126, .03), (.68, X(.128), .04, .124, .13, .05), (.55, X(.13), .046, .128, .134, .07),
+           (.42, X(.126), .056, .118, .126, .06), (.33, X(.122), .066, .106, .114, .05), (.27, X(.118), .074, .094, .1, .08), (.235, X(.116), .08, .106, .11, .1),
+           (.205, X(.115), .084, .094, .098, .08), (.175, X(.114), .088, .104, .108, .06), (.15, X(.114), .09, .108, .112, .03)]
+    finish(tube('z', LEG, n=14), 'cargo', lb, 0.06)
+    # big cargo pocket with depth, flap, button
+    px = X(.128 + .118 - .004)
+    finish(cube((px, .045, .7), (.05, .15, .17)), 'cargo', lb[:3], 0.05, smooth=False)
+    finish(cube((px + X(.006), .045, .69), (.04, .13, .145)), 'cargoDark', lb[:3], 0.05, smooth=False)
+    finish(cube((px + X(.01), .045, .79), (.056, .16, .055), rot=(0, X(.12), 0)), 'cargo', lb[:3], 0.05, smooth=False)
+    finish(sphere((px + X(.04), .045, .775), (.01, .012, .012), u=6, v=4), 'black', lb[:3], 0.05)
+
+    # --- chunky 2000s high-top skate shoe
+    cx = X(.114)
     sb = ['calf' + sf, 'foot' + sf, 'ball' + sf]
-    finish(tube('y', [(.135, cx, .105, .062, .088), (.065, cx, .135, .07, .104), (-.04, cx, .088, .076, .074), (-.15, cx, .066, .072, .054), (-.25, cx, .052, .058, .042)], n=12), 'shoe', sb, 0.05)
-    finish(tube('z', [(.07, cx, .084, .07, .078), (.19, cx, .068, .07, .07), (.235, cx, .072, .075, .075)], n=12), 'shoe', sb, 0.05)
-    finish(tube('z', [(.222, cx, .071, .076, .078), (.245, cx, .072, .077, .08)], n=12), 'shoeGrey', sb, 0.05)                           # padded collar
-    finish(cube((cx, -.056, .026), (.158, .41, .056)), 'sole', sb, 0.05, smooth=False)
-    finish(cube((cx, -.056, .063), (.162, .418, .014)), 'white', sb, 0.05, smooth=False)                                                   # midsole line
-    finish(sphere((cx, -.215, .06), (.062, .06, .05), u=10, v=7), 'shoeGrey', sb, 0.05)
-    finish(cube((cx, .0, .23), (.075, .035, .1), rot=(.35, 0, 0)), 'shoeGrey', sb, 0.05, smooth=False)
-    for k in range(3):
-        finish(cube((cx, -.01 - k * .052, .185 - k * .042), (.082, .012, .01), rot=(.55, 0, 0)), 'black', sb, 0.05, smooth=False)
-    ox = cx + s * (.08)
-    flat_decal('p_flame', (ox, -.055, .105), .21, .06, s, rot=0.0, bones=sb)
+    finish(tube('y', [(.17, cx, .115, .072, .095), (.10, cx, .15, .086, .125), (0, cx, .125, .094, .1), (-.12, cx, .095, .096, .072), (-.24, cx, .078, .09, .056), (-.31, cx, .068, .07, .042)], n=14), 'shoe', sb, 0.05)
+    finish(tube('z', [(.08, cx, .09, .086, .09), (.19, cx, .086, .082, .082)], n=14), 'shoe', sb, 0.05)
+    finish(tube('z', [(.18, cx, .086, .09, .09), (.21, cx, .087, .087, .087)], n=14), 'shoeGrey', sb, 0.05)                         # padded collar
+    finish(tube('y', [(.195, cx, .032, .098, .032), (.1, cx, .03, .106, .036), (-.1, cx, .03, .11, .036), (-.26, cx, .033, .102, .036), (-.34, cx, .04, .075, .034)], n=10), 'sole', sb, 0.05)
+    finish(tube('y', [(.19, cx, .066, .1, .007), (-.335, cx, .066, .078, .007)], n=10), 'white', sb, 0.05)                           # midsole stripe
+    finish(sphere((cx, -.275, .072), (.088, .07, .054), u=12, v=8), 'shoeGrey', sb, 0.05)                                              # toe cap
+    finish(sphere((cx, -.02, .2), (.06, .034, .07), rot=(.6, 0, 0), u=10, v=6), 'shoeGrey', sb, 0.05)                           # fat tongue
+    for k in range(4):
+        finish(cube((cx, -.055 - k * .04, .175 - k * .022), (.1, .013, .012), rot=(.5, 0, 0)), 'black', sb, 0.05, smooth=False)
+    for side in (1, -1):                                                                                                              # flames on both sides
+        flat_decal('p_flame', (cx + X(side * .1), -.07, .1), .28, .085, s * side, bones=sb)
 
 # ================================================================ weights
 def seg_dist(p, a, b):
