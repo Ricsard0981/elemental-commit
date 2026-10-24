@@ -12,6 +12,7 @@ import * as UI from './ui.js';
 import { haptic } from './settings.js';
 import { sliceEnemy } from './enemies.js';
 import { styleMult, styleEnergy, styleLoot } from './style.js';
+import { react } from './reactions.js';
 
 // ----------------------------------------------------------------- feedback hierarchy
 // One profile per kind of event (seconds / trauma / FOV degrees / aberration). Every contact, parry, kill and landing asks
@@ -167,7 +168,8 @@ export function hitEnemy(e, base, o = {}) {
   if (e.armorT > 0 && (e.armorMsg ?? 0) < G.time) { e.armorMsg = G.time + 0.5; floatText(e.x, e.y + e.h + 0.9, 'ARMOR', { color: '#9fd0ff', size: 14, dur: 0.6 }); }
   if (e.poise <= 0 && e.stagger <= 0 && !e.boss) { e.stagger = e.staggerTime || 0.45; e.poise = e.poiseMax; e.onStagger?.(); staggerFx(e); }
   if (e.boss && e.poise <= 0) { e.poise = e.poiseMax; e.onStagger?.(); }
-  // statuses
+  // statuses (a reaction first: it looks at what the enemy already carries, before this hit adds to it)
+  if (!o.noReact && !o.dot) react(e, p, o);
   if (o.burn) { e.burn = Math.max(e.burn, o.burn); e.burnDps = Math.max(e.burnDps || 0, o.burnDps || 8); }
   if (o.chill) {
     e.chill = Math.max(e.chill, o.chill);

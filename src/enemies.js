@@ -30,7 +30,7 @@ function pivot(parent, x, y, z) { const g = new THREE.Group(); g.position.set(x,
 
 function base(type, x, y, o) {
   const e = {
-    type, x, y, vx: 0, vy: 0, w: 1, h: 1, hp: 30, hpMax: 30, poise: 20, poiseMax: 20, stagger: 0, staggerTime: 0.45, stun: 0, chill: 0, frozen: 0, chillStacks: 0, burn: 0, burnDps: 0, burnT: 0,
+    type, x, y, vx: 0, vy: 0, w: 1, h: 1, hp: 30, hpMax: 30, poise: 20, poiseMax: 20, stagger: 0, staggerTime: 0.45, stun: 0, chill: 0, mire: 0, blind: 0, frozen: 0, chillStacks: 0, burn: 0, burnDps: 0, burnT: 0,
     vulnerable: 0, flash: 0, hurtT: 0, dead: false, spawnT: 0.7, facing: -1, state: 'idle', st: 0, cd: rand(0.3, 1), color: RED, xp: 10, commits: 3, heart: 0.1,
     heavy: false, flying: false, boss: false, mats: [], group: new THREE.Group(), lift: 0, kbMul: 1, anim: rand(6),
     air: false, juggle: 0, bounced: false, spiked: false, downT: 0, getUp: 0, airT: 0, maxH: 0, recoil: 0, kdir: 1, tiltZ: 0, stunBuild: 0, ...o,
@@ -248,6 +248,8 @@ function applyStatus(e, dt) {
   if (e.stun > 0) { e.stun -= dt; if (Math.random() < 0.3) glow.emit(e.x + rand(-0.5, 0.5), e.y + e.h + 0.2, 0, 0, 1, 0, rgb(0xffd33d, 1.6), 0.2, 0, 0.4); }
   if (e.chill > 0) { e.chill -= dt; if (Math.random() < 0.3) glow.emit(e.x + rand(-0.5, 0.5), e.y + rand(0, e.h), 0, 0, -1, 0, rgb(0x9fe8ff, 1.6), 0.2, 0, 0.5); }
   if (e.frozen > 0) { e.frozen -= dt; if (Math.random() < 0.4) glow.emit(e.x + rand(-0.5, 0.5), e.y + rand(0, e.h), 0, 0, 0, 0, rgb(0xcfeeff, 1.8), 0.15, 0, 0.3); }
+  if (e.mire > 0) e.mire -= dt;
+  if (e.blind > 0) e.blind -= dt;
   if (e.vulnerable > 0) e.vulnerable -= dt;
   if (e.stagger > 0) e.stagger -= dt;
   if (e.burn > 0) {
@@ -649,7 +651,7 @@ export function updateEnemies(dt) {
   for (let i = G.enemies.length - 1; i >= 0; i--) {
     const e = G.enemies[i];
     if (e.dead) { removeEnemy(e); G.enemies.splice(i, 1); if (G.boss === e) G.boss = null; continue; }
-    const tm = (e.chill > 0 ? (e.boss ? 0.8 : p.mods.frostbite ? 0.42 : 0.55) : 1) * witchK(); // chill slows a boss far less
+    const tm = (e.chill > 0 ? (e.boss ? 0.8 : p.mods.frostbite ? 0.42 : 0.55) : 1) * witchK() * (e.mire > 0 ? 0.3 : 1); // chill slows a boss far less
     // spawn glitch
     if (e.spawnT > 0) {
       e.spawnT -= dt;
