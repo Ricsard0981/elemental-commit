@@ -181,6 +181,10 @@ export const sfx = {
     noise({ dur: 0.7, f: 6500, vol: 0.14, type: 'highpass', swell: 0.12, wet: 0.5 }); noise({ dur: 0.35, f: 400, f2: 3000, vol: 0.15, swell: 0.7, delay: -0.0 });
     sparkle(2637, 4, 0.06, 0.05);
   },
+  // perfect dodge: a reversed swell into a low bell, the world drops into slow motion
+  dodge() { duck(0.5, 0.6); noise({ dur: 0.5, f: 300, f2: 5200, vol: 0.2, swell: 0.85, type: 'bandpass', q: 1.2, wet: 0.4 }); bell(587, 1.1, 0.2, [1, 2.0, 3.01, 4.2], 0.28, 0.6); tone({ f: 140, f2: 60, dur: 0.5, vol: 0.18, type: 'sine', delay: 0.26 }); sparkle(1760, 3, 0.07, 0.3); },
+  // execution: a metallic slice, a sub drop and a short bright tail
+  execute() { duck(0.3, 0.6); click(0.45, 6000); noise({ dur: 0.18, f: 9000, f2: 1800, vol: 0.28, type: 'highpass' }); thump(60, 24, 0.7, 0.7, 0.25); bell(1319, 0.9, 0.14, [1, 2.76, 5.4], 0.05, 0.5); noise({ dur: 0.5, f: 500, f2: 4000, vol: 0.1, swell: 0.6, wet: 0.5, delay: 0.05 }); },
   guardUp(el = 'fire') { const f = { fire: 300, water: 420, earth: 180, air: 560 }[el] || 300; tone({ f, f2: f * 2, dur: 0.12, vol: 0.1, type: 'triangle', wet: 0.2 }); swoosh(f * 2, f * 6, 0.12, 0.06, 1); },
   // every enemy has its own warning sound: you should be able to tell WHO is about to attack with your eyes closed
   telegraph(kind = 'bug') {

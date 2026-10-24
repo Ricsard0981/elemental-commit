@@ -6,6 +6,7 @@ import { groundAt, ripple } from './world.js';
 import { sfx } from './audio.js';
 import { ELEMENTS, MOVES } from './elements.js';
 import { addXP, xpNeed, prog } from './skills.js';
+import { cam } from './engine.js';
 import { clamp, rand, pick, randi, easeOut } from './util.js';
 import * as UI from './ui.js';
 import { haptic } from './settings.js';
@@ -52,6 +53,8 @@ export function proc(name, x, y, color = '#ffd33d') {
   if ((procAt[name] || 0) > G.time) return; procAt[name] = G.time + 0.45;
   floatText(x, y, name, { color, size: 15, dur: 0.7 });
 }
+// perfect dodge "witch time": enemies and their shots crawl while the player stays at full speed
+export const witchK = () => (G.witch > 0 ? 0.2 : 1);
 export const later = (delay, fn) => G.timers.push({ t: delay, fn });
 
 export const enemyBox = (e) => ({ x0: e.x - e.w / 2, x1: e.x + e.w / 2, y0: e.y, y1: e.y + e.h });
@@ -212,6 +215,14 @@ export function hitEnemy(e, base, o = {}) {
   e.onHurt?.(d, o);
   emit('hit', { e, d, crit, o, dir, launched });
   if (e.dummy) { e.hp = e.hpMax; return d; }
+  // Execution: a heavy blow on a poise-broken enemy finishes it with a cinematic beat
+  if (e.hp > 0 && !e.dummy && !e.boss && e.stagger > 0 && (o.finisher || o.launch || o.spike || o.bounce) && e.hp <= e.hpMax * (e.heavy ? 0.6 : 1)) {
+    e.hp = 0; o = { ...o, big: true, execute: true };
+    cam.push = 1; slowmo(0.3, 0.4); hitstop(0.12); screenFlash(0xffffff, 0.2); sfx.execute();
+    floatText(e.x, e.y + e.h + 1.4, 'EXECUTED', { color: '#ffd33d', size: 30, dur: 1.1, vy: 2 });
+    if (p.hp < p.hpMax * 0.85) e.heart = Math.max(e.heart ?? 0, 0.6);
+    p.energy = Math.min(p.energyMax, p.energy + 15); emit('execute', { e });
+  }
   if (e.hp <= 0) killEnemy(e, o);
   return d;
 }
@@ -342,8 +353,9 @@ export function updateProjectiles(dt) {
         pr.vx = Math.cos(na) * sp; pr.vy = Math.sin(na) * sp;
       }
     }
-    pr.vy -= pr.grav * dt;
-    pr.x += pr.vx * dt; pr.y += pr.vy * dt; pr.life -= dt;
+    const dp = pr.owner === 'player' ? dt : dt * witchK();
+    pr.vy -= pr.grav * dp;
+    pr.x += pr.vx * dp; pr.y += pr.vy * dp; pr.life -= dp;
     pr.mesh.position.set(pr.x, pr.y, 0);
     if (pr.shape === 'blade') pr.mesh.rotation.z = Math.atan2(pr.vy, pr.vx);
     if (pr.shape === 'rock') { pr.mesh.rotation.x += dt * 8; pr.mesh.rotation.z += dt * 6; }
@@ -383,9 +395,21 @@ export function damagePlayer(amount, src = {}) {
   if (r !== 'iframes') emit('playerHit', { result: r, amount, src });
   return r;
 }
+function perfectDodge(src) {
+  const p = G.player;
+  if (!p || (G.witchCd || 0) > 0 || src.kind === 'dot' || src.noDodge || G.mode !== 'play') return;
+  G.witch = 1.1; G.witchCd = 2.2;
+  sfx.dodge(); haptic('parry'); cam.push = Math.max(cam.push, 0.5);
+  post.desat = Math.max(post.desat || 0, 0.7);
+  screenFlash(0xb98aff, 0.28); punchFov(3);
+  ring(p.x, p.y + 1, 0.5, 0xb98aff, { r0: 0.3, r1: 5, dur: 0.6 }); ring(p.x, p.y + 1, 0.5, 0xffffff, { r0: 0.2, r1: 2.6, dur: 0.35 });
+  floatText(p.x, p.y + 3.4, 'PERFECT DODGE', { color: '#d2b8ff', size: 26, dur: 1.0 });
+  emit('perfectDodge', { src });
+}
 function damagePlayerInner(amount, src) {
   const p = G.player;
-  if (!p || p.dead || p.hurtI > 0 || p.dashInv > 0) return 'iframes';
+  if (!p || p.dead || p.hurtI > 0) return 'iframes';
+  if (p.dashInv > 0) { perfectDodge(src); return 'iframes'; }
   const el = ELEMENTS[G.element], g = el.guard;
   const front = (src.x - p.x) * p.facing >= -0.4;
   const guarded = p.guarding && (front || g.allAround);

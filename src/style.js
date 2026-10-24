@@ -69,5 +69,6 @@ export function initStyle() {
   on('perfectDodge', () => addStyle(30, 'DODGE'));
   on('reaction', ({ name }) => addStyle(28, name));
   on('stagger', () => addStyle(12));
+  on('execute', () => addStyle(25, 'EXECUTION'));
   on('playerHit', ({ result }) => { if (result === 'hit') dropStyle(); });
 }

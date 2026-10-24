@@ -6,7 +6,7 @@ import { toonMaterial, addOutline, outlineHard } from './toon.js';
 import { Q, impactFlash, decal, shockwave, cam } from './engine.js';
 import { emit } from './events.js';
 import { sfx } from './audio.js';
-import { damagePlayer, spawnProj, killEnemy, hitstop, slowmo, later, fb } from './combat.js';
+import { damagePlayer, spawnProj, killEnemy, hitstop, slowmo, later, fb, witchK } from './combat.js';
 import { groundWave } from './elements.js';
 import * as UI from './ui.js';
 import { clamp, damp, rand, lerp, sign, easeOut } from './util.js';
@@ -649,7 +649,7 @@ export function updateEnemies(dt) {
   for (let i = G.enemies.length - 1; i >= 0; i--) {
     const e = G.enemies[i];
     if (e.dead) { removeEnemy(e); G.enemies.splice(i, 1); if (G.boss === e) G.boss = null; continue; }
-    const tm = e.chill > 0 ? (e.boss ? 0.8 : p.mods.frostbite ? 0.42 : 0.55) : 1; // chill slows a boss far less
+    const tm = (e.chill > 0 ? (e.boss ? 0.8 : p.mods.frostbite ? 0.42 : 0.55) : 1) * witchK(); // chill slows a boss far less
     // spawn glitch
     if (e.spawnT > 0) {
       e.spawnT -= dt;

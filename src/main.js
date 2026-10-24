@@ -365,6 +365,7 @@ function frame(now) {
   setSlow(G.ts); audio.lowHp = !!(p && !p.dead && G.mode === 'play' && p.hp / p.hpMax < 0.3);
   G.time += gdt;
   updateCombatDebug(rdt); updateStyle(gdt);
+  if (G.witch > 0) G.witch -= rdt; if (G.witchCd > 0) G.witchCd -= rdt;
   In.updateAim();
 
   if (active && p) {

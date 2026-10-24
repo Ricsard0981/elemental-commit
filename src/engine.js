@@ -515,7 +515,7 @@ function updateFloaters(dt) {
 
 // ---------------------------------------------------------------- camera
 const ZOOM_K = 0.68; // characters are big and readable: the camera sits closer than the original vertical slice
-export const cam = { x: 0, y: 3, trauma: 0, fovKick: 0, zoom: 1, zoomT: 1, look: 0, roll: 0, bx0: 6, bx1: 250, free: false, tx: 0, ty: 0 };
+export const cam = { x: 0, y: 3, trauma: 0, fovKick: 0, zoom: 1, zoomT: 1, look: 0, roll: 0, push: 0, bx0: 6, bx1: 250, free: false, tx: 0, ty: 0 };
 let frameShake = 0;
 // trauma is capped per FRAME, so a finisher that hits three enemies (and explodes) shakes like one big hit, not like three
 export function shake(a) { const add = Math.min(a * S.shake, Math.max(0, 0.5 - frameShake)); frameShake += add; cam.trauma = Math.min(1, cam.trauma + add); }
@@ -528,11 +528,12 @@ export function updateCamera(dt, tx, ty, facing, t) {
   cam.y = damp(cam.y, gy, 3.2, dt);
   cam.zoom = damp(cam.zoom, cam.zoomLock ?? cam.zoomT, 2.5, dt); // zoomLock: debug / screenshot override
   cam.fovKick = damp(cam.fovKick, 0, 6, dt);
+  cam.push = damp(cam.push, 0, 3.2, dt); // cinematic push-in (executions, perfect dodge)
   cam.trauma = Math.max(0, cam.trauma - dt * 1.7);
   const s = cam.trauma * cam.trauma;
   const sx = (Math.sin(t * 47) + Math.sin(t * 31 + 1)) * 0.5 * s * 1.5;
   const sy = (Math.sin(t * 53 + 2) + Math.sin(t * 29)) * 0.5 * s * 1.5;
-  const dist = 18.5 * cam.zoom * ZOOM_K;
+  const dist = 18.5 * cam.zoom * ZOOM_K * (1 - cam.push * 0.2);
   camera.position.set(cam.x + sx, Math.max(cam.y, 1.5) + 3.0 * cam.zoom * ZOOM_K + sy, dist);
   camera.lookAt(cam.x + sx * 0.5, Math.max(cam.y, 1.5) + 0.2 + sy * 0.5, 0);
   camera.rotateZ(Math.sin(t * 40) * s * 0.03 + cam.roll);
