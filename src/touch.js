@@ -5,12 +5,14 @@ import { G } from './state.js';
 import { S, touchOn, haptic, onSetting } from './settings.js';
 import { ELEMENTS } from './elements.js';
 import { ICON } from './ui.js';
+import { REV } from './revert.js';
 
 const SVG = (inner, fill = false) => `<svg viewBox="0 0 24 24" ${fill ? 'fill="currentColor"' : 'fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"'}>${inner}</svg>`;
 const ICONS = {
   main: SVG('<path d="M4.500 19.500C11 18 17 12.500 19.500 4.500"/><path d="M8 20.500c5-.500 9.500-4 12-9" stroke-opacity=".45"/><path d="M3.500 14.500 9.500 20.500"/>'),
   jump: SVG('<path d="M6 13.500l6-6 6 6"/><path d="M6 19l6-6 6 6" stroke-opacity=".5"/>'),
   dash: SVG('<path d="M5 6l6 6-6 6"/><path d="M12 6l6 6-6 6"/>'),
+  revert: SVG('<path d="M4 12a8 8 0 1 0 2.600-5.900"/><path d="M4 4v5h5"/>'),
   guard: SVG('<path d="M12 3l7.500 3v5.500c0 4.800-3.200 8-7.500 9.500C7.700 19.500 4.500 16.300 4.500 11.500V6z"/>'),
   ranged: SVG('<circle cx="12" cy="12" r="7.500"/><circle cx="12" cy="12" r="1.600" fill="currentColor"/><path d="M12 1.500v4M12 18.500v4M1.500 12h4M18.500 12h4"/>'),
   s2: SVG('<path d="M12 2.500l2.300 6.400 6.700.300-5.300 4.100 1.900 6.500L12 16l-5.600 3.800 1.900-6.500L3 9.200l6.700-.300z"/>', true),
@@ -24,6 +26,7 @@ const LAYOUT = [
   { id: 'ranged', act: 'ranged', a: 76, r: 120, size: 68, label: 'Ranged', aim: true },
   { id: 's1', act: 's1', a: 166, r: 216, size: 64, label: 'Q' },
   { id: 's2', act: 's2', a: 132, r: 216, size: 64, label: 'E' },
+  { id: 'revert', act: 'revert', a: 190, r: 214, size: 54, label: 'Revert' },
 ];
 // short labels that fit a thumb-sized button (and never clash with Jump/Dash)
 const SHORT = {
@@ -93,7 +96,7 @@ export function setElement(key) {
   if (!built) return;
   const e = ELEMENTS[key];
   root.style.setProperty('--c', e.css); root.style.setProperty('--c2', e.css2);
-  const names = { ...SHORT[key], jump: 'Jump', dash: 'Dash' };
+  const names = { ...SHORT[key], jump: 'Jump', dash: 'Dash', revert: 'Revert' };
   for (const b of Object.values(btns)) {
     b.ico.innerHTML = b.id === 's1' ? ICON[key] : ICONS[b.id];
     b.lbl.textContent = names[b.id] || b.label;
@@ -219,6 +222,10 @@ export function updateTouch() {
         if (b.lastCd > 0 && c[0] <= 0) { b.el.classList.remove('ready'); void b.el.offsetWidth; b.el.classList.add('ready'); }
       }
       b.lastCd = c[0];
+    }
+    if (b.id === 'revert') {
+      k = 'r' + REV.charges;
+      if (k !== b.k) { b.el.classList.toggle('poor', REV.charges < 1); b.cdTxt.textContent = REV.charges > 0 ? '⟲'.repeat(REV.charges) : ''; b.cdTxt.style.fontSize = '14px'; }
     }
     if (b.id === 'main') {
       const idx = p.state === 'attack' ? p.combo : p.comboT > 0 ? p.combo : -1;
