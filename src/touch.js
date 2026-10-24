@@ -30,7 +30,7 @@ const LAYOUT = [
 ];
 // short labels that fit a thumb-sized button (and never clash with Jump/Dash)
 const SHORT = {
-  fire: { main: 'Blade', ranged: 'Fireball', guard: 'Ward', s1: 'Grind', s2: 'Spit' },
+  fire: { main: 'Blade', ranged: 'Fireball', guard: 'Ward', s1: 'Phoenix', s2: 'Meteors' },
   water: { main: 'Whip', ranged: 'Bolt', guard: 'Bubble', s1: 'Wave', s2: 'Rain' },
   earth: { main: 'Fists', ranged: 'Rock', guard: 'Stone', s1: 'Quake', s2: 'Bastion' },
   air: { main: 'Blades', ranged: 'Cutter', guard: 'Wall', s1: 'Cyclone', s2: 'Fly' },

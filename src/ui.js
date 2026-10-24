@@ -132,8 +132,6 @@ export function updateHUD(dt) {
   put('hp-txt', 'text', `${Math.ceil(p.hp)} / ${p.hpMax}`);
   const low = hpK < 0.3; if (_w.get('low') !== low) { _w.set('low', low); $('hpbar').classList.toggle('low', low); }
   const enK = clamp(p.energy / p.energyMax, 0, 1);
-  if (G.element === 'fire') { put('heat-fill', 'width', clamp(p.heat, 0, 100).toFixed(1) + '%'); tg($('heatbar'), 'blaze', p.blaze > 0); put('heat-txt', 'text', p.blaze > 0 ? 'BLAZING' : 'HEAT'); }
-  tg(document.body, 'el-fire', G.element === 'fire');
   put('en-fill', 'width', (enK * 100).toFixed(1) + '%'); put('en-txt', 'text', String(Math.floor(p.energy)));
   // xp
   const pr = prog(G.element);

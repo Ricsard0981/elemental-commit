@@ -88,13 +88,6 @@ export class Hero {
         m.castShadow = true; m.userData.ph = i * 1.26; scene.add(m); this.shards.push(m);
       }
     }
-    if (key === 'fire') { // the deck he rides during Ignite Grind (the strapped one on his back is part of the outfit)
-      const d = this.deck = new THREE.Group(), o = this.o;
-      const bd = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.035, 0.24), o.wood); bd.position.y = 0.0; d.add(bd);
-      for (const [x, m, w] of [[-0.28, o.accent, 0.12], [0.02, o.extra, 0.07], [0.3, o.hairB, 0.06]]) { const st = new THREE.Mesh(new THREE.BoxGeometry(w, 0.004, 0.245), m); st.position.set(x, 0.02, 0); d.add(st); }
-      for (const x of [-0.32, 0.32]) for (const z of [-0.09, 0.09]) { const w = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.04, 10), o.helmet); w.rotation.x = Math.PI / 2; w.position.set(x, -0.06, z); d.add(w); }
-      d.position.y = 0.1; d.visible = false; this.group.add(d);
-    }
     this.cur = {}; this.tgt = {}; this.pelY = 0; this.spin = 0; this.spinC = 0; this.dive = 0;
     this.landT = 0; this.wasGround = true; this._atk = null; this._cast = -1; this._hurt = 0; this.lean = 0; this.t = rand(10);
   }
@@ -317,7 +310,6 @@ export class Hero {
     } else if (st === 'dash') {
       T('spine_01', 0.5); T('spine_02', 0.2); arms(-1.2, -1.0, 0.6, 0.6); T('thigh_r', -0.9); T('thigh_l', 0.8);
     }
-    if (p.kickT > 0) { spin = (1 - p.kickT / 0.42) * Math.PI * 2; T('spine_01', 0.25); T('thigh_l', 0.7); T('calf_l', 0.5); arms(1.1, 1.1, 0.4, 0.4); } // perfect-parry kick turn: a full 360 on the board
     // pose deltas ease in fast and ease OUT slower, so cancelling a move never pops the arms / torso
     for (const n in this.cur) { const c = this.cur[n], t = this.tgt[n]; const k = t && t.lengthSq() >= c.lengthSq() ? 34 : 15; c.lerp(t || ZERO, 1 - Math.exp(-k * dt)); }
     this.pelY = damp(this.pelY, pelY, 20, dt); this.dive = damp(this.dive, dive, 18, dt);
@@ -415,7 +407,6 @@ export class Hero {
     this.cape.upload(t);
     }
     const active = st === 'attack' || st === 'cast' || st === 'dash';
-    if (this.deck) { this.deck.visible = p.deckT > 0 && this.group.visible; if (this.deck.visible) this.deck.rotation.z = Math.sin(this.t * 14) * 0.03; }
     this.trails.forEach((tr, i) => { this.hands[i].getWorldPosition(_v); tr.push(_v.x, _v.y, active, dt); tr.upload(t); });
     if (this.shards) this.shards.forEach((m) => {
       const a = t * 1.8 + m.userData.ph; m.position.set(p.x + Math.cos(a) * 1.0, p.y + 1.2 + Math.sin(a * 1.3) * 0.55, Math.sin(a) * 0.75);

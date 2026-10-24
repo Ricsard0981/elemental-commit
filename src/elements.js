@@ -115,24 +115,19 @@ const fire = {
   guard: {
     name: 'Flame Ward', desc: 'Hold to raise a wall of flame (−55% damage). Time it perfectly to parry: a nova erupts and enemies are staggered.', reduction: 0.55, knockback: 4,
     onPerfect(p) {
-      // frame-precise kick turn: a 360 on the board, flame waves both ways and a comic impact flash
-      p.kickT = 0.42; p.skid(2.8); screenFlash(0xffffff, 0.28);
-      for (const d of [-1, 1]) groundWave(p.x, d, { len: 7, speed: 17, dmg: 20, color: 0xff6a2b, kx: 6, ky: 4, hitOpts: { burn: 2.5, burnDps: 8 } });
-      floatText(p.x, p.y + 4.4, 'KICK TURN!', { color: '#ffd33d', size: 30, cls: 'parry', dur: 1.0 });
       explode(p.x, p.y + 1, 5.2, 40, { color: 0xff6a2b, burn: 3, kx: 13, ky: 6, stun: 0.6, shake: 0.5 });
       if (p.mods.heatHaze) { p.cd.s1 = 0; floatText(p.x, p.y + 3.7, 'DASH READY', { color: '#ffc233', size: 18 }); }
     },
   },
   s1: {
-    name: 'Ignite Grind', desc: 'Drop the board and grind forward in a blaze: immune while grinding, igniting everything you pass and leaving a burning graffiti trail on the ground.', cost: 25, cd: 6, lock: 0.1,
+    name: 'Phoenix Dash', desc: 'Blaze through enemies as a phoenix, immune while dashing, leaving a burning trail.', cost: 25, cd: 6, lock: 0.1,
     cdFn: (p) => (p.mods.phoenixWings ? 3.6 : 6),
     cast(p) {
       const wings = p.mods.phoenixWings, dist = wings ? 10 : 7.5, dur = 0.26;
       sfx.cast('fire'); sfx.dash();
-      const x0 = p.x, hit = new Set(); let dacc = 0; p.deckT = dur + 0.3;
+      const x0 = p.x, hit = new Set();
       p.startDash({ dir: p.facing, speed: dist / dur, dur, inv: 0.34, vy0: 0, tint: 0xff6a2b,
         tick(pl, dt) {
-          dacc += dt; if (dacc > 0.1) { dacc = 0; decal('scorch', pl.x, groundAt(pl.x), 1.8, 5, 0xff6a2b); }
           const b = { x0: pl.x - 0.9, x1: pl.x + 0.9, y0: pl.y - 0.2, y1: pl.y + 2 };
           for (const e of G.enemies) if (!e.dead && e.spawnT <= 0 && !hit.has(e)) { const eb = enemyBox(e); if (eb.x0 < b.x1 && eb.x1 > b.x0 && eb.y0 < b.y1 && eb.y1 > b.y0) { hit.add(e); hitEnemy(e, 32, { kind: 'special', dir: pl.facing, kx: 9, ky: 6, burn: 3, burnDps: 10, big: true, color: 0xff6a2b });
             if (pl.mods.cadence) { pl.cd.ranged = 0; pl.energy = Math.min(pl.energyMax, pl.energy + 15); floatText(pl.x, pl.y + 3, 'CADENCE', { color: '#ffc233', size: 14, dur: 0.6 }); } } }
@@ -149,27 +144,9 @@ const fire = {
     },
   },
   s2: {
-    name: 'Volcanic Spit-Trick', desc: 'Leap and spin around your deck, spitting a wave of fire at the ground: a huge graffiti fire stamp that burns everything on it. Mastery calls meteors down onto the stamp.', cost: 50, cd: 14, lock: 0.7,
+    name: 'Meteor Storm', desc: 'Call down a barrage of meteors on the area ahead of you (or at your cursor).', cost: 50, cd: 14, lock: 0.55,
     cdFn: () => 14,
     cast(p, a, mouse) {
-      const cx = clamp(mouse ? mouse.wx : p.x + p.facing * 6, 2, 264), gy = groundAt(cx), mast = p.mods.armageddon || p.mods.solarFlare;
-      sfx.cast('fire'); screenFlash(0xff6a2b, 0.22); shake(0.25); punchFov(3);
-      p.vy = 11; p.kickT = 0.42; p.deckT = 0.8; p.skid(2.4);
-      later(0.26, () => {
-        // the fire breath: a stream from his face to the floor
-        let t = 0; addFx((dt) => { t += dt; for (let i = 0; i < 6; i++) { const u = Math.random(); glow.emit(lerp(p.x, cx, u) + rand(-0.4, 0.4), lerp(p.y + 1.8, gy + 0.3, u) + rand(-0.3, 0.3), 0.3, rand(-2, 2), rand(-2, 1), 0, rgb(Math.random() < 0.5 ? 0xff6a2b : 0xffd23a, 2.1), rand(0.4, 0.8), 0.1, 0.45, 0, 0.5); } return t < 0.35; });
-        later(0.3, () => {
-          sfx.explosion(1.6); shake(0.5); punchFov(4); screenFlash(0xffd23a, 0.3);
-          decal('scorch', cx, gy, 10, 8, 0xff6a2b); decal('crack', cx, gy, 6, 8, 0xffd23a); // the graffiti stamp
-          ring(cx, gy + 0.06, 0.5, 0xffd23a, { r0: 0.5, r1: 9, dur: 0.6, flat: true }); ring(cx, gy + 0.06, 0.5, 0xff2e93, { r0: 0.3, r1: 6, dur: 0.5, flat: true });
-          zone(0, 0, { dur: 6, tick: 0.3, onFrame: () => { for (let i = 0; i < 4; i++) { const x = cx + rand(-4.5, 4.5); glow.emit(x, groundAt(x) + 0.1, rand(-0.3, 0.3), 0, rand(2, 6), 0, rgb(Math.random() < 0.5 ? 0xff6a2b : 0xffd23a, 1.9), rand(0.5, 0.9), 0, 0.6, -2); } },
-            onTick: () => hitBox(cx - 4.6, cx + 4.6, gy - 0.5, gy + 2.6, 9, { kind: 'special', burn: 2.5, burnDps: 9, kx: 0, noCombo: true, quiet: true, hitstop: 0, shake: 0, color: 0xff6a2b, poise: 1 }) });
-          if (mast) later(0.25, () => fire.s2.meteors(p, a, { wx: cx }));
-          else for (let i = 0; i < 4; i++) later(0.14 * i, () => explode(cx + (i - 1.5) * 2.3, gy + 0.6, 2.2, 22, { color: 0xff6a2b, burn: 3, kx: 6, ky: 8, shake: 0.3, hitstop: 0.03 }));
-        });
-      });
-    },
-    meteors(p, a, mouse) {
       const arm = p.mods.armageddon, flare = p.mods.solarFlare, n = flare ? 1 : arm ? 9 : 5, rad = flare ? 7.5 : arm ? 3.4 : 2.7;
       const cx = mouse ? mouse.wx : p.x + p.facing * 7;
       sfx.cast('fire'); screenFlash(0xff6a2b, 0.25); shake(0.25); punchFov(3);

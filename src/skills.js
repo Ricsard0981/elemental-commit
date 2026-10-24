@@ -20,10 +20,10 @@ export const SKILLS = {
     n('f2', 0, 1, 'Cinder Brand', 'Every hit ignites. Burning enemies take +40% from everything you do, and when one dies it sets everything within 7 m on fire.', { brand: true, burnMain: true, spreadBurn: true }, '✦'),
     n('f3', 0, 2, 'Inferno Mastery', 'Your 3rd ground hit slams a pillar of fire into the floor that burns for 4 s. Burning kills explode.', { firePillar: true, deathExplode: true }, '✺'),
     n('f4', 1, 0, 'Ember Cannon', 'NEW MOVE: Hold the Ranged button for 0.7 s, release: a huge fire orb that detonates for massive area damage.', { charge: true }, '◉'),
-    n('f5', 1, 1, 'Grind Rail', 'Ignite Grind: −40% cooldown, +30% distance, a lasting firetrail, and every enemy it ignites refunds your ranged cooldown and 15 energy.', { phoenixWings: true, cadence: true }, '❖'),
-    n('f6', 1, 2, 'Meteor Mastery', 'Choose how the Volcanic Spit-Trick ends: meteors fall on its fire stamp.', {}, '☄', [
-      fork('a', 'Armageddon', 'Meteors: 9 bigger meteors rain onto the stamp and shake the whole map.', { armageddon: true }, '☄'),
-      fork('b', 'Solar Flare', 'Solar Flare: ONE colossal meteor lands on the stamp: huge blast, 1.4 s stun, burns everything.', { solarFlare: true }, '☀'),
+    n('f5', 1, 1, 'Phoenix Rising', 'Phoenix Dash: −40% cooldown, +30% distance, a lasting firetrail, and every enemy it ignites refunds your ranged cooldown and 15 energy.', { phoenixWings: true, cadence: true }, '❖'),
+    n('f6', 1, 2, 'Meteor Mastery', 'Choose how Meteor Storm ends.', {}, '☄', [
+      fork('a', 'Armageddon', 'Meteor Storm rains 9 bigger meteors and shakes the whole map.', { armageddon: true }, '☄'),
+      fork('b', 'Solar Flare', 'Meteor Storm becomes ONE colossal meteor: huge blast, 1.4 s stun, burns everything.', { solarFlare: true }, '☀'),
     ]),
     n('f7', 2, 0, 'Flame Riposte', 'NEW MOVE: A perfect parry vanishes you beside the attacker and detonates it in a firestorm.', { riposte: true }, '◈'),
     n('f8', 2, 1, 'Burning Guard', 'Enemies that hit your guard catch fire and every block erupts in a nova. Perfect-parry window +50%, and parries refresh Phoenix Dash.', { burnGuard: true, parry: 0.5, heatHaze: true }, '◉'),
