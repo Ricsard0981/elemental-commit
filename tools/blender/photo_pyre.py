@@ -264,7 +264,7 @@ arm = next(o for o in bpy.data.objects if o.type == 'ARMATURE')
 for o in [o for o in bpy.data.objects if o.parent is arm and o.type == 'MESH']:
     flame = 'Flame' in o.name
     o.data.materials.clear()
-    o.data.materials.append(toon('pyre_flame' if flame else 'pyre', image=ATL, emit=2.6 if flame else 0.0))
+    o.data.materials.append(toon('pyre_flame' if flame else 'pyre', image=ATL, emit=1.1 if flame else 0.0))
     outline(o, .009 if flame else .011)
 P = arm.pose.bones
 
@@ -280,8 +280,8 @@ def rot(b, axis, deg):
 # legs: thighs forward over the edge, one shin dangling, one tucked back against the box
 rot('thigh_l', 'X', -84); rot('thigh_l', 'Z', 14)
 rot('thigh_r', 'X', -82); rot('thigh_r', 'Z', -16)
-rot('calf_l', 'X', 70); rot('calf_r', 'X', 102)
-rot('foot_l', 'X', 18); rot('foot_r', 'X', -10)
+rot('calf_l', 'X', 52); rot('calf_r', 'X', 84)
+rot('foot_l', 'X', 18); rot('foot_r', 'X', 30)
 # torso leans in, head tips down toward the low camera, a little attitude
 rot('spine_01', 'X', 10); rot('spine_02', 'X', 8); rot('spine_03', 'X', 4); rot('spine_03', 'Z', -6)
 rot('neck_01', 'X', 10); rot('Head', 'X', 6); rot('Head', 'Z', -10); rot('Head', 'Y', 6)

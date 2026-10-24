@@ -40,16 +40,16 @@ sc.render.film_transparent = False
 sc.world = bpy.data.worlds.new('w'); sc.world.color = (0.72, 0.9, 0.78)
 sc.render.resolution_x, sc.render.resolution_y = 520, 900
 cam = bpy.data.objects.new('cam', bpy.data.cameras.new('cam'))
-cam.data.type = 'ORTHO'; cam.data.ortho_scale = 2.65
+cam.data.type = 'ORTHO'; cam.data.ortho_scale = 2.55
 sc.collection.objects.link(cam); sc.camera = cam
 imgs = []
 for name, ang in (('front', 0), ('q', 40), ('side', 90), ('back', 180)):
     r = 6.0
-    cam.location = Vector((0, 0, 1.12))
+    cam.location = Vector((0, 0, 1.08))
     cam.location.x = math.sin(math.radians(ang)) * r
     cam.location.y = -math.cos(math.radians(ang)) * r
-    cam.location.z = 1.12
-    d = Vector((0, 0, 1.12)) - cam.location
+    cam.location.z = 1.08
+    d = Vector((0, 0, 1.08)) - cam.location
     cam.rotation_euler = d.to_track_quat('-Z', 'Y').to_euler()
     p = os.path.join(os.path.dirname(out), f'_t_{name}.png')
     sc.render.filepath = p
