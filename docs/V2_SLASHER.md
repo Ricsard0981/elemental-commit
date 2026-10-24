@@ -86,3 +86,12 @@ Serve the branch: `npx http-server -p 8092 -c-1 .` in `C:\programok\ELEMENT_GAME
 - **Visual quality of the new effects** was reviewed on a few screenshots, not frame by frame. The slice seam is subtle.
 - Balance: Room Run difficulty curve, patch strength, Revert on the boss, Style rank thresholds are first guesses.
 - The Gamepad was tested with a mocked controller, not hardware.
+
+## 13. UI skin: "ink & ledger" (anti-generic pass)
+The first v2 UI still looked like a generic dark dashboard (rounded GitHub-grey cards, glow on every number, pulsing green pills). It was rebuilt as one cohesive skin in the last block of `style.css`:
+- **Shapes:** flat ink-black plates with square corners, a thick spine/top bar in the element's colour, and hard offset shadows instead of blur. No glows, no gradients on chrome, no pulsing buttons.
+- **Type:** Barlow Condensed (display: all HUD and menu text, numbers) and Barlow (body), vendored in `assets/fonts/` (SIL OFL, credited in `vendor/CREDITS.md`).
+- **Colour discipline:** paper-white text on near-black, ONE accent per run (your element); green only for commits.
+- **Game-specific details:** HP/energy as segmented ledger bars, the Style rank as a tilted stamp tile, primary buttons in paper-white, stats as segmented pips, touch buttons as flat discs with an accent rim.
+- Checked on desktop and a 844x390 phone viewport (Menu, HUD, skill tree, pause, Lab, Settings). Not checked on a real phone.
+

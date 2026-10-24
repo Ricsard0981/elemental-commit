@@ -11,3 +11,6 @@ CC0 means no credit is required; it is given here as a courtesy.
 Everything that makes the game's characters recognisable is **original work in this repository**: the four costumes (zone-painted cloth,
 runes, armour, masks, crowns), the elemental hair / cape / trail ribbons, the combat pose layer, all VFX, shaders and textures
 (generated in code), the Training Grounds scenery, and all audio (synthesised with WebAudio — there are no audio files).
+
+## Fonts
+- **Barlow** and **Barlow Condensed** (latin subset, woff2) by Jeremy Tribby, SIL Open Font License 1.1: https://github.com/jpt/barlow . Files in `assets/fonts/`. Used for all HUD and menu text.
