@@ -9,7 +9,7 @@ import { assets } from './assets.js';
 import { toonMaterial, costumeMaterial, outlineMaterial, outlineHard, addOutline } from './toon.js';
 import { Animator } from './animator.js';
 import { Ribbon, Trail } from './ribbons.js';
-import { Q, scene } from './engine.js';
+import { Q, scene, glow, rgb } from './engine.js';
 import { G } from './state.js';
 import { clamp, damp, lerp, rand, easeOut } from './util.js';
 
@@ -167,6 +167,100 @@ export class Hero {
     deck.quaternion.setFromAxisAngle(new THREE.Vector3(0, 0, 1), 0.45).multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI / 2));
     this.model.add(deck); this.model.updateMatrixWorld(true);
     this.bones.spine_03.attach(deck);
+    const P = this.deckPose = { back: { pos: deck.position.clone(), quat: deck.quaternion.clone(), scale: deck.scale.clone() } };
+    // in the hand: held by the tail like a bat, the board continuing the line of the forearm
+    const hand = this.bones.hand_r, H = this.J('hand_r'), E = this.J('lowerarm_r'), dir = H.clone().sub(E).normalize();
+    const tmp = new THREE.Object3D(); tmp.position.copy(H).addScaledVector(dir, 0.3); tmp.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), dir);
+    this.model.add(tmp); tmp.updateMatrixWorld(true); hand.attach(tmp);
+    P.hand = { pos: tmp.position.clone(), quat: tmp.quaternion.clone(), scale: tmp.scale.clone() }; hand.remove(tmp);
+    // under his feet (tilt space: +X is where he faces, the board runs along X, wheels on the floor)
+    P.feet = { pos: new THREE.Vector3(0, 0.095, 0), quat: new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI / 2), scale: new THREE.Vector3(1.18, 1.18, 1.18) };
+    this.deckMode = 'back'; this.yaw = 0; this.flipDur = 0; this.trickA = 0;
+  }
+  // where the board is this frame: on the spine, in his right hand, under his feet, or flying free (emotes, kickflips)
+  setDeck(mode) {
+    if (mode === this.deckMode) return;
+    const d = this.deck, P = this.deckPose, par = mode === 'back' ? this.bones.spine_03 : mode === 'hand' ? this.bones.hand_r : this.tilt, pose = P[mode] || P.feet;
+    par.add(d); d.position.copy(pose.pos); d.quaternion.copy(pose.quat); d.scale.copy(pose.scale);
+    this.deckMode = mode;
+  }
+  deckModeFor(p) {
+    const a = p.atk, e = p.emote;
+    if (e) return e.n === 0 ? (e.t < 0.78 ? 'free' : e.t < 1.5 ? 'spin' : 'back') : e.n === 1 ? 'free' : e.n === 2 ? 'free' : (e.t > 0.2 && e.t < 0.95 ? 'hand' : 'back');
+    if (a && a.kind === 'launcher') return 'free';
+    if (a && a.cfg.deck) return a.cfg.deck;
+    if (p.guarding || p.kickT > 0 || p.handstand > 0) return 'hand';
+    if (p.skate || p.grind || (p.dash && (p.dash.grind || p.dash.slide))) return 'feet';
+    return 'back';
+  }
+  updateDeck(p, dt) {
+    let mode = this.deckModeFor(p);
+    const free = mode === 'free' || mode === 'spin';
+    this.setDeck(free ? 'feet' : mode);
+    const d = this.deck, P = this.deckPose.feet;
+    if (this.deckMode === 'feet') {
+      d.position.copy(P.pos); d.quaternion.copy(P.quat);
+      const e = p.emote, a = p.atk;
+      if (p.ollieT > 0) { const k = 1 - p.ollieT / 0.5; d.position.y += Math.sin(k * Math.PI) * 0.25; d.rotateZ(k * Math.PI * 2); } // ollie kickflip
+      if (a && a.kind === 'launcher') { // Kickflip Uppercut: the board flips up off his foot
+        const k = clamp(a.t / a.dur, 0, 1), up = Math.sin(Math.min(1, k * 1.6) * Math.PI);
+        d.position.set(0.55, 0.1 + up * 2.0, 0.1); d.rotateZ(k * Math.PI * 4); d.rotateX(up * 0.6);
+      }
+      if (e && e.n === 0) { // kickflip catch: off the floor, double flip up into his hand, finger spin
+        if (e.t < 0.2) d.position.x = 0.55;
+        else if (mode === 'free') { const k = (e.t - 0.2) / 0.58; d.position.set(0.55 - k * 0.2, 0.08 + Math.sin(k * Math.PI * 0.5) * 1.25, 0.15 * k); d.rotateZ(k * Math.PI * 4); }
+        else { this.bones.hand_r.getWorldPosition(_v); this.tilt.worldToLocal(_v); d.position.copy(_v).add(_v2.set(0, 0.06, 0)); d.quaternion.setFromAxisAngle(_v2.set(0, 1, 0), e.t * 14).multiply(_q.setFromAxisAngle(_v2.set(0, 0, 1), 0.15)); }
+      }
+      if (e && e.n === 1) { d.position.set(0, 0.11, 0); d.rotateX(0.22); }                               // heel-grind: tail down, nose up
+      if (e && e.n === 2) { d.position.set(0.5, 0.4, 0.12); d.quaternion.setFromAxisAngle(_v2.set(1, 0, 0), -Math.PI / 2); } // planted on its tail
+    }
+    // BLAZE: the deck glows and trails fire
+    if (this.deckM) {
+      const b = p.blaze > 0 ? 0.8 + Math.sin(this.t * 22) * 0.25 : 0;
+      if (Math.abs(this.deckM.emissiveIntensity - b) > 0.01) { this.deckM.emissive.setHex(0xff4a1a); this.deckM.emissiveIntensity = b; }
+      if (b > 0 && this.group.visible && Math.random() < 0.8) { d.getWorldPosition(_v); glow.emit(_v.x + rand(-0.3, 0.3), _v.y + rand(-0.1, 0.2), _v.z, rand(-0.3, 0.3), rand(1, 3), 0, rgb(Math.random() < 0.5 ? 0xff6a2b : 0xffd23a, 1.9), rand(0.25, 0.45), 0, 0.4, -1, 1); }
+    }
+  }
+  // Pyre's own poses on top of the clips (same delta convention as pose(): negative pitch swings a limb forward)
+  pyrePose(p, T, arms) {
+    const a = p.atk, st = p.state, e = p.emote, r = {};
+    const legs = (tl, tr, cl, cr) => { T('thigh_l', tl); T('thigh_r', tr); T('calf_l', cl); T('calf_r', cr); };
+    if (st === 'attack' && a) {
+      const k = clamp(a.t / a.dur, 0, 1), w = clamp(a.t / Math.max(0.01, a.hitAt), 0, 1), sw = easeOut(clamp((a.t - a.hitAt) / Math.max(0.05, a.dur * 0.5), 0, 1));
+      const pose = a.cfg.pose;
+      if (pose === 'sweep') { r.pelY = -0.5 * Math.sin(k * Math.PI); r.spin = easeOut(k) * Math.PI * 2; T('spine_01', 0.45); legs(0.3, -1.45 * Math.max(w, sw), 1.4, 0.1); arms(0.4, 0.4, 0.3, 0.3); }
+      else if (pose === 'elbow') { T('spine_02', 0.15, 0.7 * w - 1.0 * sw); arms(1.7, 0.3, 2.3, 0.4); legs(0.3, -0.3, 0.4, 0.2); }
+      else if (pose === 'spinKick') { r.spin = easeOut(k) * Math.PI * 2; T('spine_01', -0.35 * w); legs(0.15, -1.6 * Math.max(w, sw * 0.8), 0.3, 0.15); arms(0.6, 0.6, 0.4, 0.4); r.pelY = 0.06; }
+      else if (pose === 'deckSlam') { r.spin = easeOut(clamp((a.t - a.hitAt * 0.4) / (a.dur * 0.75), 0, 1)) * Math.PI * 2; T('spine_01', 0.3 * w - 0.3 * sw); arms(-1.2 * w + 2.6 * sw, 0.6 * w, 0.5, 0.4); legs(0.4, -0.5, 0.3, 0.3); r.pelY = -0.1; }
+      else if (pose === 'kickflip') { legs(0.2, -1.8 * sw, 0.3, 0.1 + 0.6 * (1 - sw)); T('spine_01', -0.25 * sw); arms(-0.4, 1.4 * sw, 0.3, 0.6); }
+      else if (pose === 'meia') { r.spin = (a.i % 2 ? -1 : 1) * easeOut(k) * Math.PI * (a.i === 2 ? 2 : 1.2); legs(-0.4, -1.5, 0.9, 0.1); T('spine_01', -0.2); arms(1.0, 1.0, 0.5, 0.5); }
+      else if (pose === 'stomp') { legs(-0.25, -0.25, 0.5, 0.5); arms(1.6, 1.6, 0.4, 0.4); }
+      else if (pose === 'slideKick') { r.pelY = -0.42; legs(0.9, -1.55, 1.5, 0.05); T('spine_01', -0.35); arms(-0.6, 0.9, 0.2, 0.6); }
+      return r;
+    }
+    if (e) {
+      const t = e.t;
+      if (e.n === 0) { if (t < 0.3) legs(0.1, -0.9 * Math.sin(t / 0.3 * Math.PI), 0.2, 0.8); arms(t > 0.6 ? 1.4 : 0.3, 0.2, t > 0.6 ? 1.6 : 0.3, 0.2); if (t > 0.75 && t < 1.5) T('Head', 0.25); }
+      else if (e.n === 1) { r.pelY = -0.3; legs(-0.9, -0.9, 1.7, 1.7); T('spine_01', 0.35); if (t > 0.9) { arms(2.8, 0.4, 2.6, 0.3); T('Head', -0.15); } else arms(0.6, 0.6, 1.0, 1.0); }
+      else if (e.n === 2) { arms(1.1, 0.1, 1.4, 0.4); T('spine_01', 0.12); T('Head', 0.18 + Math.sin(t * 6) * 0.14); T('thigh_l', -0.2, 0, 0); }   // leaning on the nose, slow head-nod
+      else { legs(-1.4, -1.4, 1.8, 1.8); arms(t > 0.2 && t < 0.95 ? 1.6 : 1.0, 1.2, 1.0, 1.0); }
+      return r;
+    }
+    if (p.handstand > 0) { arms(3.0, 3.0, 0.1, 0.1); legs(0.1, 0.1, 0.1, 0.1); return r; }
+    if (p.flipT > 0) { legs(-1.4, -1.4, 1.8, 1.8); arms(1.1, 1.1, 1.2, 1.2); return r; }
+    if (p.kickT > 0) { r.spin = (1 - p.kickT / 0.42) * Math.PI * 2; T('spine_01', 0.25); legs(0.7, -0.2, 0.5, 0.2); arms(1.35, 1.2, 1.8, 1.6); return r; }
+    if (p.guarding) { arms(1.5, 1.2, 1.4, 1.6); T('spine_01', 0.15); legs(-0.3, 0.35, 0.4, 0.2); r.pelY = -0.09; return r; } // the deck held out as a shield
+    if (st === 'dash' && p.dash && (p.dash.grind || p.dash.slide)) { r.pelY = -0.18; legs(-0.5, -0.5, 1.0, 1.0); T('spine_01', 0.2); arms(0.9, 0.9, 0.4, 0.4); return r; }
+    if (p.skate && st === 'free') { // riding: knees bent, arms loose for balance, a gentle sway
+      const sway = Math.sin(this.t * 3) * 0.04;
+      if (p.ollieT > 0) { legs(-1.1, -1.1, 1.7, 1.7); arms(0.8, 0.8, 0.6, 0.6); return r; }
+      r.pelY = p.onGround ? -0.17 : 0; T('spine_01', 0.18); arms(0.35, 0.35, 0.5, 0.5);
+      // a wide skate stance: feet spread along the board, knees bent
+      T('thigh_l', -0.45 + sway, 0, 0.24); T('thigh_r', -0.45 - sway, 0, -0.24); T('calf_l', 0.85, 0, -0.2); T('calf_r', 0.85, 0, 0.2);
+      if (p.dropT > 0) { arms(1.0, 0.3, 0.8, 0.2); r.pelY = -0.18; }
+      return r;
+    }
+    return null;
   }
   both(fn) { fn(1, '_l'); fn(-1, '_r'); } // +x is the character's left in the bind pose
   buildCostume() {
@@ -283,7 +377,7 @@ export class Hero {
     m.getWorldQuaternion(_qm);
     // pelvis height offset
     if (this.bones.pelvis) this.bones.pelvis.position.y += this.pelY / this.s;
-    const order = ['pelvis', 'spine_01', 'spine_02', 'spine_03', 'neck_01', 'Head', 'clavicle_l', 'clavicle_r', 'upperarm_l', 'upperarm_r', 'lowerarm_l', 'lowerarm_r', 'thigh_l', 'thigh_r', 'calf_l', 'calf_r'];
+    const order = ['pelvis', 'spine_01', 'spine_02', 'spine_03', 'neck_01', 'Head', 'clavicle_l', 'clavicle_r', 'upperarm_l', 'upperarm_r', 'lowerarm_l', 'lowerarm_r', 'thigh_l', 'thigh_r', 'calf_l', 'calf_r', 'foot_l', 'foot_r'];
     for (const n of order) {
       const d = this.cur[n]; if (!d || (d.x === 0 && d.y === 0 && d.z === 0)) continue;
       const b = this.bones[n]; b.parent.updateWorldMatrix(true, false);
@@ -338,6 +432,7 @@ export class Hero {
     } else if (st === 'dash') {
       T('spine_01', 0.5); T('spine_02', 0.2); arms(-1.2, -1.0, 0.6, 0.6); T('thigh_r', -0.9); T('thigh_l', 0.8);
     }
+    if (this.pyre) { const r = this.pyrePose(p, T, arms); if (r) { if (r.pelY !== undefined) pelY = r.pelY; if (r.spin !== undefined) spin = r.spin; } }
     // pose deltas ease in fast and ease OUT slower, so cancelling a move never pops the arms / torso
     for (const n in this.cur) { const c = this.cur[n], t = this.tgt[n]; const k = t && t.lengthSq() >= c.lengthSq() ? 34 : 15; c.lerp(t || ZERO, 1 - Math.exp(-k * dt)); }
     this.pelY = damp(this.pelY, pelY, 20, dt); this.dive = damp(this.dive, dive, 18, dt);
@@ -397,6 +492,7 @@ export class Hero {
         else if (an.curName === 'Jump_Start' && an.cur.time > 0.5) an.play('Jump_Loop', { fade: 0.12 });
         else if (p.vy < -2 && an.curName !== 'Jump_Loop' && an.curName !== 'Jump_Start') an.play('Jump_Loop', { fade: 0.1 });
       } else if (this.landT > 0) { /* landing */ }
+      else if (p.skate && p.onGround) an.play('Idle_Loop', { fade: 0.15 });
       else if (Math.abs(p.vx) > 1.2 && (p.moveIntent || p.vx * p.facing > 0)) an.play(Math.abs(p.vx) > 7.5 ? 'Sprint_Loop' : 'Jog_Fwd_Loop', { fade: 0.1, speed: clamp(Math.abs(p.vx) / (Math.abs(p.vx) > 7.5 ? 8.5 : 5.5), 0.45, 1.5) });
       else an.play('Idle_Loop', { fade: 0.15 });
       if (st !== 'dash') this._dash = false;
@@ -413,7 +509,20 @@ export class Hero {
     // whole-body layers: lean, spin, dive tilt, squash & stretch
     this.lean = damp(this.lean, p.leanT ?? 0, 14, dt);
     this.tilt.rotation.z = -(this.lean + this.dive * 0.9);
-    this.pivot.rotation.y = this.spin;
+    if (this.pyre) {
+      // riding: the body turns side-on to the camera (feet along the board) while the board carves underneath
+      const side = p.skate && st !== 'attack' && st !== 'cast' && !p.emote ? -Math.PI / 2 - this.group.rotation.y : 0;
+      let dy = side - this.yaw; while (dy > Math.PI) dy -= 2 * Math.PI; while (dy < -Math.PI) dy += 2 * Math.PI;
+      this.yaw += dy * (1 - Math.exp(-14 * dt));
+      // backflips (grind dismount, spit-trick, emote) rotate the whole body about the hips
+      if (p.flipT > 0) { if (!this.flipDur) this.flipDur = p.flipT; } else this.flipDur = 0;
+      const th = this.flipDur ? easeOut(1 - p.flipT / this.flipDur) * Math.PI * 2 : 0, c = 1.0;
+      this.tilt.rotation.z += th;
+      this.tilt.position.set(th ? c * Math.sin(th) : 0, th ? c * (1 - Math.cos(th)) : 0, 0);
+      this.updateDeck(p, dt);
+      this.pivot.position.y = damp(this.pivot.position.y, this.deckMode === 'feet' && (p.skate || p.grind || p.dash || (p.emote && p.emote.n === 1)) ? (p.emote ? 0.13 : 0.1) : 0, 20, dt);
+    }
+    this.pivot.rotation.y = this.spin + (this.yaw || 0);
     const gnd = p.onGround, stretch = !gnd && st !== 'dash' ? clamp(Math.abs(p.vy) / 40, 0, 0.14) : 0;
     const sy = 1 - p.squash * 0.45 + stretch, sxz = 1 + p.squash * 0.4 - stretch * 0.5;
     this.pivot.scale.set(this.s * this.width * sxz, this.s * sy, this.s * this.width * sxz);

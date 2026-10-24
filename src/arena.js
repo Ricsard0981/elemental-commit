@@ -7,7 +7,9 @@ import { toonMaterial, outlineHard, addOutline } from './toon.js';
 import { rand, clamp, lerp } from './util.js';
 
 export const ARENA_L = 64;
-const ground = { L: ARENA_L, ground: () => 0, solids(x0, x1, out) {
+// two graffiti grind rails for Pyre's Ignite Grind (no collision: you only ride them while grinding)
+const RAILS = [{ x0: 11, x1: 21, y: 1.0 }, { x0: 42, x1: 53, y: 1.5 }];
+const ground = { L: ARENA_L, rails: RAILS, ground: () => 0, solids(x0, x1, out) {
   out.length = 0;
   out.push({ x0: Math.max(0, x0 - 1), x1: Math.min(ARENA_L, x1 + 1), y0: -50, y1: 0 });
   for (const d of dyn) if (d.x1 > x0 && d.x0 < x1) out.push(d);
@@ -201,6 +203,13 @@ export function buildArena() {
     const kind = i % 4, m = new THREE.Mesh(kind === 0 ? sph2 : kind === 1 ? oct1 : kind === 2 ? torus1 : ico1, [chrome, pinkM, cyM, limeM][kind]);
     const sc = rand(0.7, 1.7); m.scale.set(sc, kind === 1 ? sc * 1.5 : sc, sc); m.position.set(rand(-4, L + 4), rand(8, 14), -rand(22, 36)); m.scale.multiplyScalar(1.6); m.userData = { y: m.position.y, sp: rand(0.2, 0.9) * (i % 2 ? 1 : -1), ph: rand(10) };
     m.castShadow = false; root.add(m); y2k.push(m);
+  }
+  // grind rails: a chrome bar on painted posts, a strip of stickers along the front
+  const barM = toonMaterial({ color: 0xdbe4ff, rim: 0x19e3ff, rimK: 0.9 }), postM = toonMaterial({ color: 0xff2e93, rim: 0xffffff, rimK: 0.4 });
+  for (const r of RAILS) {
+    const len = r.x1 - r.x0, bar = new THREE.Mesh(cyl1, barM); bar.scale.set(0.07, len, 0.07); bar.rotation.z = Math.PI / 2; bar.position.set((r.x0 + r.x1) / 2, r.y - 0.04, -0.35); bar.castShadow = true; root.add(bar); addOutline(bar, outlineHard);
+    for (let x = r.x0 + 0.4; x <= r.x1 - 0.3; x += Math.max(2, len / 4)) { const post = new THREE.Mesh(box1, postM); post.scale.set(0.12, r.y, 0.12); post.position.set(x, r.y / 2 - 0.05, -0.35); post.castShadow = true; root.add(post); }
+    for (const x of [r.x0, r.x1]) { const foot = new THREE.Mesh(box1, postM); foot.scale.set(0.2, r.y, 0.2); foot.position.set(x, r.y / 2 - 0.05, -0.35); root.add(foot); }
   }
   // wall hints at the arena ends
   for (const x of [0, L]) { const w = new THREE.Mesh(box1, ruinDark); w.scale.set(1.2, 2.2, 3); w.position.set(x, 1.1, -1); w.castShadow = true; root.add(w); }

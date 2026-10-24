@@ -71,6 +71,9 @@ export function groundAt(x) { // top of the playable lane (null → pit)
   const h = laneH[i];
   return h === null ? -60 : h;
 }
+// grindable edges for Pyre's Ignite Grind {x0, x1, y}: the floating slabs here, or the active playfield's own rails
+const slabRails = platforms.map((p) => ({ x0: p.x - p.w / 2, x1: p.x + p.w / 2, y: p.y }));
+export const railsHere = () => (terrain.active ? terrain.active.rails || [] : slabRails);
 export const dyn = []; // dynamic solids {x0,x1,y0,y1,owner}
 export const gates = [];
 

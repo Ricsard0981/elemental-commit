@@ -12,6 +12,7 @@ import { emit } from './events.js';
 import { hitEnemy, enemyBox, hitBox, explode } from './combat.js';
 import { MOVES } from './elements.js';
 import { applyPatches } from './patches.js';
+import { isPyre, pyreInput, pyreTick, skateMove, powerSlide, skid, KIT as PYRE_KIT } from './pyre.js';
 import { haptic, S, diff } from './settings.js';
 import { clamp, damp, lerp, rand, easeOut, sign } from './util.js';
 
@@ -35,6 +36,7 @@ export class Player {
     this.safeX = 4; this.runPhase = 0; this.stepT = 0; this.turn = 0; this.shieldK = 0;
     this.clock = 0; this.bufStamp = {}; this.guardPresses = []; this.latchT = -9; this.latchUp = this.latchDown = false; this.latchAx = 0; this.lastKind = ''; this.noEnT = -9; this.dashEndT = -9; this.chargeT = 0; this.chargeReady = false;
     this.blink = 0; this.counterT = 0; this.deadT = 0; this.moveIntent = false; this.landK = 0; this.parryBase = 0.18;
+    this.skate = false; this.stanceCd = 0; this.dropT = 0; this.heat = 0; this.blaze = 0; this.kickT = 0; this.flipT = 0; this.ollieT = 0; this.handstand = 0; this.emote = null; this.grind = null; this.idleT = 0; // Pyre (src/pyre.js)
     this.castSeq = 0; this.leanT = 0; this.airHits = 0; this.acombo = 0; this.acomboT = 0; this.imbue = null; this.hero = null; this.infEnergy = false; this.noCooldowns = false; this.cheering = false;
     this.refreshMods(true);
     this.hp = this.hpMax; this.energy = this.energyMax * 0.6;
@@ -185,6 +187,7 @@ export class Player {
   }
   tryDash() {
     if (this.cd.dash > 0 || (!this.onGround && !this.airDash)) return false;
+    if (this.skate && this.onGround && In.down('down')) { powerSlide(this); return true; }
     const ax = In.axis(), dir = ax ? sign(ax) : this.facing;
     if (!this.onGround) { if (this.airDashExtra > 0) this.airDashExtra--; else this.airDash = false; }
     const dashX0 = this.x;
@@ -200,7 +203,7 @@ export class Player {
     return true;
   }
   // ground combo / launcher (Up + Attack) / air chain (Attack in the air) / slam (Down + Attack in the air)
-  startAttack() {
+  startAttack(force) {
     const m = this.el.main;
     // direction is latched when the button was pressed (a short hold of Up/Down still counts), live input otherwise
     const fresh = this.clock - this.latchT < 0.3;
@@ -210,6 +213,7 @@ export class Player {
     const air = !this.onGround;
     let kind = 'ground';
     if (air) kind = down ? 'slam' : 'air'; else if (up) kind = 'launcher';
+    if (force) kind = force;
     if (kind === 'air' && this.airHits >= 6) { this.buf.main = 0; return; } // land first: no endless air stall
     if ((kind === 'ground' || kind === 'air') && this.mods.dashStrike && this.clock - this.dashEndT < 0.3) kind = 'dashStrike'; // Attack right after a Dash
     if (kind !== this.lastKind) { this.comboT = 0; this.acomboT = 0; } // a different move type always starts its own chain at hit 1
@@ -225,6 +229,7 @@ export class Player {
     else if (kind === 'air') {
       this.acombo = this.acomboT <= 0 ? 0 : (this.acombo + 1) % 3; i = this.acombo; cfg = m.air.hits[i]; this.airHits++;
     } else if (kind === 'dashStrike') { cfg = MOVES[this.key].dsCfg; this.combo = 0; this.comboT = 0; this.dashEndT = -9; }
+    else if (kind === 'slideKick') { cfg = PYRE_KIT.slideKick; this.combo = 0; this.comboT = 0; }
     else { cfg = m.slam; }
     const toward = this.nearestDir(4.5);
     if (ax) this.facing = sign(ax); else if (toward) this.facing = toward;
@@ -325,6 +330,7 @@ export class Player {
     if (In.hitNow('guard')) { this.buf.guard = BUF.guard; this.guardPresses.push(this.clock); if (this.guardPresses.length > 6) this.guardPresses.shift(); }
     for (const k in this.buf) this.buf[k] = Math.max(0, this.buf[k] - rdt);
     if (this.cheering) for (const k in this.buf) this.buf[k] = 0;
+    if (isPyre(this)) pyreInput(this, rdt);
     if (dt <= 0) return;
     const m = this.mods, el = this.el;
     // timers
@@ -340,6 +346,7 @@ export class Player {
     this.coyote = this.onGround ? 0.1 : Math.max(0, this.coyote - dt);
 
     const ax = this.cheering ? 0 : In.axis(); this.moveIntent = ax !== 0;
+    if (isPyre(this)) { pyreTick(this, dt, ax); this.ollieT = Math.max(0, this.ollieT - dt); if (this.emote && this.stun > 0) { this.emote = null; this.state = 'free'; } }
     const canAct = this.state === 'free' && this.stun <= 0;
     // ---- guard
     const gHeld = (In.down('guard') || this.buf.guard > 0) && !this.cheering; // a tap inside hit-stop still raises the guard
@@ -360,11 +367,13 @@ export class Player {
     // ---- state machine
     if (this.state === 'dash') {
       const d = this.dash; d.t += dt;
+      if (d.decel) d.speed = Math.max(3, d.speed - d.decel * dt);
       this.vx = d.dir * d.speed; this.vy = d.vy0 ?? 0;
       d.tick?.(this, dt);
       // dash afterimages
       for (let i = 0; i < 4; i++) glow.emit(this.x + rand(-0.2, 0.2), this.y + rand(0.2, 1.6), rand(-0.2, 0.2), -d.dir * rand(1, 4), rand(-1, 1), 0, rgb(d.tint ?? el.color, 1.7), rand(0.3, 0.55), 0, 0.35);
-      if (d.basic && this.mods.dashStrike && d.t >= d.dur * 0.35 && this.buf.main > 0 && !this.stun) { // Attack mid-dash: the dash flows straight into the Dash Strike
+      if (d.slide && d.t > 0.08 && this.buf.main > 0 && !this.stun) { this.state = 'free'; this.dash = null; this.dashInv = 0; this.startAttack('slideKick'); }
+      else if (d.basic && this.mods.dashStrike && d.t >= d.dur * 0.35 && this.buf.main > 0 && !this.stun) { // Attack mid-dash: the dash flows straight into the Dash Strike
         this.dashEndT = this.clock; this.state = 'free'; this.dash = null; this.dashInv = 0; this.startAttack();
       } else if (d.t >= d.dur) { this.dashEndT = this.clock; this.vx = d.dir * Math.min(d.speed, 8) * 0.5; this.state = 'free'; this.dash = null; d.end?.(this); }
     } else if (this.state === 'attack') {
@@ -391,6 +400,7 @@ export class Player {
           if (a.kind === 'launcher') el.main.launcher.strike(this);
           else if (a.kind === 'air') el.main.air.strike(this, a.i);
           else if (a.kind === 'dashStrike') MOVES[this.key].dashStrike(this);
+          else if (a.kind === 'slideKick') a.cfg.strike(this);
           else el.main.strike(this, a.i);
           this.hero?.kick(this.facing, a.kind === 'launcher' ? 0.4 : a.i === 2 ? 0.34 : 0.22); // hair / cape follow-through
         }
@@ -423,7 +433,8 @@ export class Player {
       if (this.guarding) sm = { fire: 0.45, water: 0.6, earth: m.immovable ? 0.45 : 0, air: 0.85 }[this.key];
       const target = ax * 8.2 * this.speedMul() * sm;
       const acc = Math.abs(target) > Math.abs(this.vx) || sign(target) !== sign(this.vx) ? (this.onGround ? 70 : 38) : (this.onGround ? 55 : 10);
-      if (ax) { this.vx += clamp(target - this.vx, -acc * dt, acc * dt); if (!this.guarding) this.facing = sign(ax); } else this.vx = damp(this.vx, 0, this.onGround ? 16 : 3, dt);
+      if (this.skate && !this.guarding) skateMove(this, ax, dt);
+      else if (ax) { this.vx += clamp(target - this.vx, -acc * dt, acc * dt); if (!this.guarding) this.facing = sign(ax); } else this.vx = damp(this.vx, 0, this.onGround ? 16 : 3, dt);
       if (this.guarding && ax) this.facing = this.facing; // facing locked while guarding
       // jump
       this.tryJump();
@@ -480,6 +491,7 @@ export class Player {
       this.squash = -0.3;
     } else {
       this.jumps = 1; this.vy = this.el.prof.jump; sfx.jump(); puff(this.x, this.y + 0.1, 5, 0x8b949e, 0.8, 0.45, 2.5);
+      if (this.skate) { this.vy *= 1.12; this.ollieT = 0.5; } // Skate Mode: an ollie with a kickflip
       this.squash = -0.35;
     }
     this.onGround = false;
@@ -487,6 +499,7 @@ export class Player {
   land(vy) {
     const k = clamp(-vy / 28, 0, 1); this.landK = k;
     this.airHits = 0; this.acombo = 0; this.acomboT = 0;
+    if (isPyre(this) && (k > 0.35 || (this.skate && k > 0.15))) skid(this, 1.2 + k);
     if (this.mods.quakeLand && k > 0.45) explode(this.x, this.y + 0.3, 3.4, 22, { color: 0xc08a4b, stun: 0.9, kx: 6, ky: 3, noReact: true, shake: 0.3 });
     if (this.slam) { const f = this.slam; this.slam = null; f(); }
     if (this.state === 'attack' && this.atk && this.atk.kind === 'slam' && !this.atk.landed) {
@@ -500,7 +513,7 @@ export class Player {
     }
   }
   fellInPit() {
-    this.atk = null; this.slam = null; if (this.state === 'attack' || this.state === 'cast') this.state = 'free';
+    this.atk = null; this.slam = null; this.grind = null; this.emote = null; if (this.state === 'attack' || this.state === 'cast' || this.state === 'emote') this.state = 'free';
     this.x = this.safeX; this.y = groundAt(this.safeX) + 0.2; this.vx = this.vy = 0;
     this.hp = Math.max(1, this.hp - 15); this.hurtI = 1.4;
     sfx.hurt(); shake(0.4); post.aberr = 0.01; UI.damageVignette();
@@ -609,6 +622,7 @@ export class Player {
     if (this.guarding) lean = this.key === 'earth' ? 0.12 : -0.05;
     if (this.stun > 0) lean = -0.3;
     if (!this.onGround && this.state === 'free') lean = clamp(-this.vy / 70, -0.1, 0.16);
+    if (this.skate && this.state === 'free' && this.onGround) lean = 0;
     this.leanT = lean;
   }
   poseLegacy(dt, run, gnd, t) {
@@ -662,6 +676,7 @@ export class Player {
   respawn(x) {
     this.dead = false; this.hp = this.hpMax; this.energy = this.energyMax * 0.5; this.x = x; this.y = groundAt(x) + 0.1; this.vx = this.vy = 0;
     this.hurtI = 2; this.state = 'free'; this.atk = null; this.guarding = false; this.dash = null; this.stun = 0; this.group.visible = true;
+    this.skate = false; this.heat = 0; this.blaze = 0; this.kickT = 0; this.flipT = 0; this.emote = null; this.grind = null;
     this.fly = 0; this.haste = 0; this.dmgBuff = 1; this.slam = null; this.safeX = x; this.airHits = 0; this.acombo = 0; this.cheering = false; this.deadT = 0; this.blink = 0; this.counterT = 0; this.lastKind = ''; for (const k in this.buf) this.buf[k] = 0;
     this.hero?.reset();
     for (const k in this.cd) this.cd[k] = 0;

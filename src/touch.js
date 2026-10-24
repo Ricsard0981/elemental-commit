@@ -12,6 +12,7 @@ const ICONS = {
   main: SVG('<path d="M4.500 19.500C11 18 17 12.500 19.500 4.500"/><path d="M8 20.500c5-.500 9.500-4 12-9" stroke-opacity=".45"/><path d="M3.500 14.500 9.500 20.500"/>'),
   jump: SVG('<path d="M6 13.500l6-6 6 6"/><path d="M6 19l6-6 6 6" stroke-opacity=".5"/>'),
   dash: SVG('<path d="M5 6l6 6-6 6"/><path d="M12 6l6 6-6 6"/>'),
+  stance: SVG('<path d="M3 13.500h18"/><path d="M3 13.500c0-1.500 1-2 2-2M21 13.500c0-1.500-1-2-2-2"/><circle cx="7.500" cy="17" r="1.600"/><circle cx="16.500" cy="17" r="1.600"/>'),
   revert: SVG('<path d="M4 12a8 8 0 1 0 2.600-5.900"/><path d="M4 4v5h5"/>'),
   guard: SVG('<path d="M12 3l7.500 3v5.500c0 4.800-3.200 8-7.500 9.500C7.700 19.500 4.500 16.300 4.500 11.500V6z"/>'),
   ranged: SVG('<circle cx="12" cy="12" r="7.500"/><circle cx="12" cy="12" r="1.600" fill="currentColor"/><path d="M12 1.500v4M12 18.500v4M1.500 12h4M18.500 12h4"/>'),
@@ -27,10 +28,11 @@ const LAYOUT = [
   { id: 's1', act: 's1', a: 166, r: 216, size: 64, label: 'Q' },
   { id: 's2', act: 's2', a: 132, r: 216, size: 64, label: 'E' },
   { id: 'revert', act: 'revert', a: 190, r: 214, size: 54, label: 'Revert' },
+  { id: 'stance', act: 'stance', a: 184, r: 296, size: 56, label: 'Skate', fire: true }, // Fire only: tap = Skate Mode, hold = emote
 ];
 // short labels that fit a thumb-sized button (and never clash with Jump/Dash)
 const SHORT = {
-  fire: { main: 'Blade', ranged: 'Fireball', guard: 'Ward', s1: 'Phoenix', s2: 'Meteors' },
+  fire: { main: 'Kicks', ranged: 'Fireball', guard: 'Kick-Turn', s1: 'Grind', s2: 'Spit' },
   water: { main: 'Whip', ranged: 'Bolt', guard: 'Bubble', s1: 'Wave', s2: 'Rain' },
   earth: { main: 'Fists', ranged: 'Rock', guard: 'Stone', s1: 'Quake', s2: 'Bastion' },
   air: { main: 'Blades', ranged: 'Cutter', guard: 'Wall', s1: 'Cyclone', s2: 'Fly' },
@@ -100,6 +102,7 @@ export function setElement(key) {
   for (const b of Object.values(btns)) {
     b.ico.innerHTML = b.id === 's1' ? ICON[key] : ICONS[b.id];
     b.lbl.textContent = names[b.id] || b.label;
+    if (b.fire) b.el.style.display = key === 'fire' ? '' : 'none';
   }
 }
 
@@ -110,6 +113,8 @@ function btnAt(x, y) {
 }
 function press(b, pid) {
   b.held = pid; b.el.classList.add('down');
+  // the stance button: a tap toggles Skate Mode (on release), a long press (0.45 s) plays the next emote instead
+  if (b.id === 'stance') { b.longT = setTimeout(() => { b.longT = null; In.vDown('emote'); In.vUp('emote'); haptic('tap'); }, 450); haptic('tap'); return; }
   In.vDown(b.act);
   haptic('tap');
   const r = document.createElement('span'); r.className = 'tc-ripple'; b.el.appendChild(r); setTimeout(() => r.remove(), 450);
@@ -117,6 +122,7 @@ function press(b, pid) {
 function release(b) {
   if (!b) return;
   b.held = null; b.el.classList.remove('down', 'aiming');
+  if (b.id === 'stance') { if (b.longT) { clearTimeout(b.longT); b.longT = null; In.vDown('stance'); In.vUp('stance'); } return; }
   In.vUp(b.act);
   if (b.aim) { In.touch.aim = null; }
 }
@@ -232,6 +238,7 @@ export function updateTouch() {
       k = 'm' + idx;
       if (k !== b.k) b.pips.forEach((pip, i) => pip.classList.toggle('on', i <= idx));
     }
+    if (b.id === 'stance') { k = p.skate ? 'S' : 'F'; if (k !== b.k) { b.lbl.textContent = p.skate ? 'On foot' : 'Skate'; b.el.classList.toggle('active', !!p.skate); } }
     if (b.id === 'guard') {
       const perfect = p.guarding && p.guardT <= p.parryWindow;
       k += perfect ? 'P' : p.guarding ? 'G' : '';

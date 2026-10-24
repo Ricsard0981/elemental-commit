@@ -8,11 +8,12 @@ const MAP = {
   main: ['KeyJ', 'Mouse0'], ranged: ['KeyK', 'Mouse2'], guard: ['KeyF', 'KeyL'],
   s1: ['KeyQ', 'KeyU'], s2: ['KeyE', 'KeyI'], dash: ['ShiftLeft', 'ShiftRight'], revert: ['KeyR'],
   skills: ['Tab', 'KeyT'], pause: ['Escape', 'KeyP'],
+  stance: ['KeyC'], emote: ['KeyG'], emote1: ['Digit1'], emote2: ['Digit2'], emote3: ['Digit3'], emote4: ['Digit4'], // Fire (Pyre): Skate Mode toggle, skate emotes
 };
 // user key bindings (Settings -> Controls): the primary key of an action can be rebound, mouse buttons stay as secondaries
 for (const [a, code] of Object.entries(S.keymap || {})) if (MAP[a] && typeof code === 'string') MAP[a][0] = code;
 export const DEFAULT_KEYS = Object.fromEntries(Object.entries(MAP).map(([a, c]) => [a, c[0]]));
-export const ACTIONS = [['left', 'Move left'], ['right', 'Move right'], ['jump', 'Jump'], ['up', 'Up (launcher)'], ['down', 'Down (slam)'], ['main', 'Attack'], ['ranged', 'Ranged'], ['guard', 'Defend'], ['s1', 'Special 1'], ['s2', 'Special 2'], ['dash', 'Dash'], ['revert', 'Revert']];
+export const ACTIONS = [['left', 'Move left'], ['right', 'Move right'], ['jump', 'Jump'], ['up', 'Up (launcher)'], ['down', 'Down (slam)'], ['main', 'Attack'], ['ranged', 'Ranged'], ['guard', 'Defend'], ['s1', 'Special 1'], ['s2', 'Special 2'], ['dash', 'Dash'], ['revert', 'Revert'], ['stance', 'Skate stance (Fire)'], ['emote', 'Emote (Fire)']];
 export const keyName = (c) => (c || '').replace(/^Key/, '').replace(/^Digit/, '').replace('Arrow', '').replace('Left', 'Left ').replace('Right', 'Right ').replace(/^Mouse0$/, 'Click').replace(/^Mouse2$/, 'Right click').replace('Space', 'Space').trim();
 let capture = null;
 export function captureNext(cb) { capture = cb; }
@@ -28,9 +29,9 @@ const released = new Set();
 // virtual (touch) actions
 const vHeld = new Set();
 const vPressed = new Set();
-// ---- gamepad (standard mapping): A jump, X attack, Y ranged, B dash, RT defend, RB/LB specials, LT revert, left stick move/up/down, right stick aims
+// ---- gamepad (standard mapping): A jump, X attack, Y ranged, B dash, RT defend, RB/LB specials, LT revert, L3 skate stance, R3 emote, left stick move/up/down, right stick aims
 const pad = { ax: 0, held: new Set(), pressed: new Set(), connected: false, aiming: false };
-const PAD = { 0: 'jump', 2: 'main', 3: 'ranged', 1: 'dash', 7: 'guard', 5: 's1', 4: 's2', 6: 'revert', 9: 'pause', 8: 'skills', 12: 'up', 13: 'down', 14: 'left', 15: 'right' };
+const PAD = { 0: 'jump', 2: 'main', 3: 'ranged', 1: 'dash', 7: 'guard', 5: 's1', 4: 's2', 6: 'revert', 9: 'pause', 8: 'skills', 10: 'stance', 11: 'emote', 12: 'up', 13: 'down', 14: 'left', 15: 'right' };
 let activePad = null;
 export const padConnected = () => pad.connected;
 export function pollPad() {
