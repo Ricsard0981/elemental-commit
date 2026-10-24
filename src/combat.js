@@ -10,7 +10,7 @@ import { cam } from './engine.js';
 import { clamp, rand, pick, randi, easeOut } from './util.js';
 import * as UI from './ui.js';
 import { haptic } from './settings.js';
-import { sliceEnemy } from './enemies.js';
+import { sliceEnemy, giveTokenSafe } from './enemies.js';
 import { styleMult, styleEnergy, styleLoot } from './style.js';
 import { react } from './reactions.js';
 import { autoRevert } from './revert.js';
@@ -159,13 +159,15 @@ export function hitEnemy(e, base, o = {}) {
     floatText(e.x, e.y + e.h + 1.2, 'COUNTER', { color: '#ffd33d', size: 18, dur: 0.9 }); emit('counter', { e });
   }
   const dir = o.dir ?? (Math.sign(e.x - p.x) || 1);
+  // Shieldling: hits from the front are blocked (they chip the shield), launchers / spikes / slams / hits from behind go through
+  if (e.shielded && !e.air && e.stagger <= 0 && !o.launch && !o.spike && !o.bounce && dir === -e.facing) { shieldBlock(e, d, o, dir); return 0; }
   e.hp -= d; e.flash = 0.06; e.hurtT = 2.2; e.recoil = 1; e.kdir = dir;
   // knockback
   if (!e.heavy || e.stagger > 0) {
     e.vx += dir * (o.kx ?? 5) * (e.kbMul ?? 1); if (o.ky && !e.air) e.vy += o.ky * (e.kbMul ?? 1);
   } else e.vx += dir * (o.kx ?? 5) * 0.12;
   // poise / stagger
-  e.poise -= (o.poise ?? dRaw * 0.9) * p.el.prof.poise * (e.shield ? 2 : 1) * (e.state === 'recover' ? 1.6 : 1) * (e.armorT > 0 ? 0.5 : 1);
+  e.poise -= (o.poise ?? dRaw * 0.9) * p.el.prof.poise * (e.eliteArmor ? 0.45 : 1) * (e.shield ? 2 : 1) * (e.state === 'recover' ? 1.6 : 1) * (e.armorT > 0 ? 0.5 : 1);
   if (e.armorT > 0 && (e.armorMsg ?? 0) < G.time) { e.armorMsg = G.time + 0.5; floatText(e.x, e.y + e.h + 0.9, 'ARMOR', { color: '#9fd0ff', size: 14, dur: 0.6 }); }
   if (e.poise <= 0 && e.stagger <= 0 && !e.boss) { e.stagger = e.staggerTime || 0.45; e.poise = e.poiseMax; e.onStagger?.(); staggerFx(e); }
   if (e.boss && e.poise <= 0) { e.poise = e.poiseMax; e.onStagger?.(); }
@@ -238,6 +240,20 @@ function staggerFx(e) {
   sparks(e.x, cy, 0xffe9a0, 10, 9, 0.22, 0.4, 0, 1);
   if (e.heavy) floatText(e.x, e.y + e.h + 1.1, 'BREAK', { color: '#ffe9a0', size: 18, dur: 0.9 });
   sfx.stagger(!!e.heavy); emit('stagger', { e });
+}
+function shieldBlock(e, d, o, dir) {
+  const heavy = o.finisher || o.big ? 2 : 1;
+  e.shieldHp -= d * heavy; e.hp -= Math.max(1, Math.round(d * 0.1)); e.flash = 0.04; e.recoil = 0.4; e.kdir = dir;
+  sparks(e.x + e.facing * 0.9, e.y + e.h * 0.55, 0xdff6ff, 10, 8, 0.2, 0.3, e.facing); impactFlash(e.x + e.facing * 0.9, e.y + e.h * 0.55, 0x6bd1ff, 2);
+  sfx.block(); hitstop(0.05); shake(0.12); e.vx += dir * 1.2;
+  proc('BLOCKED', e.x, e.y + e.h + 0.7, '#9fd0ff');
+  if (e.shieldHp <= 0) {
+    e.shielded = false; e.stagger = 2.2; e.vulnerable = 2.4; e.state = 'idle'; e.cd = 1.2; e.tele = 0; giveTokenSafe(e);
+    floatText(e.x, e.y + e.h + 1.0, 'SHIELD BROKEN', { color: '#ffd33d', size: 24, dur: 1.1 });
+    ring(e.x + e.facing * 0.8, e.y + e.h * 0.55, 0.5, 0x6bd1ff, { r0: 0.3, r1: 3.4, dur: 0.5 }); sparks(e.x + e.facing * 0.8, e.y + e.h * 0.55, 0xdff6ff, 28, 12, 0.3, 0.6);
+    sfx.stagger(true); fb('stagger'); emit('stagger', { e });
+  }
+  if (e.hp <= 0) killEnemy(e, o);
 }
 export function killEnemy(e, o = {}) {
   if (e.dead) return;

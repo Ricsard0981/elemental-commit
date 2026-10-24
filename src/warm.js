@@ -30,7 +30,7 @@ export async function warmAll(onStep) {
   });
   G.player = players[0];
   // enemies (hp bars on)
-  const ens = ['bug', 'pointer', 'brute', 'dummy', 'boss'].map((t, i) => {
+  const ens = ['bug', 'pointer', 'brute', 'dummy', 'boss', 'shield', 'charger', 'medic'].map((t, i) => {
     const e = spawnEnemy(t, X - 6 + i * 3, 0, { spawnT: 0 }); e.y = groundAt(e.x) + (t === 'pointer' ? 3 : 0);
     e.group.position.set(e.x, e.y, 0); e.bar.visible = true; e.bar.position.set(e.x, e.y + 2, 1); return e;
   });

@@ -102,6 +102,57 @@ function buildBrute(x, y, o) {
   for (const l of [e.legF, e.legB]) mk(e, box, 0x38414d, { sx: 0.6, sy: 1.1, sz: 0.55, y: -0.5, parent: l, metal: 0.6 });
   return e;
 }
+// SHIELDLING: a frontal shield. Hits from the front are mostly blocked and chip the shield; launchers, spikes, slams and hits from behind go through.
+// When the shield breaks it is staggered. Its bash has a 0.75 s tell and leaves the shield down.
+function buildShield(x, y, o) {
+  const e = base('shield', x, y, { name: 'Shieldling', w: 1.3, h: 2.1, hp: 70, hpMax: 70, poise: 50, poiseMax: 50, xp: 26, commits: 6, speed: 2.3, color: 0x6bd1ff, heart: 0.2, shielded: true, shieldHp: 55, shieldMax: 55, ...o });
+  const g = e.group;
+  e.torso = pivot(g, 0, 1.15, 0);
+  mk(e, box, 0x2f4f66, { sx: 0.75, sy: 1.15, sz: 0.62, parent: e.torso, metal: 0.5, rough: 0.4 });
+  mk(e, box, 0x6bd1ff, { em: 0x6bd1ff, ei: 1.2, y: 0.12, sx: 0.78, sy: 0.07, sz: 0.66, parent: e.torso });
+  e.head = pivot(e.torso, 0.05, 0.85, 0);
+  mk(e, sph, 0x39556b, { sx: 0.34, sy: 0.34, sz: 0.34, parent: e.head, metal: 0.5 });
+  mk(e, box, 0xff4d6d, { em: 0xff4d6d, ei: 3, x: 0.3, y: 0.03, sx: 0.04, sy: 0.07, sz: 0.34, parent: e.head });
+  e.plate = pivot(e.torso, 0.7, 0.05, 0);
+  e.plateMain = mk(e, box, 0x5fc6f0, { em: 0x6bd1ff, ei: 1.0, sx: 0.12, sy: 1.75, sz: 1.15, parent: e.plate, metal: 0.8, rough: 0.2 });
+  mk(e, box, 0xdff6ff, { em: 0xdff6ff, ei: 1.5, x: 0.07, sx: 0.04, sy: 1.5, sz: 0.2, parent: e.plate });
+  e.legF = pivot(g, 0, 0.7, 0.22); e.legB = pivot(g, 0, 0.7, -0.22);
+  for (const l of [e.legF, e.legB]) mk(e, box, 0x2a4256, { sx: 0.28, sy: 0.8, sz: 0.28, y: -0.35, parent: l, metal: 0.4 });
+  if (e.mini) { e.group.scale.setScalar(1.0); }
+  return e;
+}
+// RAMMER: telegraphs a charge lane on the ground, then rushes in a straight line. Dodge it (perfect dodge!), jump it or parry it; it crashes
+// into stagger when it overshoots.
+function buildCharger(x, y, o) {
+  const e = base('charger', x, y, { name: 'Rammer', w: 1.9, h: 1.2, hp: 62, hpMax: 62, poise: 40, poiseMax: 40, xp: 24, commits: 6, speed: 3.0, color: 0xffa24d, heart: 0.18, ...o });
+  const g = e.group;
+  e.body = pivot(g, 0, 0.75, 0);
+  mk(e, box, 0x7a4a2a, { sx: 1.35, sy: 0.7, sz: 0.85, parent: e.body, rough: 0.55 });
+  mk(e, box, 0xffa24d, { em: 0xff7a1a, ei: 1.0, y: 0.38, sx: 1.2, sy: 0.07, sz: 0.55, parent: e.body });
+  e.head = pivot(e.body, 0.78, 0.05, 0);
+  mk(e, box, 0x5e381f, { sx: 0.55, sy: 0.55, sz: 0.62, parent: e.head });
+  mk(e, box, 0xff3030, { em: 0xff3030, ei: 3, x: 0.26, y: 0.1, z: 0.2, sx: 0.06, sy: 0.07, sz: 0.07, parent: e.head });
+  mk(e, box, 0xff3030, { em: 0xff3030, ei: 3, x: 0.26, y: 0.1, z: -0.2, sx: 0.06, sy: 0.07, sz: 0.07, parent: e.head });
+  for (const s of [-1, 1]) { const h = mk(e, cyl, 0xf2e8d0, { sx: 0.06, sy: 0.42, sz: 0.06, x: 0.2, y: 0.38, z: s * 0.26, parent: e.head }); h.rotation.z = -0.5; }
+  e.legs = [];
+  for (let i = 0; i < 4; i++) {
+    const leg = pivot(g, (i % 2 ? 0.5 : -0.5), 0.55, (i < 2 ? 0.3 : -0.3));
+    mk(e, box, 0x4a2c18, { sx: 0.2, sy: 0.6, sz: 0.2, y: -0.28, parent: leg });
+    leg.userData = { ph: i * 1.6 }; e.legs.push(leg);
+  }
+  return e;
+}
+// HOTFIX: a flying medic. Heals the most hurt ally with a 1.1 s visible beam (kill it first), and keeps its distance.
+function buildMedic(x, y, o) {
+  const e = base('medic', x, y, { name: 'Hotfix', w: 1.1, h: 1.1, hp: 24, hpMax: 24, poise: 12, poiseMax: 12, xp: 20, commits: 5, flying: true, color: 0x7ee787, heart: 0.3, ...o });
+  e.core = mk(e, new THREE.OctahedronGeometry(1, 0), 0x1d4d2a, { em: 0x39d353, ei: 1.5, y: 0.55, sx: 0.36, sy: 0.4, sz: 0.36, rough: 0.2, metal: 0.4 });
+  e.cross1 = mk(e, box, 0xdfffe6, { em: 0xaaffbb, ei: 2.5, y: 0.55, sx: 0.5, sy: 0.12, sz: 0.12 });
+  e.cross2 = mk(e, box, 0xdfffe6, { em: 0xaaffbb, ei: 2.5, y: 0.55, sx: 0.12, sy: 0.5, sz: 0.12 });
+  e.r1 = pivot(e.group, 0, 0.55, 0); mk(e, new THREE.TorusGeometry(1, 0.06, 6, 20), 0x39d353, { em: 0x39d353, ei: 1.6, sx: 0.62, sy: 0.62, sz: 0.62, parent: e.r1 });
+  e.r2 = e.r1; e.bits = [];
+  return e;
+}
+
 function buildDummy(x, y, o) {
   const e = base('dummy', x, y, { name: 'Training Dummy', w: 1.1, h: 2.2, hp: 99999, hpMax: 99999, poise: 1e9, poiseMax: 1e9, xp: 0, commits: 0, heart: 0, dummy: true, color: 0xd9b36b, home: x, ...o });
   const g = e.group;
@@ -157,8 +208,10 @@ function buildBoss(x, y) {
 // ----------------------------------------------------------------- spawn
 export function spawnEnemy(type, x, yOff = 0, o = {}) {
   const gy = groundAt(x);
-  const y = type === 'pointer' ? Math.max(gy, 0) + (yOff || 4) : gy;
-  const e = ({ bug: buildBug, pointer: buildPointer, brute: buildBrute, boss: buildBoss, dummy: buildDummy }[type])(x, type === 'boss' ? 28 : y, o);
+  const y = type === 'pointer' || type === 'medic' ? Math.max(gy, 0) + (yOff || 4) : gy;
+  const e = ({ bug: buildBug, pointer: buildPointer, brute: buildBrute, boss: buildBoss, dummy: buildDummy, shield: buildShield, charger: buildCharger, medic: buildMedic }[type])(x, type === 'boss' ? 28 : y, o);
+  if (o.elite) makeElite(e, o.elite);
+  if (o.mini) { e.mini = true; e.name = 'Gatekeeper'; e.hp = e.hpMax = 340; e.poise = e.poiseMax = 160; e.w *= 1.5; e.h *= 1.5; e.group.scale.setScalar(1.6); e.xp = 120; e.commits = 30; e.heart = 0.8; }
   e.homeY = y;
   G.enemies.push(e);
   if (type === 'boss') { G.boss = e; e.spawnT = 2.2; return e; }
@@ -235,6 +288,27 @@ export function sliceEnemy(e, o = {}, big = false) {
   });
 }
 
+
+// ELITES: any enemy with an affix. Bigger, tougher, worth three times as much, and each affix changes how you fight it.
+const AFFIX = {
+  armoured: { name: 'ARMOURED', color: 0xffd33d, apply(e) { e.hp = e.hpMax = Math.round(e.hpMax * 2.4); e.poise = e.poiseMax = e.poiseMax * 2; e.eliteArmor = true; } },
+  volatile: { name: 'VOLATILE', color: 0xff6a2b, apply(e) { e.hp = e.hpMax = Math.round(e.hpMax * 1.6); e.volatile = true; } },
+  swift: { name: 'SWIFT', color: 0x7ff3d6, apply(e) { e.hp = e.hpMax = Math.round(e.hpMax * 1.5); e.speed = (e.speed || 3) * 1.4; e.cd *= 0.5; e.swift = true; } },
+};
+export const AFFIXES = Object.keys(AFFIX);
+function makeElite(e, key) {
+  const a = AFFIX[key]; if (!a) return;
+  e.elite = key; a.apply(e);
+  e.xp *= 3; e.commits *= 3; e.heart = Math.max(e.heart || 0, 0.5); e.name = a.name + ' ' + e.name;
+  e.group.scale.setScalar(1.18);
+  const crown = mk(e, new THREE.OctahedronGeometry(1, 0), a.color, { em: a.color, ei: 2.4, y: e.h + 0.55, sx: 0.2, sy: 0.3, sz: 0.2 });
+  e.crown = crown;
+  if (e.volatile) e.onDeath = () => { // a delayed blast: the ring on the floor shows where it will go off
+    const x = e.x, gy = groundAt(e.x);
+    ring(x, gy + 0.06, 0.5, 0xff6a2b, { r0: 3.4, r1: 0.4, dur: 0.7, flat: true, intensity: 2 }); sfx.telegraph('bug');
+    later(0.7, () => { ring(x, gy + 0.2, 0.5, 0xff6a2b, { r0: 0.3, r1: 4, dur: 0.4 }); sparks(x, gy + 0.8, 0xffc233, 24, 12, 0.3, 0.5); sfx.explosion(1.2); shake(0.4); const p = P(); if (p && !p.dead && Math.abs(p.x - x) < 3.4 && p.y < gy + 2.4) damagePlayer(14, { x, y: gy + 0.5, kind: 'blast' }); });
+  };
+}
 function removeEnemy(e) {
   scene.remove(e.group); scene.remove(e.bar);
   e.fists?.forEach((f) => scene.remove(f.g));
@@ -248,6 +322,7 @@ function applyStatus(e, dt) {
   if (e.stun > 0) { e.stun -= dt; if (Math.random() < 0.3) glow.emit(e.x + rand(-0.5, 0.5), e.y + e.h + 0.2, 0, 0, 1, 0, rgb(0xffd33d, 1.6), 0.2, 0, 0.4); }
   if (e.chill > 0) { e.chill -= dt; if (Math.random() < 0.3) glow.emit(e.x + rand(-0.5, 0.5), e.y + rand(0, e.h), 0, 0, -1, 0, rgb(0x9fe8ff, 1.6), 0.2, 0, 0.5); }
   if (e.frozen > 0) { e.frozen -= dt; if (Math.random() < 0.4) glow.emit(e.x + rand(-0.5, 0.5), e.y + rand(0, e.h), 0, 0, 0, 0, rgb(0xcfeeff, 1.8), 0.15, 0, 0.3); }
+  if (e.crown) { e.crown.rotation.y += dt * 2.4; e.crown.position.y = e.h + 0.55 + Math.sin(G.time * 3) * 0.08; }
   if (e.mire > 0) e.mire -= dt;
   if (e.blind > 0) e.blind -= dt;
   if (e.vulnerable > 0) e.vulnerable -= dt;
@@ -320,7 +395,7 @@ function telegraph(e, secs, kind) { e.tele = secs; e.teleMax = secs; sfx.telegra
 const TOKENS = { melee: 1, ranged: 1, heavy: 1 }, PACE = { melee: 0.85, ranged: 1.4, heavy: 1.6 };
 const held = { melee: new Map(), ranged: new Map(), heavy: new Map() }; // enemy -> time it took the token
 const lastStart = { melee: -9, ranged: -9, heavy: -9 };
-const kindOf = (e) => (e.type === 'pointer' ? 'ranged' : e.type === 'brute' ? 'heavy' : 'melee');
+const kindOf = (e) => (e.type === 'pointer' ? 'ranged' : e.type === 'brute' || e.type === 'charger' ? 'heavy' : 'melee');
 const onScreen = (e) => Math.abs(e.x - cam.x) < 8.4;
 function canAttack(e) { const p = P(); return onScreen(e) && !p.dead && p.stun <= 0 && p.hurtI < 0.35; }
 function takeToken(e) {
@@ -330,6 +405,7 @@ function takeToken(e) {
   h.set(e, G.time); lastStart[k] = G.time; return true;
 }
 function giveToken(e) { held[kindOf(e)].delete(e); }
+export const giveTokenSafe = (e) => giveToken(e);
 function sweepTokens() { for (const k in held) for (const [e, t] of held[k]) if (e.dead || !G.enemies.includes(e) || G.time - t > 5) held[k].delete(e); }
 export function resetDirector() { for (const k in held) held[k].clear(); }
 export const directorState = () => ({ melee: held.melee.size, ranged: held.ranged.size, heavy: held.heavy.size });
@@ -561,6 +637,92 @@ function aiBoss(e, dt, tm) {
   } else if (!near) e.contactT = 0;
 }
 
+// ----------------------------------------------------------------- new enemy AI (v2)
+function aiShield(e, dt, tm) {
+  const p = P(), dx = p.x - e.x, ad = Math.abs(dx), dir = sign(dx);
+  e.st += dt;
+  if (e.mini && !e.summoned && e.hp < e.hpMax * 0.5 && e.state !== 'summon') { e.state = 'summon'; e.st = 0; e.summoned = true; telegraph(e, 0.9, 'summon'); e.vx = 0; }
+  if (e.state === 'summon') {
+    e.vx = damp(e.vx, 0, 10, dt);
+    if (e.st * tm > 0.9) { for (const s of [-1, 1]) spawnEnemy('bug', e.x + s * 3, 0, { arena: e.arena }); ring(e.x, e.y + 1, 0.5, 0x39d353, { r0: 0.4, r1: 5, dur: 0.5 }); e.state = 'chase'; e.cd = 1.2; }
+    return;
+  }
+  if (e.state === 'idle' || e.state === 'chase') {
+    e.state = 'chase'; e.facing = dir; e.shielded = true;
+    const want = ad > 2.6 ? dir * e.speed : ad < 1.5 ? -dir * e.speed * 0.4 : 0;
+    steer(e, want, dt, tm);
+    e.cd -= dt * tm;
+    if (e.cd <= 0 && ad < 4.6 && Math.abs(p.y - e.y) < 1.6 && takeToken(e)) { e.state = 'wind'; e.st = 0; e.vx = 0; e.dirLock = dir; e.hitDone = false; telegraph(e, 0.75, 'shield'); }
+  } else if (e.state === 'wind') {
+    e.vx = damp(e.vx, 0, 12, dt); e.facing = e.dirLock;
+    if (e.st * tm > 0.75) { e.state = 'bash'; e.st = 0; e.vx = e.dirLock * (e.mini ? 15 : 13); }
+  } else if (e.state === 'bash') {
+    if (!e.hitDone && Math.abs(p.x - e.x) < (e.mini ? 1.7 : 1.3) && p.y < e.y + 2 && p.y + p.h > e.y && !p.dead) {
+      e.hitDone = true; const r = damagePlayer(e.mini ? 18 : 11, { x: e.x, y: e.y + 0.8, enemy: e, kind: 'melee' });
+      if (r === 'parry' || r === 'blocked') e.vx = -e.dirLock * 4;
+    }
+    if (e.st > 0.34) { e.state = 'recover'; e.st = 0; e.shielded = false; e.vulnerable = Math.max(e.vulnerable, 1.1); giveToken(e); }
+  } else if (e.state === 'recover') {
+    e.vx = damp(e.vx, 0, 9, dt);
+    if (e.st > 1.1) { e.state = 'chase'; e.cd = rand(1.0, 2.0); e.shielded = e.shieldHp > 0; }
+  }
+}
+function aiCharger(e, dt, tm) {
+  const p = P(), dx = p.x - e.x, ad = Math.abs(dx), dir = sign(dx);
+  e.st += dt;
+  if (e.state === 'idle' || e.state === 'chase') {
+    e.state = 'chase'; e.facing = dir;
+    steer(e, ad > 9 ? dir * e.speed : ad < 4.5 ? -dir * e.speed * 0.7 : 0, dt, tm);
+    e.cd -= dt * tm;
+    if (e.cd <= 0 && ad > 4 && ad < 13 && Math.abs(p.y - e.y) < 2 && takeToken(e)) { e.state = 'scrape'; e.st = 0; e.vx = 0; e.dirLock = dir; e.hitDone = false; e.laneT = 0; telegraph(e, 0.9, 'charger'); }
+  } else if (e.state === 'scrape') {
+    e.vx = damp(e.vx, 0, 14, dt); e.facing = e.dirLock;
+    e.laneT -= dt;
+    if (e.laneT <= 0) { e.laneT = 0.12; for (let i = 1; i <= 9; i++) { const lx = e.x + e.dirLock * i * 1.7; glow.emit(lx, groundAt(lx) + 0.12, 0.3, 0, 0.4, 0, rgb(0xff4040, 2.1), 0.55, 0.0, 0.2, 0, 2, 0); } }
+    if (e.st * tm > 0.9) { e.state = 'charge'; e.st = 0; e.vx = e.dirLock * 17; sfx.stomp(); }
+  } else if (e.state === 'charge') {
+    e.vx = e.dirLock * 17 * tm; e.facing = e.dirLock;
+    if (Math.random() < 0.7) puff(e.x - e.dirLock * 0.8, e.y + 0.2, 1, 0x8b949e, 0.6, 0.4);
+    if (!e.hitDone && Math.abs(p.x - e.x) < 1.35 && p.y < e.y + 1.4 && p.y + p.h > e.y && !p.dead) {
+      e.hitDone = true; const r = damagePlayer(14, { x: e.x, y: e.y + 0.5, enemy: e, kind: 'melee' });
+      if (r === 'parry' || r === 'blocked' || r === 'deflect') { e.vx = -e.dirLock * 5; e.stagger = 1.6; e.vulnerable = 2; giveToken(e); return; }
+    }
+    if (e.st > 1.05 || Math.abs(e.vx) < 3 * tm && e.st > 0.25) { // overshot or hit a wall: crash and stagger
+      shake(0.25); puff(e.x + e.dirLock, e.y + 0.4, 8, 0x8b949e, 1.2, 0.6); ring(e.x + e.dirLock, groundAt(e.x) + 0.06, 0.4, 0xffa24d, { r0: 0.3, r1: 2.6, dur: 0.4, flat: true });
+      e.stagger = 1.5; e.vulnerable = 2; e.vx = 0; giveToken(e); e.state = 'idle'; e.cd = rand(1.5, 2.5);
+    }
+  }
+}
+function aiMedic(e, dt, tm) {
+  const p = P(), dx = p.x - e.x, ad = Math.abs(dx);
+  e.st += dt;
+  if (e.side === undefined) e.side = e.x < p.x ? -1 : 1;
+  if (ad < 3.5) e.side = -sign(dx) || 1;
+  const gy = Math.max(groundAt(clamp(e.x, 2, worldLen() - 2)), groundAt(p.x), 0);
+  const tx = p.x + e.side * 9, ty = gy + 4.2 + Math.sin(G.time * 1.4 + e.anim) * 0.3;
+  e.facing = -e.side;
+  e.vx = damp(e.vx, clamp((tx - e.x) * 1.3, -6, 6) * tm, 3, dt); e.vy = damp(e.vy, clamp((ty - e.y) * 1.6, -4, 4) * tm, 3, dt);
+  if (e.state === 'idle' || e.state === 'chase') {
+    e.state = 'chase'; e.cd -= dt * tm;
+    if (e.cd <= 0) {
+      let best = null, bk = 0.78;
+      for (const o of G.enemies) if (o !== e && !o.dead && !o.boss && !o.dummy && o.spawnT <= 0 && Math.abs(o.x - e.x) < 15) { const k = o.hp / o.hpMax; if (k < bk) { bk = k; best = o; } }
+      if (best) { e.state = 'heal'; e.st = 0; e.target = best; telegraph(e, 1.1, 'medic'); }
+      else e.cd = 1;
+    }
+  } else if (e.state === 'heal') {
+    const t = e.target;
+    if (!t || t.dead) { e.state = 'chase'; e.cd = 1.5; e.tele = 0; return; }
+    // visible beam: green motes flowing from the medic to its patient
+    for (let i = 0; i < 2; i++) { const u = Math.random(); glow.emit(lerp(e.x, t.x, u), lerp(e.y + 0.6, t.y + t.h * 0.5, u), 0.3, 0, 0, 0, rgb(0x7ee787, 2.2), 0.22, 0.02, 0.25, 0, 0, 0); }
+    if (e.st * tm > 1.1) {
+      t.hp = Math.min(t.hpMax, t.hp + t.hpMax * 0.4); ring(t.x, t.y + t.h * 0.5, 0.5, 0x7ee787, { r0: 0.3, r1: 2.4, dur: 0.5 }); sparks(t.x, t.y + t.h * 0.6, 0x7ee787, 14, 6, 0.2, 0.5);
+      floatText(t.x, t.y + t.h + 0.6, 'HOTFIX +40%', { color: '#7ee787', size: 16, dur: 0.9 }); sfx.heal();
+      e.state = 'chase'; e.cd = 4.5; e.target = null;
+    }
+  }
+}
+
 // ----------------------------------------------------------------- animation
 function animate(e, dt, tm) {
   const t = G.time, g = e.group;
@@ -618,6 +780,27 @@ function animate(e, dt, tm) {
     else { e.torso.rotation.z = damp(e.torso.rotation.z, e.stagger > 0 ? -0.3 : 0, 10, dt); if (e.state === 'recover') arm = 0.9; }
     e.armF.rotation.z = damp(e.armF.rotation.z, -arm, 18, dt); e.armB.rotation.z = damp(e.armB.rotation.z, arm * 0.6 + w * 0.2, 12, dt);
     e.head.rotation.z = Math.sin(t * 2) * 0.03;
+  } else if (e.type === 'shield') {
+    e.anim += dt * (2 + spd * 1.5) * tm; const w = Math.sin(e.anim * 2);
+    e.legF.rotation.z = w * 0.45 * Math.min(1, spd); e.legB.rotation.z = -w * 0.45 * Math.min(1, spd);
+    const wind = e.state === 'wind' ? Math.min(1, e.st / 0.75) : 0, bash = e.state === 'bash' ? 1 : 0;
+    e.torso.rotation.z = damp(e.torso.rotation.z, -0.2 * wind + 0.18 * bash + (e.stagger > 0 ? -0.3 : 0), 14, dt);
+    e.plate.position.x = damp(e.plate.position.x, 0.7 + bash * 0.25 - wind * 0.1, 18, dt);
+    e.plate.visible = e.shielded || e.state === 'bash' || e.state === 'wind';
+    e.plate.rotation.z = damp(e.plate.rotation.z, e.shielded ? 0 : -0.9, 12, dt);
+    e.torso.position.y = 1.15 + Math.abs(w) * 0.04; e.head.rotation.z = Math.sin(t * 2) * 0.03;
+  } else if (e.type === 'charger') {
+    e.anim += dt * (3 + spd * 0.7) * tm;
+    e.legs.forEach((l) => { l.rotation.z = Math.sin(e.anim * 2 + l.userData.ph) * (e.state === 'charge' ? 1.0 : 0.5) * Math.min(1, 0.3 + spd * 0.3); });
+    const sc = e.state === 'scrape' ? Math.min(1, e.st / 0.9) : 0;
+    e.body.rotation.z = damp(e.body.rotation.z, sc * 0.2 + (e.state === 'charge' ? -0.12 : 0), 14, dt);
+    e.head.rotation.z = damp(e.head.rotation.z, -sc * 0.35 + (e.stagger > 0 ? 0.35 : 0), 14, dt);
+    e.body.position.y = 0.75 - sc * 0.08 + Math.abs(Math.sin(e.anim * 2)) * 0.04 * Math.min(1, spd);
+    if (e.state === 'scrape') e.legs[0].rotation.z = Math.sin(t * 40) * 0.9;
+  } else if (e.type === 'medic') {
+    e.core.rotation.y += dt * 2; e.cross1.rotation.z += dt * 1.5; e.cross2.rotation.z += dt * 1.5; e.r1.rotation.x += dt * 2; e.r1.rotation.y += dt * 1.3;
+    const s = e.state === 'heal' ? 1 + Math.min(1, e.st / 1.1) * 0.5 : 1; e.core.scale.set(0.36 * s, 0.4 * s, 0.36 * s);
+    e.group.rotation.y = 0;
   } else if (e.type === 'dummy') {
     e.torso.rotation.z = Math.sin(t * 2 + e.anim) * 0.01;
   } else if (e.type === 'boss') {
@@ -680,7 +863,7 @@ export function updateEnemies(dt) {
     const busy = e.stagger > 0 || e.stun > 0 || e.air || e.downT > 0 || e.getUp > 0;
     if (busy && e.state !== 'stunned' && !e.boss) { if (e.state !== 'recover') { e.state = 'idle'; e.cd = Math.max(e.cd, 0.4); } e.tele = 0; e.armorT = 0; giveToken(e); }
     if (!busy && !p.dead && (G.trainAttack !== false || e.dummy)) {
-      ({ bug: aiBug, pointer: aiPointer, brute: aiBrute, boss: aiBoss, dummy: aiDummy }[e.type])(e, dt, tm);
+      ({ bug: aiBug, pointer: aiPointer, brute: aiBrute, boss: aiBoss, dummy: aiDummy, shield: aiShield, charger: aiCharger, medic: aiMedic }[e.type])(e, dt, tm);
     } else if (!busy && p.dead) e.vx = damp(e.vx, 0, 5, dt);
     if (e.dummy && busy) e.idleT = 0;
     physics(e, dt, tm);

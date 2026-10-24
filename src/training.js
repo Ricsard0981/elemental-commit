@@ -96,9 +96,10 @@ export function resetDummies(onlyCenter = false) {
   if (T.mode === 'trials' || onlyCenter) { T.dummies.push(spawnEnemy('dummy', ARENA_L / 2 + 2, 0, { arena: 'train', spawnT: 0 })); return; }
   for (const x of [ARENA_L / 2 - 2, ARENA_L / 2 + 5, ARENA_L / 2 + 12]) T.dummies.push(spawnEnemy('dummy', x, 0, { arena: 'train', spawnT: 0 }));
 }
-function spawnNear(type) {
+function spawnNear(spec) {
+  const [type, mod] = spec.split(':'); // 'brute:armoured' = an elite, 'shield:mini' = the Gatekeeper mini-boss
   const p = G.player, x = clamp(p.x + p.facing * 9, 6, ARENA_L - 6);
-  const e = spawnEnemy(type, type === 'boss' ? ARENA_L / 2 + 8 : x, type === 'pointer' ? 5 : 0, { arena: 'train', ...(type === 'boss' ? { bx0: 6, bx1: ARENA_L - 6 } : {}) });
+  const e = spawnEnemy(type, type === 'boss' ? ARENA_L / 2 + 8 : x, type === 'pointer' || type === 'medic' ? 5 : 0, { arena: 'train', ...(mod === 'mini' ? { mini: true } : mod ? { elite: mod } : {}), ...(type === 'boss' ? { bx0: 6, bx1: ARENA_L - 6 } : {}) });
   return e;
 }
 
@@ -201,7 +202,7 @@ export function renderLab() {
   h += `<section class="lab-sec"><h4>DPS meter</h4><div class="dps"><div><b id="d-dps">0</b><small>DPS (5s)</small></div><div><b id="d-total">0</b><small>total</small></div><div><b id="d-combo">0</b><small>max combo</small></div></div>
     <div class="juggle"><span>last hit <b id="d-last">0</b></span><span>juggle <b id="d-jug">0 hits · 0.0 m · 0.0 s</b></span><span>best <b id="d-best">0 hits</b></span></div><button id="d-reset" class="mini">Reset meter</button></section>`;
   if (T.mode === 'sandbox') {
-    h += `<section class="lab-sec"><h4>Spawn</h4><div class="chips">${[['bug', 'Bug'], ['pointer', 'Pointer'], ['brute', 'Bot'], ['boss', 'Boss'], ['dummy', 'Dummy']].map(([k, n]) => `<button class="mini" data-spawn="${k}">${n}</button>`).join('')}<button class="mini warn" data-act="clear">Clear</button><button class="mini" data-act="dummies">Reset dummies</button></div></section>`;
+    h += `<section class="lab-sec"><h4>Spawn</h4><div class="chips">${[['bug', 'Bug'], ['pointer', 'Pointer'], ['brute', 'Bot'], ['shield', 'Shield'], ['charger', 'Rammer'], ['medic', 'Medic'], ['bug:swift', 'Swift Bug'], ['bug:volatile', 'Volatile Bug'], ['brute:armoured', 'Elite Bot'], ['shield:mini', 'Gatekeeper'], ['boss', 'Boss'], ['dummy', 'Dummy']].map(([k, n]) => `<button class="mini" data-spawn="${k}">${n}</button>`).join('')}<button class="mini warn" data-act="clear">Clear</button><button class="mini" data-act="dummies">Reset dummies</button></div></section>`;
     h += `<section class="lab-sec"><h4>Toggles</h4>${toggleRow('attack', 'Enemies attack back', '', () => G.trainAttack)}${toggleRow('energy', 'Infinite energy', '', () => p.infEnergy)}${toggleRow('cd', 'No cooldowns', '', () => p.noCooldowns)}${toggleRow('dbg', 'Combat debug', 'timings, buffers, tells, tokens', () => G.combatDbg)}</section>`;
   }
   if (T.mode !== 'endless') {
