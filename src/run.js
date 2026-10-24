@@ -28,7 +28,7 @@ const BEST_KEY = 'elemental-commit-runs-v1';
 const api = { gainRevert: (n) => gainRevert(n), giveRes: () => { const r = G.run; r.res = pick(KEYS.filter((k) => k !== r.key)); r.hasRes = true; G.player?.refreshMods(); } };
 
 export function runActive() { return !!(G.run && G.run.active); }
-const FOG = { combat: 0xd9a68a, elite: 0xd98a86, shop: 0xe3cf8f, rest: 0x9ad9a8, minibos: 0xb08ad9, boss: 0x8a86b8 };
+const FOG = { combat: 0x7a2f8f, elite: 0xa02a5a, shop: 0x2a7a9a, rest: 0x2f8a6a, minibos: 0x6a2fb0, boss: 0x4a1f6a };
 export function newRun(key, daily = false) {
   const seed = daily ? todaySeed() : Math.floor(Math.random() * 1e9); seedRng(seed);
   G.run = { seed, daily, active: true, key, room: 0, depth: 0, type: 'combat', patches: [], res: null, hasRes: false, wave: 0, waves: [], delay: 0, cleared: false, spawning: 0, rooms: 0, bestStyle: 0, startedAt: performance.now() };

@@ -54,6 +54,8 @@ export const QUALITY = {
   ultra: { prMax: 2, renderScale: 1, shadows: 'ultra', bloom: 'full', aa: 4, outlines: true, particles: 1.25, ribbons: 'ultra', trails: 'long', decals: true, distort: true, lights: 8, detail: 'ultra', dynRes: false },
 };
 // the options shown under Advanced (label, choices); values are the tier keys above
+// comic print (halftone dots in the shadows, coloured shadows, richer colour): the Spider-Verse-style look. Off on the weakest presets.
+QUALITY.potato.comic = 0; QUALITY.low.comic = 0; QUALITY.medium.comic = 0.6; QUALITY.high.comic = 1; QUALITY.ultra.comic = 1;
 export const GFX_OPTS = [
   { k: 'renderScale', label: 'Render scale', opts: [[0.5, '50%'], [0.7, '70%'], [0.9, '90%'], [1, '100%'], [1.25, '125%'], [1.5, '150%'], [2, '200%']], hint: 'Above 100% supersamples (sharper, much heavier)' },
   { k: 'prMax', label: 'Hi-DPI cap', opts: [[1, '1×'], [1.25, '1.25×'], [1.5, '1.5×'], [2, '2×'], [3, 'Native']], hint: 'Limits retina / phone screens; no effect on 1× monitors' },
@@ -61,6 +63,7 @@ export const GFX_OPTS = [
   { k: 'shadows', label: 'Shadows', opts: [['off', 'Off'], ['low', 'Low'], ['medium', 'Med'], ['high', 'High'], ['ultra', 'Ultra']] },
   { k: 'bloom', label: 'Bloom (glow)', opts: [['off', 'Off'], ['half', 'Half-res'], ['full', 'Full']] },
   { k: 'aa', label: 'Anti-aliasing', opts: [[0, 'Off'], [2, '2× MSAA'], [4, '4× MSAA']] },
+  { k: 'comic', label: 'Comic print look', opts: [[0, 'Off'], [0.6, 'Light'], [1, 'Full']], hint: 'Halftone dots, coloured shadows, punchier colour' },
   { k: 'outlines', label: 'Character outlines', opts: [[true, 'On'], [false, 'Off']] },
   { k: 'particles', label: 'Particles', opts: [[0.3, '30%'], [0.45, '45%'], [0.75, '75%'], [1, '100%'], [1.25, '125%']] },
   { k: 'ribbons', label: 'Hair & capes', opts: [['off', 'Off'], ['low', 'Low'], ['high', 'High'], ['ultra', 'Ultra']] },
@@ -85,7 +88,7 @@ export function deriveQuality(t = gfxTiers()) {
     prMax: t.prMax, renderScale: t.renderScale ?? 1, dynRes: t.dynRes,
     shadows: t.shadows !== 'off', shadowMap: { off: 512, low: 512, medium: 1024, high: 2048, ultra: 4096 }[t.shadows], shadowType: { off: 'basic', low: 'basic', medium: 'pcf', high: 'soft', ultra: 'soft' }[t.shadows],
     bloom: t.bloom !== 'off', bloomRes: t.bloom === 'half' ? 0.5 : 1, aa: t.aa,
-    outlines: t.outlines, particles: p, glowMax: Math.round(7000 * p), dustMax: Math.round(1200 * p), debris: Math.round(800 * Math.max(0.4, p)),
+    comic: t.comic ?? 0, outlines: t.outlines, particles: p, glowMax: Math.round(7000 * p), dustMax: Math.round(1200 * p), debris: Math.round(800 * Math.max(0.4, p)),
     ribbonN: { off: 0, low: 5, high: 9, ultra: 12 }[t.ribbons], trailN: { off: 0, short: 10, long: 20 }[t.trails],
     decals: t.decals ? (t.detail === 'ultra' ? 20 : 12) : 0, distort: t.distort, lights: t.lights,
     rows: { low: 8, medium: 14, high: 28, ultra: 28 }[t.detail], farRows: t.detail !== 'low', props: { low: 0.4, medium: 0.7, high: 1, ultra: 1 }[t.detail],

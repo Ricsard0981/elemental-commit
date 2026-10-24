@@ -77,6 +77,7 @@ export function resize(force = false) {
   if (Math.abs(renderer.getPixelRatio() - pr) > 0.001) { renderer.setPixelRatio(pr); composer.setPixelRatio(pr); }
   renderer.setSize(w, h, false);
   composer.setSize(w, h);
+  fxPass.uniforms.res.value.set(w * pr, h * pr);
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
   const s = (h * pr) / (2 * Math.tan((camera.fov * Math.PI) / 360));
@@ -87,11 +88,11 @@ export function resize(force = false) {
 const FXShader = {
   uniforms: {
     tDiffuse: { value: null }, aberr: { value: 0 }, vig: { value: 0.4 },
-    flash: { value: new THREE.Vector4(0, 0, 0, 0) }, desat: { value: 0 }, shock: { value: new THREE.Vector4(0, 0, 0, 0) }, aspect: { value: 1.78 },
+    flash: { value: new THREE.Vector4(0, 0, 0, 0) }, comic: { value: 0 }, res: { value: new THREE.Vector2(1280, 720) }, desat: { value: 0 }, shock: { value: new THREE.Vector4(0, 0, 0, 0) }, aspect: { value: 1.78 },
   },
   vertexShader: 'varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }',
   fragmentShader: `
-    uniform sampler2D tDiffuse; uniform float aberr; uniform float vig; uniform vec4 flash; uniform float desat; uniform vec4 shock; uniform float aspect;
+    uniform sampler2D tDiffuse; uniform float aberr; uniform float vig; uniform vec4 flash; uniform float desat; uniform vec4 shock; uniform float aspect; uniform float comic; uniform vec2 res;
     varying vec2 vUv;
     void main(){
       vec2 uv = vUv;
@@ -101,6 +102,17 @@ const FXShader = {
       vec3 c = vec3(texture2D(tDiffuse, uv + off).r, texture2D(tDiffuse, uv).g, texture2D(tDiffuse, uv - off).b);
       float l = dot(c, vec3(.299,.587,.114));
       c = mix(c, vec3(l), desat);
+      if (comic > 0.001) {
+        // comic print: coloured shadows, richer colour, and a Ben-Day dot screen that grows in the dark areas
+        c = mix(c, c * vec3(.78, .7, 1.25), (1. - smoothstep(.08, .55, l)) * .55 * comic);
+        c = mix(vec3(l), c, 1. + .24 * comic);
+        float cell = max(3.5, res.y / 190.);
+        vec2 gp = mat2(.7071, -.7071, .7071, .7071) * (gl_FragCoord.xy / cell);
+        float dist = length(fract(gp) - .5), dark = 1. - smoothstep(.12, .5, l);
+        float dots = smoothstep(.0, -.08, dist - dark * .62);
+        c = mix(c, c * vec3(.55, .42, .85), dots * dark * .75 * comic);
+        c += (fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453) - .5) * .028 * comic;
+      }
       c = mix(c, flash.rgb, flash.a);
       c *= 1. - vig * smoothstep(.18, .9, length(d) * 1.35);
       gl_FragColor = vec4(c, 1.);
@@ -573,7 +585,7 @@ export function stepEngine(dt, rdt, groundAt) {
   post.desat = damp(post.desat, G.mode === 'dead' ? 0.85 : 0, 3, rdt);
   const u = fxPass.uniforms;
   u.aberr.value = post.aberr * (S.flashes ? 1 : 0.2); u.flash.value.set(post.flash[0], post.flash[1], post.flash[2], post.flashA);
-  u.desat.value = post.desat; u.vig.value = post.vig; u.shock.value.copy(shock.v); u.aspect.value = camera.aspect;
+  u.comic.value = Q.comic || 0; u.desat.value = post.desat; u.vig.value = post.vig; u.shock.value.copy(shock.v); u.aspect.value = camera.aspect;
   updateDecals(dt);
   bloom.strength = 0.55 + post.bloomBoost;
 }

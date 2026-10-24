@@ -99,7 +99,7 @@ export function showSelect(mode) {
   const d = document.getElementById('mode-desc'); if (d) d.textContent = mode === 'run' ? 'Room Run: random rooms, a Patch after each, shops and a final boss.' : 'Campaign: the hand-built level and boss.';
   show('title', false); show('menu', true);
 }
-export function setHudVisible(v) { $('hud').classList.toggle('show', v); }
+export function setHudVisible(v) { $('hud').classList.toggle('show', v); if (v) { show('title', false); show('menu', false); show('credits', false); } }
 
 // ----------------------------------------------------------------- HUD
 let lagHp = 100, lastCombo = 0, hintT = 0, lastLvlKey = '';
