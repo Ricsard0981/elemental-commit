@@ -9,10 +9,10 @@ import * as THREE from 'three';
 import { toonMaterial } from './toon.js';
 
 const box = new THREE.BoxGeometry(1, 1, 1), sph = new THREE.SphereGeometry(1, 14, 10), cone = new THREE.ConeGeometry(1, 1, 6), cyl = new THREE.CylinderGeometry(1, 1, 1, 12), oct = new THREE.OctahedronGeometry(1);
-const torus = new THREE.TorusGeometry(1, 0.16, 6, 20), kilt = new THREE.CylinderGeometry(1, 1.38, 1, 18, 1, true), ico = new THREE.IcosahedronGeometry(1, 0);
+const domeG = new THREE.SphereGeometry(1, 22, 12, 0, Math.PI * 2, 0, 1.75), torus = new THREE.TorusGeometry(1, 0.16, 6, 20), kilt = new THREE.CylinderGeometry(1, 1.38, 1, 18, 1, true), ico = new THREE.IcosahedronGeometry(1, 0);
 
 const PAL = {
-  fire: { jacket: 0x15121b, accent: 0xe5262f, kilt: 0xb3162a, face: 0xf1ece3, hairA: 0xff4a1c, hairB: 0xffc233, boot: 0x16131c, sole: 0xff7a1a, chrome: 0xdfe6ff, extra: 0xff2e93 },
+  fire: { jacket: 0x2b4c8c, accent: 0xff2e93, kilt: 0x8f845e, face: 0x07060d, hairA: 0xff4a1c, hairB: 0xffd23a, boot: 0xf2ece4, sole: 0xff7a1a, chrome: 0xdfe6ff, extra: 0xc6ff3d, helmet: 0xe9e2d6, wood: 0xb0834f },
   water: { jacket: 0x2ad4e8, accent: 0xffffff, kilt: 0xa9c0d6, face: 0xf4f1fb, hairA: 0x19e3ff, hairB: 0xff2e93, boot: 0xf4f6ff, sole: 0x19e3ff, chrome: 0xdfe6ff, extra: 0xff2e93 },
   earth: { jacket: 0xc9852f, accent: 0xc6ff3d, kilt: 0x3a5486, face: 0xe9dfd0, hairA: 0x2b2116, hairB: 0xc6ff3d, boot: 0xf2ece4, sole: 0xff7a1a, chrome: 0xdfe6ff, extra: 0x3b6a2a },
   air: { jacket: 0xe9f3f6, accent: 0x7ff3d6, kilt: 0xaab4c8, face: 0xf5f7fb, hairA: 0xffffff, hairB: 0x7ff3d6, boot: 0xe9f3f6, sole: 0xff2e93, chrome: 0xdfe6ff, extra: 0xffe14d },
@@ -23,6 +23,7 @@ export function makeOutfitMaterials(h) {
   h.pal = p;
   h.o = {
     jacket: M(p.jacket, 0.7), accent: M(p.accent, 0.5, { emissive: p.accent, emissiveIntensity: 0.25 }), kilt: M(p.kilt, 0.5), face: M(p.face, 0.9), hairA: M(p.hairA, 0.7, { emissive: p.hairA, emissiveIntensity: 0.35 }), hairB: M(p.hairB, 0.7, { emissive: p.hairB, emissiveIntensity: 0.4 }),
+    helmet: M(p.helmet || p.boot, 0.7), wood: M(p.wood || 0xb0834f, 0.5), black: M(0x15121b, 0.6),
     boot: M(p.boot, 0.6), sole: M(p.sole, 0.5, { emissive: p.sole, emissiveIntensity: 0.3 }), chrome: M(p.chrome, 1.0), extra: M(p.extra, 0.5, { emissive: p.extra, emissiveIntensity: 0.3 }),
   };
 }
@@ -38,44 +39,64 @@ const mid = (a, b, t = 0.5) => a.clone().lerp(b, t);
 
 const OUTFIT = {
   fire(h, c) {
+    // THE FIRE-SKATER: a faceless punk skater. Void-black face under a cracked skate helmet, a flame mohawk, a patched denim vest with pins and
+    // chains, baggy cargo pants, oversized 2000s skate shoes, and a graffiti deck strapped to his back (he rides it during Ignite Grind).
     const { k, hand, elbow, shoulder, knee, ankle, pelvis, head, chest, beltY } = c, o = h.o, H = blankHead(h, c);
-    // --- punk jacket: boxy studded leather, zip, lapels, spray-painted X on the back
-    h.part('spine_03', box, o.jacket, [0, chest.y + 0.01, 0], [0.37 * k, 0.28, 0.235 * k]);
-    h.part('pelvis', box, o.jacket, [0, beltY + 0.05, 0], [0.34 * k, 0.17, 0.225 * k]);
-    h.part('spine_03', box, o.chrome, [0, chest.y - 0.02, 0.119 * k], [0.012, 0.4, 0.01]);                  // zip
-    h.part('spine_03', box, o.accent, [0, chest.y + 0.03, 0.121 * k], [0.07 * k, 0.23, 0.008]);             // red tee under the jacket
-    for (const s of [-1, 1]) h.part('spine_03', box, o.jacket, [s * 0.062 * k, chest.y + 0.1, 0.125 * k], [0.07 * k, 0.12, 0.014], [0, 0, s * -0.5]); // lapels
-    for (let i = 0; i < 5; i++) for (const s of [-1, 1]) h.part('spine_03', oct, o.chrome, [s * (0.085 + i * 0.004) * k, chest.y + 0.13 - i * 0.045, 0.133 * k], [0.011, 0.011, 0.011]); // studs
-    h.part('spine_03', box, o.extra, [0, chest.y, -0.121 * k], [0.035, 0.34, 0.01], [0, 0, 0.7]);
-    h.part('spine_03', box, o.extra, [0, chest.y, -0.121 * k], [0.035, 0.34, 0.01], [0, 0, -0.7]);
-    h.part('spine_03', torus, o.chrome, [0, chest.y, -0.124 * k], [0.12, 0.12, 0.12], [0, 0, 0]);
+    // --- vest: sleeveless denim over a black tee, ripped hem, patches, safety pins, a diagonal chain
+    h.part('spine_03', box, o.jacket, [0, chest.y + 0.01, 0], [0.335 * k, 0.27, 0.225 * k]);
+    h.part('pelvis', box, o.jacket, [0, beltY + 0.045, 0], [0.315 * k, 0.15, 0.215 * k]);
+    h.part('spine_03', box, o.black, [0, chest.y + 0.01, 0.115 * k], [0.11 * k, 0.29, 0.008]);                         // tee showing through the open front
+    for (let i = 0; i < 7; i++) h.part('pelvis', cone, o.jacket, [(i - 3) * 0.045 * k, beltY - 0.045 - (i % 2) * 0.012, 0.108 * k], [0.022, 0.05 + (i % 3) * 0.018, 0.01], [Math.PI, 0, (i - 3) * 0.08]); // ripped hem
+    h.part('spine_03', box, o.accent, [-0.105 * k, chest.y + 0.055, 0.118 * k], [0.065, 0.065, 0.008], [0, 0, 0.18]);   // patches
+    h.part('spine_03', oct, o.extra, [0.108 * k, chest.y + 0.01, 0.12 * k], [0.04, 0.04, 0.008], [0, 0, 0.3]);
+    h.part('spine_03', box, o.hairB, [-0.1 * k, chest.y - 0.07, 0.118 * k], [0.05, 0.035, 0.008], [0, 0, -0.1]);
+    h.part('spine_03', cyl, o.accent, [0, chest.y, -0.118 * k], [0.1, 0.01, 0.1], [Math.PI / 2, 0, 0]);                  // big back patch
+    h.part('spine_03', oct, o.hairB, [0, chest.y, -0.126 * k], [0.05, 0.05, 0.008]);
+    h.part('spine_03', box, o.extra, [0.09 * k, chest.y - 0.1, -0.12 * k], [0.06, 0.04, 0.008], [0, 0, 0.3]);
+    for (let i = 0; i < 4; i++) { const sx = i % 2 ? 1 : -1; h.part('spine_03', box, o.chrome, [sx * (0.1 + (i >> 1) * 0.02) * k, chest.y + 0.1 - i * 0.04, 0.119 * k], [0.03, 0.006, 0.006], [0, 0, 0.7 * sx]); } // safety pins
+    for (let i = 0; i < 9; i++) h.part('spine_03', torus, o.chrome, [(-0.13 + i * 0.03) * k, chest.y + 0.12 - i * 0.034, 0.121 * k], [0.017, 0.017, 0.017], [i % 2 ? 0 : Math.PI / 2, Math.PI / 2, 0]); // chain across the chest
+    // --- bare arms: tape wraps, fingerless gloves, a stud on each shoulder strap
     h.both((s, sf) => {
-      const m = mid(shoulder, elbow, 0.55), m2 = mid(elbow, hand, 0.45);
-      h.part('upperarm' + sf, cyl, o.jacket, [s * m.x, m.y, m.z], [0.075 * k, 0.25, 0.075 * k], [0, 0, Math.PI / 2]);
-      h.part('lowerarm' + sf, cyl, o.jacket, [s * m2.x, m2.y, m2.z], [0.062 * k, 0.2, 0.062 * k], [0, 0, Math.PI / 2]);
-      h.part('lowerarm' + sf, torus, o.chrome, [s * (hand.x - 0.075), hand.y, hand.z], [0.063 * k, 0.063 * k, 0.063 * k], [0, Math.PI / 2, 0]); // cuff
-      h.part('hand' + sf, box, o.boot, [s * (hand.x + 0.02), hand.y, hand.z], [0.07, 0.05 * k, 0.07 * k]);   // fingerless glove
-      for (let i = 0; i < 3; i++) h.part('upperarm' + sf, cone, o.chrome, [s * (shoulder.x + 0.02 + i * 0.045), shoulder.y + 0.07, shoulder.z], [0.026, 0.1 - i * 0.012, 0.026], [0, 0, -s * (0.35 + i * 0.25)]); // shoulder spikes
-      for (let i = 0; i < 3; i++) h.part('hand' + sf, oct, o.chrome, [s * (hand.x + 0.045), hand.y + 0.02, hand.z + (i - 1) * 0.025], [0.011, 0.011, 0.011]);
-      // platform boots with a bright sole
-      const cm = mid(knee, ankle, 0.5);
-      h.part('calf' + sf, cyl, o.boot, [s * cm.x, cm.y - 0.04, cm.z], [0.082 * k, 0.3, 0.088 * k]);
-      h.part('calf' + sf, torus, o.chrome, [s * cm.x, cm.y + 0.09, cm.z], [0.085 * k, 0.085 * k, 0.085 * k], [Math.PI / 2, 0, 0]);
-      h.part('foot' + sf, box, o.boot, [s * ankle.x, ankle.y - 0.045, ankle.z + 0.065], [0.09 * k, 0.085, 0.27 * k]);
-      h.part('foot' + sf, box, o.sole, [s * ankle.x, ankle.y - 0.1, ankle.z + 0.07], [0.098 * k, 0.045, 0.3 * k]);
-      h.part('foot' + sf, oct, o.chrome, [s * ankle.x, ankle.y - 0.05, ankle.z + 0.2], [0.032, 0.03, 0.03]);  // steel toe
+      for (let i = 0; i < 3; i++) { const m = mid(elbow, hand, 0.25 + i * 0.2); h.part('lowerarm' + sf, torus, o.helmet, [s * m.x, m.y, m.z], [0.052 * k, 0.052 * k, 0.052 * k], [0, Math.PI / 2, 0]); }
+      h.part('hand' + sf, box, o.black, [s * (hand.x + 0.02), hand.y, hand.z], [0.07, 0.05 * k, 0.07 * k]);
+      h.part('upperarm' + sf, torus, o.accent, [s * (shoulder.x + 0.07), shoulder.y - 0.02, shoulder.z], [0.058 * k, 0.058 * k, 0.058 * k], [0, Math.PI / 2, 0]); // wristband on the arm
+      // baggy cargo pants: wide legs, big side pockets with straps, rolled cuffs
+      const th = mid(pelvis, knee, 0.5), cm = mid(knee, ankle, 0.5);
+      h.part('thigh' + sf, cyl, o.kilt, [s * th.x, th.y, th.z], [0.112 * k, 0.4, 0.114 * k]);
+      h.part('thigh' + sf, box, o.kilt, [s * (th.x + 0.108 * k), th.y - 0.03, th.z], [0.045, 0.14, 0.11 * k]);
+      h.part('thigh' + sf, box, o.black, [s * (th.x + 0.112 * k), th.y + 0.03, th.z], [0.048, 0.02, 0.113 * k]);
+      h.part('calf' + sf, cyl, o.kilt, [s * cm.x, cm.y + 0.03, cm.z], [0.122 * k, 0.4, 0.124 * k]);
+      h.part('calf' + sf, cyl, o.black, [s * cm.x, cm.y - 0.17, cm.z], [0.126 * k, 0.03, 0.128 * k]);
+      // oversized 2000s skate shoes: puffy tongue, fat laces, thick orange sole, a pink side stripe
+      h.part('foot' + sf, box, o.boot, [s * ankle.x, ankle.y - 0.035, ankle.z + 0.08], [0.135 * k, 0.125, 0.36 * k]);
+      h.part('foot' + sf, sph, o.boot, [s * ankle.x, ankle.y + 0.05, ankle.z + 0.01], [0.075 * k, 0.07, 0.06 * k]);        // puffy tongue
+      h.part('foot' + sf, box, o.sole, [s * ankle.x, ankle.y - 0.108, ankle.z + 0.085], [0.145 * k, 0.065, 0.39 * k]);
+      h.part('foot' + sf, box, o.accent, [s * (ankle.x + 0.069 * k), ankle.y - 0.035, ankle.z + 0.08], [0.008, 0.045, 0.2 * k]);
+      for (let i = 0; i < 3; i++) h.part('foot' + sf, box, o.black, [s * ankle.x, ankle.y + 0.04, ankle.z + 0.09 + i * 0.045], [0.1 * k, 0.012, 0.012]);
     });
-    // --- tartan kilt (open cylinder), studded belt + buckle, belt chain
-    h.part('pelvis', kilt, o.kilt, [0, beltY - 0.13, 0], [0.17 * k, 0.25, 0.155 * k]);
-    h.part('pelvis', torus, o.boot, [0, beltY - 0.045, 0], [0.19 * k, 0.17 * k, 0.17 * k], [Math.PI / 2, 0, 0]);
-    h.part('pelvis', box, o.chrome, [0, beltY - 0.045, 0.17 * k], [0.055, 0.045, 0.012]);
-    for (let i = 0; i < 5; i++) h.part('pelvis', torus, o.chrome, [0.175 * k, beltY - 0.05 - i * 0.045, 0.03], [0.02, 0.02, 0.02], [i % 2 ? 0 : Math.PI / 2, Math.PI / 2, 0]);
-    // --- head: neck choker, ear rings, a flame-coloured mohawk
-    h.part('neck_01', torus, o.boot, [0, head.y - 0.05, head.z - 0.005], [0.058, 0.058, 0.058], [Math.PI / 2, 0, 0]);
-    for (let i = 0; i < 4; i++) h.part('neck_01', cone, o.chrome, [Math.sin(i * 1.3 - 1.9) * 0.062, head.y - 0.04, head.z - 0.005 + Math.cos(i * 1.3 - 1.9) * 0.062], [0.009, 0.026, 0.009], [Math.cos(i * 1.3 - 1.9) * 1.2, 0, -Math.sin(i * 1.3 - 1.9) * 1.2]);
-    for (const s of [-1, 1]) h.part('Head', torus, o.chrome, [s * 0.098 * H.f, H.cy - 0.01, H.cz - 0.005], [0.018, 0.018, 0.018], [0, Math.PI / 2, 0]);
-    const hs = [0.07, 0.115, 0.16, 0.19, 0.2, 0.17, 0.14, 0.1, 0.07];
-    hs.forEach((hh, i) => h.part('Head', cone, i % 2 ? o.hairB : o.hairA, [0, H.top - 0.012, H.cz + 0.075 - i * 0.0215], [0.024, hh, 0.034], [-0.25 + i * 0.075, 0, 0]));
+    h.part('pelvis', torus, o.black, [0, beltY - 0.03, 0], [0.185 * k, 0.17 * k, 0.15 * k], [Math.PI / 2, 0, 0]);
+    h.part('pelvis', box, o.chrome, [0, beltY - 0.03, 0.17 * k], [0.05, 0.04, 0.012]);
+    for (let i = 0; i < 6; i++) h.part('pelvis', torus, o.chrome, [0.18 * k, beltY - 0.05 - i * 0.04, 0.03 + (i > 3 ? 0.03 : 0)], [0.02, 0.02, 0.02], [i % 2 ? 0 : Math.PI / 2, Math.PI / 2, 0]); // hanging belt chain
+    // --- the deck: a battered board with neon tags strapped diagonally across his back
+    const dz = -0.2 * k, dy = chest.y - 0.04, tilt = 0.5, ux = -Math.sin(tilt), uy = Math.cos(tilt);
+    h.part('spine_03', box, o.wood, [0, dy, dz], [0.2 * k, 0.78, 0.022], [0, 0, tilt]);
+    h.part('spine_03', box, o.accent, [ux * 0.12, dy + uy * 0.12, dz - 0.013], [0.205 * k, 0.1, 0.004], [0, 0, tilt]);
+    h.part('spine_03', box, o.extra, [-ux * 0.05, dy - uy * 0.05, dz - 0.013], [0.205 * k, 0.05, 0.004], [0, 0, tilt]);
+    h.part('spine_03', box, o.hairB, [ux * 0.26, dy + uy * 0.26, dz - 0.013], [0.205 * k, 0.04, 0.004], [0, 0, tilt]);
+    for (const e of [-1, 1]) for (const w of [-1, 1]) h.part('spine_03', cyl, o.helmet, [ux * 0.27 * e + Math.cos(tilt) * 0.075 * w, dy + uy * 0.27 * e + Math.sin(tilt) * 0.075 * w, dz - 0.035], [0.034, 0.02, 0.034], [0, 0, tilt + Math.PI / 2]); // wheels
+    h.part('spine_03', box, o.black, [0.06 * k, chest.y + 0.1, -0.113 * k], [0.03, 0.2, 0.01], [0, 0, 0.5]); // strap
+    // --- head: cracked skate helmet, glowing cracks, sticker, chin strap, a flame mohawk through the top
+    const hy = H.cy + 0.012, hz = H.cz - 0.01;
+    h.part('Head', domeG, o.helmet, [0, hy, hz], [0.108 * H.f, 0.14 * H.f, 0.122 * H.f]);
+    h.part('Head', box, o.black, [0, H.cy + 0.062 * H.f, H.cz + 0.1], [0.108 * H.f, 0.014, 0.055], [0.18, 0, 0]);          // peak
+    for (const s of [-1, 1]) h.part('Head', sph, o.helmet, [s * 0.1 * H.f, H.cy - 0.005, hz], [0.022, 0.052, 0.054]);       // ear covers
+    h.part('Head', torus, o.black, [0, H.cy - 0.07 * H.f, H.cz + 0.008], [0.082 * H.f, 0.082 * H.f, 0.082 * H.f], [Math.PI / 2, 0, 0]); // chin strap
+    h.part('Head', box, o.accent, [0.03, H.cy + 0.095 * H.f, H.cz + 0.088], [0.008, 0.07, 0.006], [0.3, 0, 0.5]);          // cracks
+    h.part('Head', box, o.accent, [0.05, H.cy + 0.075 * H.f, H.cz + 0.095], [0.008, 0.04, 0.006], [0.3, 0, -0.4]);
+    h.part('Head', box, o.accent, [-0.05, H.cy + 0.105 * H.f, H.cz + 0.06], [0.008, 0.06, 0.006], [0.6, 0, 0.7]);
+    h.part('Head', box, o.extra, [0.103 * H.f, H.cy + 0.04, hz + 0.02], [0.006, 0.04, 0.04], [0, 0, 0]);                      // sticker
+    const fl = [0.09, 0.15, 0.21, 0.27, 0.3, 0.25, 0.2, 0.15, 0.1];                                                          // flame mohawk
+    fl.forEach((hh, i) => h.part('Head', cone, i % 2 ? o.hairB : o.hairA, [0, hy + 0.1 * H.f, H.cz + 0.08 - i * 0.022], [0.026, hh, 0.036], [-0.2 + i * 0.1, 0, (i % 3 - 1) * 0.12]));
   },
 
   water(h, c) {

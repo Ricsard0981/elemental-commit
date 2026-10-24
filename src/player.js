@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { G } from './state.js';
-import { scene, glow, dust, sparks, puff, cubes, rgb, ring, flashLight, floatText, shake, punchFov, player_light, post, shockwave } from './engine.js';
+import { decal, screenFlash, scene, glow, dust, sparks, puff, cubes, rgb, ring, flashLight, floatText, shake, punchFov, player_light, post, shockwave } from './engine.js';
 import { groundAt, solidsNear, platforms, ripple } from './world.js';
 import { sfx } from './audio.js';
 import { ELEMENTS } from './elements.js';
@@ -33,7 +33,7 @@ export class Player {
     this.dash = null; this.slam = null; this.fly = 0; this.haste = 0; this.dmgBuff = 1; this.dmgBuffT = 0; this.drBuff = 0;
     this.squash = 0; this.dead = false; this.reborn = false; this.critBonus = 0; this.sinceHurt = 99;
     this.safeX = 4; this.runPhase = 0; this.stepT = 0; this.turn = 0; this.shieldK = 0;
-    this.clock = 0; this.bufStamp = {}; this.guardPresses = []; this.latchT = -9; this.latchUp = this.latchDown = false; this.latchAx = 0; this.lastKind = ''; this.noEnT = -9; this.dashEndT = -9; this.chargeT = 0; this.chargeReady = false;
+    this.clock = 0; this.bufStamp = {}; this.guardPresses = []; this.latchT = -9; this.latchUp = this.latchDown = false; this.latchAx = 0; this.lastKind = ''; this.noEnT = -9; this.dashEndT = -9; this.chargeT = 0; this.chargeReady = false; this.heat = 0; this.blaze = 0; this.kickT = 0; this.deckT = 0;
     this.blink = 0; this.counterT = 0; this.deadT = 0; this.moveIntent = false; this.landK = 0; this.parryBase = 0.18;
     this.castSeq = 0; this.leanT = 0; this.airHits = 0; this.acombo = 0; this.acomboT = 0; this.imbue = null; this.hero = null; this.infEnergy = false; this.noCooldowns = false; this.cheering = false;
     this.refreshMods(true);
@@ -191,6 +191,7 @@ export class Player {
     const D = this.el.prof.dash, cd = D.cd * (1 - this.mods.dashCd);
     this.cd.dash = cd; this.cdMax.dash = cd;
     sfx.dash(); haptic('dash');
+    if (this.key === 'fire') { this.deckT = 0.4; this.skid(2.2); }
     const chilled = new Set(); // Water: the dash itself is a control tool, it chills whatever you slip through
     this.startDash({ basic: true, dir, speed: D.speed, dur: D.dur, inv: D.inv, tint: this.el.color,
       end: this.mods.dashFire ? (pl) => { const lo = Math.min(dashX0, pl.x), hi = Math.max(dashX0, pl.x); hitBox(lo, hi, pl.y - 0.4, pl.y + 2, 9, { kind: 'special', burn: 3, burnDps: 9, noCombo: true, quiet: true, noReact: true, kx: 2, hitstop: 0, shake: 0, color: 0xff6a2b }); for (let i = 0; i < 18; i++) glow.emit(rand(lo, hi), pl.y + rand(0.1, 1.2), rand(-0.3, 0.3), 0, rand(1, 4), 0, rgb(Math.random() < 0.5 ? 0xff6a2b : 0xffc233, 1.9), rand(0.4, 0.8), 0, 0.6, -2, 1); } : null,
@@ -236,6 +237,24 @@ export class Player {
     if (kind === 'slam') { this.vy = 0; this.vx = 0; }
     this.buf.main = 0;
     emit('attack', { kind, i });
+  }
+  // THE FIRE-SKATER's passive: skating at speed builds Heat; at full Heat the board bursts into flame for 6 s and every main hit splashes burning damage
+  updateHeat(dt) {
+    const fast = (this.onGround && Math.abs(this.vx) > 6.2 && this.state === 'free') || this.state === 'dash';
+    if (this.blaze > 0) {
+      this.blaze -= dt; this.heat = Math.max(0, (this.blaze / 6) * 100);
+      if (Math.random() < 0.8) glow.emit(this.x + rand(-0.5, 0.5), this.y + 0.08, rand(-0.2, 0.2), -this.facing * rand(0.5, 2), rand(2, 5), 0, rgb(Math.random() < 0.5 ? 0xff6a2b : 0xffd23a, 1.9), rand(0.3, 0.5), 0, 0.45, -2, 1);
+      if (this.blaze <= 0) this.heat = 0;
+    } else {
+      this.heat = clamp(this.heat + (fast ? 17 : -9) * dt, 0, 100);
+      if (this.heat >= 100) { this.blaze = 6; floatText(this.x, this.y + 3.9, 'BLAZING!', { color: '#ffd23a', size: 30, dur: 1.2 }); ring(this.x, this.y + 0.1, 0.5, 0xff6a2b, { r0: 0.3, r1: 4, dur: 0.5, flat: true }); screenFlash(0xff6a2b, 0.22); sfx.cast('fire'); }
+    }
+  }
+  // burning skid marks on the ground (dash, hard landings, perfect parries)
+  skid(len = 1.8) {
+    const gy = groundAt(this.x); if (gy < -20) return;
+    decal('scorch', this.x - this.facing * 0.5, gy, len, 4, 0xff6a2b);
+    for (let i = 0; i < 8; i++) glow.emit(this.x - this.facing * rand(0, 1.2), gy + 0.1, rand(-0.3, 0.3), -this.facing * rand(1, 4), rand(1, 4), 0, rgb(Math.random() < 0.5 ? 0xff6a2b : 0xffd23a, 1.9), rand(0.3, 0.6), 0, 0.5, -2, 1);
   }
   // Charged Shot: hold Ranged (the tap still fires its normal shot at once); release after 0.7 s for the element's big shot
   updateCharge(rdt) {
@@ -335,6 +354,8 @@ export class Player {
     this.comboT = Math.max(0, this.comboT - dt); this.acomboT = Math.max(0, this.acomboT - dt); this.sinceHurt += dt;
     if (this.haste > 0) this.haste -= dt; if (this.fly > 0) { this.fly -= dt; if (this.fly <= 0) floatText(this.x, this.y + 2.5, 'sky dance ended', { size: 14, color: '#bfe1ff' }); }
     if (this.dmgBuffT > 0) { this.dmgBuffT -= dt; if (this.dmgBuffT <= 0) this.dmgBuff = 1; }
+    this.kickT = Math.max(0, this.kickT - dt); this.deckT = Math.max(0, this.deckT - dt);
+    if (this.key === 'fire') this.updateHeat(dt);
     this.energy = this.infEnergy ? this.energyMax : Math.min(this.energyMax, this.energy + (5 + (this.haste > 0 ? 3 : 0)) * dt);
     if (m.regen && this.sinceHurt > 4 && this.hp < this.hpMax) this.hp = Math.min(this.hpMax, this.hp + m.regen * dt);
     this.coyote = this.onGround ? 0.1 : Math.max(0, this.coyote - dt);
@@ -487,6 +508,7 @@ export class Player {
   land(vy) {
     const k = clamp(-vy / 28, 0, 1); this.landK = k;
     this.airHits = 0; this.acombo = 0; this.acomboT = 0;
+    if (this.key === 'fire' && k > 0.35) this.skid(1.4 + k);
     if (this.mods.quakeLand && k > 0.45) explode(this.x, this.y + 0.3, 3.4, 22, { color: 0xc08a4b, stun: 0.9, kx: 6, ky: 3, noReact: true, shake: 0.3 });
     if (this.slam) { const f = this.slam; this.slam = null; f(); }
     if (this.state === 'attack' && this.atk && this.atk.kind === 'slam' && !this.atk.landed) {

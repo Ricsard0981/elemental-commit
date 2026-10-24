@@ -218,6 +218,7 @@ export function hitEnemy(e, base, o = {}) {
   if (!o.noEnergy && !p.infEnergy) p.energy = Math.min(p.energyMax, p.energy + (o.kind === 'main' ? 4.5 : 1.5) * styleEnergy());
   else if (p.infEnergy) p.energy = p.energyMax;
   if (m.echoStrike && o.kind === 'main' && !o.echo && e.hp > 0) { p.echoN = (p.echoN || 0) + 1; if (p.echoN % 4 === 0) { proc('ECHO', e.x, e.y + e.h + 0.8, '#ffd33d'); later(0.1, () => { if (!e.dead) hitEnemy(e, base * 0.7, { ...o, echo: true, noStyle: true, noReact: true }); }); } }
+  if (p.key === 'fire') { if (p.blaze <= 0) p.heat = Math.min(100, p.heat + (o.kind === 'main' ? 5 : 1.5)); else if (o.kind === 'main' && !o.splash && !o.echo) blazeSplash(e, d); }
   e.onHurt?.(d, o);
   emit('hit', { e, d, crit, o, dir, launched });
   if (e.dummy) { e.hp = e.hpMax; return d; }
@@ -241,6 +242,12 @@ function staggerFx(e) {
   sparks(e.x, cy, 0xffe9a0, 10, 9, 0.22, 0.4, 0, 1);
   if (e.heavy) floatText(e.x, e.y + e.h + 1.1, 'BREAK', { color: '#ffe9a0', size: 18, dur: 0.9 });
   sfx.stagger(!!e.heavy); emit('stagger', { e });
+}
+// BLAZING (full Heat): every main hit splashes burning damage onto its neighbours and sets the target alight
+function blazeSplash(e, d) {
+  ring(e.x, e.y + e.h * 0.4, 0.5, 0xff6a2b, { r0: 0.3, r1: 2.2, dur: 0.25 });
+  for (const o2 of G.enemies) if (o2 !== e && !o2.dead && o2.spawnT <= 0 && Math.hypot(o2.x - e.x, o2.y - e.y) < 2.3) hitEnemy(o2, Math.round(d * 0.45), { splash: true, kind: 'special', burn: 2.5, burnDps: 8, quiet: true, noReact: true, noStyle: true, noCombo: true, hitstop: 0, shake: 0, color: 0xff6a2b });
+  e.burn = Math.max(e.burn, 2.5); e.burnDps = Math.max(e.burnDps || 0, 9);
 }
 function shieldBlock(e, d, o, dir) {
   const heavy = o.finisher || o.big ? 2 : 1;

@@ -571,3 +571,8 @@ input[type=range] { accent-color: var(--txt); }
 .back-btn { position: absolute; top: calc(env(safe-area-inset-top, 0px) + 14px); left: 16px; }
 @media (max-height: 520px) { #title { padding: 3vh 5vw; } .t-btn small, .t-sub, .t-foot span:not(.t-bar) { display: none; } .t-menu { gap: 7px; } .t-stamp i { width: 64px; height: 64px; right: -30px; top: -22px; font-size: 15px; } }
 @media (max-width: 700px) and (orientation: portrait) { #title { flex-direction: column; justify-content: center; } }
+
+/* Fire-Skater's Heat gauge: only shown for Fire, burns white-hot while BLAZING */
+#heatbar { display: none; height: 12px; } body.el-fire #heatbar { display: block; } #heat-fill { background: var(--c2); box-shadow: none; width: 0; } #heatbar span { font-size: 10px; letter-spacing: .2em; padding-bottom: 0; }
+#heatbar.blaze #heat-fill { background: #fff; animation: blazeflash .25s steps(2, jump-none) infinite; } @keyframes blazeflash { 50% { background: var(--c2); } }
+body.touch #heatbar { height: 8px; } body.touch #heatbar span { display: none; }
