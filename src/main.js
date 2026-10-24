@@ -17,7 +17,8 @@ import { renderSettings } from './settingsUI.js';
 import { applyQuality, adaptResolution, perfStats, Q } from './engine.js';
 import { setVolumes, setSlow, setAmbience } from './audio.js';
 import { initStyle, updateStyle, resetStyle } from './style.js';
-import { updateRevert, resetRevert } from './revert.js';
+import { updateRevert, resetRevert, REV } from './revert.js';
+import { runActive, startRoomRunState, firstRoom, updateRun, endRun, renderPatches } from './run.js';
 import { clamp } from './util.js';
 import { loadAssets, assets } from './assets.js';
 import { enterArena, leaveArena, updateArena, ARENA_L } from './arena.js';
@@ -84,7 +85,7 @@ function startRun(key) {
   document.getElementById('menu').classList.remove('show');
 }
 function toMenu() {
-  leaveTraining(); showSelect(false); setAmbience('level');
+  endRun(); leaveTraining(); showSelect(false); setAmbience('level');
   G.mode = 'menu'; UI.setHudVisible(false);
   ['pause', 'death', 'win', 'skills'].forEach((id) => UI.show(id, false));
   UI.refreshCards(); UI.show('menu', true);
@@ -102,6 +103,28 @@ const trainHandlers = {
   switchElement: (k) => startTraining(k, TR.mode, true),
 };
 setTrainHandlers(trainHandlers);
+// ----------------------------------------------------------------- Room Run
+function startRoomRun(key) {
+  ['menu', 'death', 'win', 'pause', 'skills'].forEach((id) => UI.show(id, false)); showSelect(false); endRun();
+  if (G.player) G.player.destroy();
+  G.element = key; G.training = { mode: 'run' }; sfx.setElement(key);
+  clearEnemies(); clearAll(); dyn.length = 0; UI.hideBoss();
+  G.combo = { n: 0, t: 0, best: 0, rank: 0 }; resetStyle(); G.stats = { kills: 0, commits: 0, time: 0, parries: 0, damageTaken: 0 };
+  resetRevert(); REV.charges = 1;
+  startRoomRunState(key);
+  G.boss = null; G.freeze = 0; G.ts = 1; G.tsTarget = 1; G.tsHold = 0; G.witch = 0;
+  enterArena(); setAmbience('arena');
+  const p = new Player(key); G.player = p; p.x = 10; p.hurtI = 1; p.sinceHurt = 99;
+  UI.startRunHUD(); UI.setHudVisible(true);
+  G.mode = 'play'; runT = 0;
+  cam.bx0 = 8; cam.bx1 = ARENA_L - 8; cam.x = p.x + 4; cam.y = 2; cam.zoom = 1.2; cam.zoomT = 1;
+  ring(p.x, p.y + 1, 0.5, ELEMENTS[key].color, { r0: 0.3, r1: 6, dur: 0.8 });
+  touchElement(key);
+  if (touchOn() && S.fullscreen) goFullscreen();
+  renderPatches(); firstRoom();
+}
+addEventListener('run-again', () => startRoomRun(G.element));
+addEventListener('run-menu', () => toMenu());
 function startTraining(key, mode, keepFlags = false) {
   const old = G.player, flags = keepFlags && old ? { inf: old.infEnergy, nocd: old.noCooldowns } : null;
   ['menu', 'death', 'win', 'pause', 'skills'].forEach((id) => UI.show(id, false)); showSelect(false);
@@ -134,6 +157,7 @@ function leaveTraining() {
 let deadT = 0;
 
 function respawn() {
+  if (G.run && G.run.active) { endRun(); toMenu(); return; } // a run has no respawn: back to the menu
   if (G.training) {
     UI.show('death', false); const tp = G.player;
     G.mode = 'play'; G.ts = 1; G.tsTarget = 1; G.tsHold = 0; G.freeze = 0;
@@ -194,7 +218,7 @@ function goFullscreen() {
 function resume() { if (G.mode !== 'paused') return; G.mode = 'play'; UI.show('pause', false); }
 
 UI.initUI({
-  onPick: (k) => { initAudio(); startRun(k); },
+  onPick: (k) => { initAudio(); if (G.menuMode === 'run') startRoomRun(k); else startRun(k); },
   openSkills, closeSkills, skillsChanged, resume, toMenu, respawn,
   again: () => startRun(G.element),
 });
@@ -350,8 +374,9 @@ function frame(now) {
   const p = G.player;
 
   // global input
-  if (In.hitNow('skills') && p && G.mode !== 'menu' && G.mode !== 'settings') { G.mode === 'skills' ? closeSkills() : openSkills(); }
+  if (In.hitNow('skills') && p && G.mode !== 'menu' && G.mode !== 'settings' && G.mode !== 'ui') { G.mode === 'skills' ? closeSkills() : openSkills(); }
   if (In.hitNow('pause')) { if (G.mode === 'play') pause(); else if (G.mode === 'paused') resume(); else if (G.mode === 'skills') closeSkills(); else if (G.mode === 'settings') closeSettings(); }
+  if (G.run && G.run.active && G.mode === 'dead') { deadT += rdt; if (deadT > 1.4 && !document.getElementById('death').classList.contains('show')) UI.showRunOver(G.run); } else
   if (G.training && G.mode === 'dead') { deadT += rdt; if (deadT > 1.5) { deadT = 0; if (TR.mode === 'endless') { if (!TR.endless?.over) endlessOver(); } else respawn(); } } else deadT = 0;
   if (G.mode === 'dead' && !G.training && addEventListenerOnce.r && document.getElementById('death').classList.contains('show')) { addEventListenerOnce.r = false; respawn(); }
   if (G.mode === 'win' && winKeys.again) { winKeys.again = false; startRun(G.element); }
@@ -374,7 +399,7 @@ function frame(now) {
     if (G.mode === 'play') {
       runT += gdt; G.stats.time = runT;
       p.update(gdt); mark('player');
-      if (G.training) { updateTraining(gdt, rdt, p); cam.zoomT = 1; } else { updateArenas(gdt, p); updateRoamers(p); updateCheckpoints(p); updateHints(p); }
+      if (G.training) { updateTraining(gdt, rdt, p); updateRun(gdt, p); cam.zoomT = 1; } else { updateArenas(gdt, p); updateRoamers(p); updateCheckpoints(p); updateHints(p); }
       G.combo.t -= gdt; if (G.combo.t <= 0 && G.combo.n > 0) comboBreak();
       if (winTimer > 0) { winTimer -= rdt; if (winTimer <= 0) finishRun(); }
       // combat music intensity

@@ -9,8 +9,9 @@ import * as In from './input.js';
 import * as UI from './ui.js';
 import { acquireHero, heroReady } from './hero.js';
 import { emit } from './events.js';
-import { hitEnemy, enemyBox } from './combat.js';
+import { hitEnemy, enemyBox, hitBox, explode } from './combat.js';
 import { MOVES } from './elements.js';
+import { applyPatches } from './patches.js';
 import { haptic, S } from './settings.js';
 import { clamp, damp, lerp, rand, easeOut, sign } from './util.js';
 
@@ -43,7 +44,10 @@ export class Player {
   refreshMods(first) {
     const owned = prog(this.key).owned;
     const old = this.hpMax;
-    this.mods = computeMods(this.key, owned, prog(this.key).res, prog(this.key).temper, prog(this.key).fork);
+    const runRes = G.run && G.run.active ? G.run.res : null;
+    this.mods = computeMods(this.key, owned, runRes || prog(this.key).res, prog(this.key).temper, prog(this.key).fork);
+    applyPatches(this.mods); // room-run patches (src/patches.js)
+    if (G.run && G.run.active && G.run.res && this.mods.resonance) this.mods.resKey = G.run.res;
     if (G.training && G.trainRes && G.trainRes !== this.key) { this.mods.resKey = G.trainRes; this.mods.resPower = 2; this.mods.resFinisher = true; this.mods.resonance = true; }
     const rk = this.mods.resKey;
     this.imbue = rk ? { key: rk, color: ELEMENTS[rk].color, style: { fire: 0, water: 1, earth: 2, air: 3 }[rk], power: 1 + this.mods.resPower } : null;
@@ -182,13 +186,15 @@ export class Player {
   tryDash() {
     if (this.cd.dash > 0 || (!this.onGround && !this.airDash)) return false;
     const ax = In.axis(), dir = ax ? sign(ax) : this.facing;
-    if (!this.onGround) this.airDash = false;
+    if (!this.onGround) { if (this.airDashExtra > 0) this.airDashExtra--; else this.airDash = false; }
+    const dashX0 = this.x;
     const D = this.el.prof.dash, cd = D.cd * (1 - this.mods.dashCd);
     this.cd.dash = cd; this.cdMax.dash = cd;
     sfx.dash(); haptic('dash');
     const chilled = new Set(); // Water: the dash itself is a control tool, it chills whatever you slip through
     this.startDash({ basic: true, dir, speed: D.speed, dur: D.dur, inv: D.inv, tint: this.el.color,
-      tick: this.key === 'water' ? (pl) => { for (const e of G.enemies) if (!e.dead && e.spawnT <= 0 && !chilled.has(e) && Math.abs(e.x - pl.x) < 1.3 && Math.abs(e.y - pl.y) < 2) { chilled.add(e); e.chill = Math.max(e.chill, 2.5); e.chillStacks = (e.chillStacks || 0) + (pl.mods.freeze ? 1 : 0); sparks(e.x, e.y + 1, 0x9fe8ff, 8, 6, 0.2, 0.3); } } : null });
+      end: this.mods.dashFire ? (pl) => { const lo = Math.min(dashX0, pl.x), hi = Math.max(dashX0, pl.x); hitBox(lo, hi, pl.y - 0.4, pl.y + 2, 9, { kind: 'special', burn: 3, burnDps: 9, noCombo: true, quiet: true, noReact: true, kx: 2, hitstop: 0, shake: 0, color: 0xff6a2b }); for (let i = 0; i < 18; i++) glow.emit(rand(lo, hi), pl.y + rand(0.1, 1.2), rand(-0.3, 0.3), 0, rand(1, 4), 0, rgb(Math.random() < 0.5 ? 0xff6a2b : 0xffc233, 1.9), rand(0.4, 0.8), 0, 0.6, -2, 1); } : null,
+      tick: this.key === 'water' || this.mods.dashChill ? (pl) => { for (const e of G.enemies) if (!e.dead && e.spawnT <= 0 && !chilled.has(e) && Math.abs(e.x - pl.x) < 1.3 && Math.abs(e.y - pl.y) < 2) { chilled.add(e); e.chill = Math.max(e.chill, 2.5); e.chillStacks = (e.chillStacks || 0) + (pl.mods.freeze ? 1 : 0); sparks(e.x, e.y + 1, 0x9fe8ff, 8, 6, 0.2, 0.3); } } : null });
     punchFov(2); ring(this.x, this.y + 0.9, 0.5, this.el.color2, { r0: 0.2, r1: 1.6, dur: 0.25 });
     puff(this.x, this.y + 0.1, 5, 0x8b949e, 0.8, 0.4);
     return true;
@@ -209,7 +215,7 @@ export class Player {
     if (kind !== this.lastKind) { this.comboT = 0; this.acomboT = 0; } // a different move type always starts its own chain at hit 1
     this.lastKind = kind;
     const ramp = this.key === 'fire' ? 1 - Math.min(0.22, G.combo.n * 0.018) : 1; // Fire snowballs: the longer the combo the faster it swings
-    const sp = this.mods.hurricane ? 0.8 : 1, hs = this.haste > 0 ? 0.78 : 1, k = sp * hs * this.el.prof.atk * ramp;
+    const sp = this.mods.hurricane ? 0.8 : 1, hs = this.haste > 0 ? 0.78 : 1, k = sp * hs * this.el.prof.atk * ramp * (1 - (this.mods.atkSpeed || 0));
     let cfg, i = 0;
     if (kind === 'ground') {
       const cfgs = m.hits;
@@ -445,7 +451,7 @@ export class Player {
       if (this.fly > 0 && !this.onGround && this.vy < -6) this.vy = -6;
     }
     this.collide(dt);
-    if (this.onGround) { this.jumps = 0; this.airDash = true; this.safeX = groundAt(this.x - 1.2) > -20 && groundAt(this.x + 1.2) > -20 ? this.x : this.safeX; }
+    if (this.onGround) { this.jumps = 0; this.airDash = true; this.airDashExtra = this.mods.airDashes || 0; this.safeX = groundAt(this.x - 1.2) > -20 && groundAt(this.x + 1.2) > -20 ? this.x : this.safeX; }
     if (!wasGround && this.onGround) this.land(pvy);
     // pits
     if (this.y < -14) this.fellInPit();
@@ -481,6 +487,7 @@ export class Player {
   land(vy) {
     const k = clamp(-vy / 28, 0, 1); this.landK = k;
     this.airHits = 0; this.acombo = 0; this.acomboT = 0;
+    if (this.mods.quakeLand && k > 0.45) explode(this.x, this.y + 0.3, 3.4, 22, { color: 0xc08a4b, stun: 0.9, kx: 6, ky: 3, noReact: true, shake: 0.3 });
     if (this.slam) { const f = this.slam; this.slam = null; f(); }
     if (this.state === 'attack' && this.atk && this.atk.kind === 'slam' && !this.atk.landed) {
       const a = this.atk; a.landed = true; a.t = a.hitAt + 0.02; a.dur = a.t + 0.3; a.cancelAt = a.t + 0.16;

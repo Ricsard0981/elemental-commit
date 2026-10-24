@@ -1,4 +1,5 @@
 import { REV } from './revert.js';
+import { RUN_PLAN_LEN as RUN_LEN } from './run.js';
 import { STYLE_NAMES, STYLE_COL, styleProgress } from './style.js';
 import { G } from './state.js';
 import { ELEMENTS, KEYS } from './elements.js';
@@ -25,6 +26,10 @@ export function initUI(handlers) {
   H = handlers;
   // ---- element selection
   const cards = $('cards');
+  // mode switch: the authored Campaign, or a randomised Room Run
+  G.menuMode = G.menuMode || 'campaign';
+  const seg = document.getElementById('mode-seg');
+  if (seg) seg.querySelectorAll('button').forEach((b) => { b.classList.toggle('on', b.dataset.mode === G.menuMode); b.onclick = () => { sfx.click(); G.menuMode = b.dataset.mode; seg.querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b)); document.getElementById('mode-desc').textContent = G.menuMode === 'run' ? 'Room Run: random rooms, a Patch after each, shops and a final boss. New!' : 'Campaign: the hand-built level and boss.'; }; });
   KEYS.forEach((k, i) => {
     const e = ELEMENTS[k];
     const card = document.createElement('button');
@@ -189,11 +194,19 @@ export function commitPop() { restart($('commits'), 'pop'); }
 export function noEnergy(slot) { const s = $('slot-' + slot); if (s) restart(s, 'shake'); restart($('enbar'), 'shake'); }
 export function castFlash(slot) { const s = $('slot-' + slot); if (s) restart(s, 'cast'); }
 export function ready(slot) { const s = $('slot-' + slot); if (s) restart(s, 'ready'); }
+export function showRunOver(run) {
+  $('death').classList.add('show');
+  $('death').querySelector('h2').textContent = 'Run failed';
+  $('death').querySelector('pre').textContent = '$ git branch -D run';
+  $('death-pts').textContent = `Room ${run.rooms} of ${RUN_LEN} · ${run.patches.length} patch${run.patches.length === 1 ? '' : 'es'} · ${G.stats.kills} kills. Your XP and skill points are kept.`;
+  $('btn-respawn').innerHTML = 'Back to menu <kbd>R</kbd>';
+}
 export function showDeath() {
   if (G.training) return;
   setTimeout(() => { if (G.mode === 'dead') { show('death', true); refreshDeath(); } }, 1400);
 }
 function refreshDeath() {
+  const h = $('death').querySelector('h2'); if (h.textContent !== 'Build failed') { h.textContent = 'Build failed'; $('death').querySelector('pre').textContent = '$ git reset --hard HEAD'; $('btn-respawn').innerHTML = 'Revert to last commit <kbd>R</kbd>'; }
   $('death-pts').textContent = pointsLeft(G.element) > 0 ? `You have ${pointsLeft(G.element)} unspent skill point(s)!` : '';
 }
 export function bossBar(e) {

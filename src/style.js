@@ -24,7 +24,7 @@ function baseOf(o) {
 
 export function addStyle(n, label) {
   const s = G.style; if (!s) return;
-  const before = s.rank;
+  const before = s.rank; n *= 1 + (G.player?.mods?.styleGain || 0);
   s.pts = Math.min(TIERS[6] + 120, s.pts + n); s.idle = 0; s.flash = 1;
   s.rank = rankFor(s.pts);
   s.best = Math.max(s.best, s.rank);

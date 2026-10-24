@@ -16,7 +16,8 @@ const STEP = 0.1, KEEP = 30; // 10 snapshots a second, 3 seconds
 
 export function resetRevert() { REV.charges = G.training ? 2 : 0; REV.buf.length = 0; REV.anim = null; REV.acc = 0; }
 export function gainRevert(n = 1) {
-  if (REV.charges >= REV.max) return; REV.charges = Math.min(REV.max, REV.charges + n);
+  const cap = REV.max + (G.player?.mods.revertMax || 0);
+  if (REV.charges >= cap) return; REV.charges = Math.min(cap, REV.charges + n);
   const p = G.player; if (p) floatText(p.x, p.y + 4.1, `REVERT ${'⟲'.repeat(REV.charges)}`, { color: '#7ff3d6', size: 18, dur: 1.0 });
   sfx.revertGain?.();
 }

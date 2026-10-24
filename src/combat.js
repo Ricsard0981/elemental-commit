@@ -105,7 +105,7 @@ export function launchEnemy(e, vy, dir = 1) {
   if (e.heavy && e.stagger <= 0) { e.vx += dir * 1.5; return false; } // brutes resist until their poise breaks
   if (e.flying) { e.vy = Math.max(e.vy, vy * 0.5); e.juggle = 0; return true; }
   e.air = true; e.juggle = 0; e.bounced = false; e.spiked = false; e.downT = 0; e.getUp = 0;
-  e.vy = vy * (e.heavy ? 0.72 : 1); e.onGround = false; e.y += 0.06; e.airT = 0; e.maxH = 0; e.kdir = dir;
+  e.vy = vy * (1 + (G.player?.mods.liftMul || 0)) * (e.heavy ? 0.72 : 1); e.onGround = false; e.y += 0.06; e.airT = 0; e.maxH = 0; e.kdir = dir;
   emit('launch', { e, vy });
   return true;
 }
@@ -217,6 +217,7 @@ export function hitEnemy(e, base, o = {}) {
   if (!o.noCombo) comboAdd(1);
   if (!o.noEnergy && !p.infEnergy) p.energy = Math.min(p.energyMax, p.energy + (o.kind === 'main' ? 4.5 : 1.5) * styleEnergy());
   else if (p.infEnergy) p.energy = p.energyMax;
+  if (m.echoStrike && o.kind === 'main' && !o.echo && e.hp > 0) { p.echoN = (p.echoN || 0) + 1; if (p.echoN % 4 === 0) { proc('ECHO', e.x, e.y + e.h + 0.8, '#ffd33d'); later(0.1, () => { if (!e.dead) hitEnemy(e, base * 0.7, { ...o, echo: true, noStyle: true, noReact: true }); }); } }
   e.onHurt?.(d, o);
   emit('hit', { e, d, crit, o, dir, launched });
   if (e.dummy) { e.hp = e.hpMax; return d; }
@@ -226,7 +227,7 @@ export function hitEnemy(e, base, o = {}) {
     cam.push = 1; slowmo(0.3, 0.4); hitstop(0.12); screenFlash(0xffffff, 0.2); sfx.execute();
     floatText(e.x, e.y + e.h + 1.4, 'EXECUTED', { color: '#ffd33d', size: 30, dur: 1.1, vy: 2 });
     if (p.hp < p.hpMax * 0.85) e.heart = Math.max(e.heart ?? 0, 0.6);
-    p.energy = Math.min(p.energyMax, p.energy + 15); emit('execute', { e });
+    p.energy = Math.min(p.energyMax, p.energy + 15 + (p.mods.execHeal ? 20 : 0)); if (p.mods.execHeal) p.hp = Math.min(p.hpMax, p.hp + 8); emit('execute', { e });
   }
   if (e.hp <= 0) killEnemy(e, o);
   return d;
@@ -280,6 +281,7 @@ export function killEnemy(e, o = {}) {
   if (Math.random() < (e.heart ?? 0.1) && p.hp < p.hpMax * 0.9) spawnHeart(e.x, cy);
   giveXP(e.xp, e.x, e.y + e.h);
   // fire passive
+  if (e.burn > 0 && p.mods.fuelKill) { p.hp = Math.min(p.hpMax, p.hp + 4); p.energy = Math.min(p.energyMax, p.energy + 12); proc('FUEL', e.x, cy + 1, '#ff9a4d'); }
   if (e.burn > 0 && p.mods.deathExplode) later(0.12, () => explode(e.x, cy, 4.4, 60, { color: 0xff6a2b, burn: 3, chain: true }));
   if (e.burn > 0 && p.mods.spreadBurn) { // Spreading Embers
     ring(e.x, cy, 0.5, 0xff6a2b, { r0: 0.4, r1: 7, dur: 0.4 }); proc('EMBERS SPREAD', e.x, cy + 1, '#ff9a4d');
@@ -423,6 +425,7 @@ function perfectDodge(src) {
   screenFlash(0xb98aff, 0.28); punchFov(3);
   ring(p.x, p.y + 1, 0.5, 0xb98aff, { r0: 0.3, r1: 5, dur: 0.6 }); ring(p.x, p.y + 1, 0.5, 0xffffff, { r0: 0.2, r1: 2.6, dur: 0.35 });
   floatText(p.x, p.y + 3.4, 'PERFECT DODGE', { color: '#d2b8ff', size: 26, dur: 1.0 });
+  if (p.mods.mistStep) { p.energy = Math.min(p.energyMax, p.energy + 35); p.hp = Math.min(p.hpMax, p.hp + 6); proc('MIST STEP', p.x, p.y + 4.2, '#9fe8ff'); }
   emit('perfectDodge', { src });
 }
 function damagePlayerInner(amount, src) {
@@ -515,6 +518,7 @@ function perfectParry(src) {
   p.energy = Math.min(p.energyMax, p.energy + 25);
   comboAdd(3);
   if (src.proj) reflectProj(src.proj, 3, !!p.mods.vacuum);
+  if (p.mods.backdraft) explode(p.x, p.y + 1, 4.6, 36, { color: 0xff6a2b, burn: 3, kx: 12, ky: 7, noReact: true, shake: 0.5 });
   if (p.mods.riposte) { // Riposte: the parry becomes a counter-attack on the attacker (or the nearest enemy)
     let foe = src.enemy && !src.enemy.dead ? src.enemy : null;
     if (!foe) { let bd = 9; for (const e of G.enemies) if (!e.dead && e.spawnT <= 0 && !e.boss && Math.abs(e.x - p.x) < bd) { bd = Math.abs(e.x - p.x); foe = e; } }
@@ -558,7 +562,7 @@ export function updatePickups(dt) {
     const k = G.pickups[i];
     k.age += dt;
     const dx = p.x - k.x, dy = p.y + 1 - k.y, d = Math.hypot(dx, dy);
-    const mag = k.type === 'heart' ? 2.6 : k.home ? 99 : 2.8;
+    const mag = (k.type === 'heart' ? 2.6 : k.home ? 99 : 2.8) * (p.mods.magnet && !k.home ? 2.2 : 1);
     if (k.age > (k.home ? 0.45 : 0) && d < mag && !p.dead) {
       k.still = false;
       const pull = (k.home ? 28 : 18) * dt * (1 + k.age * 1.5);
@@ -578,6 +582,7 @@ export function updatePickups(dt) {
       scene.remove(k.mesh); G.pickups.splice(i, 1);
       if (k.type === 'commit') {
         G.stats.commits++; chain++; chainT = 0.5; sfx.pickup(chain);
+        if (p.mods.vampCommits && G.stats.commits % 3 === 0) { p.hp = Math.min(p.hpMax, p.hp + 3); floatText(p.x, p.y + 3, '+3', { color: '#7ee787', size: 14, dur: 0.6 }); }
         UI.commitPop();
         sparks(k.x, k.y, 0x7ee787, 5, 5, 0.2, 0.3);
       } else {

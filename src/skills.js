@@ -95,7 +95,7 @@ export const TEMPER = [
 
 export const BASE_MODS = { allDmg: 0, hp: 0, energy: 0, cdr: 0, speed: 0, dr: 0, parry: 0, regen: 0, jumps: 0, dashCd: 0, resPower: 0 };
 
-const addFx = (m, fx) => { for (const [k, v] of Object.entries(fx)) m[k] = typeof v === 'boolean' ? m[k] || v : (m[k] || 0) + v; };
+export const addFx = (m, fx) => { for (const [k, v] of Object.entries(fx)) m[k] = typeof v === 'boolean' ? m[k] || v : (m[k] || 0) + v; };
 export function computeMods(el, owned, res, temper = {}, forks = {}) {
   const m = { ...BASE_MODS };
   for (const s of SKILLS[el]) if (owned.includes(s.id)) {
