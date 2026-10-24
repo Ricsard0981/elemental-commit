@@ -355,7 +355,7 @@ function finishRun() {
 
 // ----------------------------------------------------------------- main loop
 const fpsEl = document.getElementById('fps');
-const SEC = {}; perfStats.hitches = []; perfStats.gaps = [];
+const SEC = {}; perfStats.hitches = []; perfStats.avg = {}; perfStats.gaps = [];
 // short readable id of a compiled program: material name + the variant flags that usually differ (skinning, instancing, shadows, map...)
 function progName(p) { const k = p.cacheKey; const f = ['SKINNING', 'INSTANCING'].filter((x) => k.includes(x)); return (p.name || '?') + '|' + k.length + '|' + k.slice(0, 18).replace(/,/g, ' '); }
 let fpsT = 0;
@@ -427,7 +427,7 @@ function frame(now) {
   const t2 = performance.now(); SEC.render = t2 - t1;
   // hitch log: any frame whose own work took > 12 ms is recorded with its breakdown (and whether shaders compiled)
   if (t2 - t0 > 12) { perfStats.hitches.push({ t: +(now / 1000).toFixed(2), total: +(t2 - t0).toFixed(1), ...Object.fromEntries(Object.entries(SEC).map(([k, v]) => [k, +v.toFixed(1)])), newPrograms: ENGW.renderer.info.programs.length - progs0, progs: ENGW.renderer.info.programs.slice(progs0).map(progName), mode: G.mode }); if (perfStats.hitches.length > 60) perfStats.hitches.shift(); }
-  for (const k in SEC) SEC[k] = 0;
+  for (const k in SEC) { perfStats.avg[k] = perfStats.avg[k] ? perfStats.avg[k] * 0.95 + SEC[k] * 0.05 : SEC[k]; SEC[k] = 0; } // smoothed ms per section
   perfStats.lastWork = t2 - t0;
   perfStats.js = perfStats.js ? perfStats.js * 0.95 + (t1 - t0) * 0.05 : t1 - t0;
   perfStats.render = perfStats.render ? perfStats.render * 0.95 + (t2 - t1) * 0.05 : t2 - t1;

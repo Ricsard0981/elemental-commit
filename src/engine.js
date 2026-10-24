@@ -170,7 +170,7 @@ const atlas = () => atlasTex || (atlasTex = makeAtlas());
 
 class Particles {
   constructor(max, additive) {
-    this.max = max; this.i = 0;
+    this.max = max; this.i = 0; this.hi = -1; this.live = 0; this.dirty = false;
     this.pos = new Float32Array(max * 3); this.col = new Float32Array(max * 3);
     this.size = new Float32Array(max); this.alpha = new Float32Array(max);
     this.vel = new Float32Array(max * 3);
@@ -198,7 +198,7 @@ class Particles {
   // sprite 0 = soft glow; 1 (streak) auto-aligns to its velocity; the others rotate by `spin` rad/s
   emit(x, y, z, vx, vy, vz, c, s0, s1, life, grav = 0, drag = 0, sprite = 0, spin = 0) {
     if (Q.budget < 1 && Math.random() > Q.budget) return;
-    const i = this.i; this.i = (i + 1) % this.max;
+    const i = this.i; this.i = (i + 1) % this.max; if (i > this.hi) this.hi = i; this.live++; this.dirty = true;
     const k = i * 3;
     this.pos[k] = x; this.pos[k + 1] = y; this.pos[k + 2] = z;
     this.vel[k] = vx; this.vel[k + 1] = vy; this.vel[k + 2] = vz;
@@ -209,9 +209,12 @@ class Particles {
     this.rot[i] = sprite === 1 ? Math.atan2(vy, vx) : sprite ? rand(6.28) : 0;
   }
   update(dt) {
+    if (!this.dirty && this.live === 0) return; // nothing alive and nothing changed: no loop, no upload
     const { pos, vel, life, maxLife, size, alpha, s0, s1, grav, drag, sprite, rot, spin } = this;
-    for (let i = 0; i < this.max; i++) {
+    const n = this.hi + 1; let live = 0;
+    for (let i = 0; i < n; i++) {
       if (life[i] <= 0) { if (alpha[i] !== 0) { alpha[i] = 0; size[i] = 0; } continue; }
+      live++;
       life[i] -= dt;
       const k = i * 3;
       const dr = Math.max(0, 1 - drag[i] * dt);
@@ -221,8 +224,12 @@ class Particles {
       size[i] = lerp(s1[i], s0[i], t); alpha[i] = Math.min(1, t * 2.2);
       if (sprite[i] === 1) rot[i] = Math.atan2(vel[k + 1], vel[k]); else if (spin[i]) rot[i] += spin[i] * dt;
     }
-    const a = this.points.geometry.attributes;
-    a.position.needsUpdate = a.color.needsUpdate = a.size.needsUpdate = a.alpha.needsUpdate = a.sprite.needsUpdate = a.rot.needsUpdate = true;
+    // only the part of the buffers that was in use goes to the GPU, and only that part is drawn
+    const g = this.points.geometry, a = g.attributes;
+    g.setDrawRange(0, n);
+    for (const key in a) { const at = a[key]; at.clearUpdateRanges(); at.addUpdateRange(0, n * at.itemSize); at.needsUpdate = true; }
+    this.live = live; this.dirty = live > 0; // one last upload happens in the frame the final particle dies (it zeroes its alpha)
+    if (live === 0) { this.hi = -1; this.i = 0; g.setDrawRange(0, 0); }
   }
 }
 
@@ -251,17 +258,19 @@ class Debris {
     const i = this.i; this.i = (i + 1) % this.max;
     const d = this.d[i];
     d.life = life; d.ml = life; d.x = x; d.y = y; d.z = z; d.vx = vx; d.vy = vy; d.vz = vz;
-    d.s = size; d.rx = rand(6); d.ry = rand(6); d.rz = rand(6);
+    this.active = true; d.s = size; d.rx = rand(6); d.ry = rand(6); d.rz = rand(6);
     d.sx = rand(-8, 8); d.sy = rand(-8, 8); d.sz = rand(-8, 8); d.bounce = 0;
     this.c.set(color); if (mult !== 1) this.c.multiplyScalar(mult);
     this.mesh.setColorAt(i, this.c);
     this.mesh.instanceColor.needsUpdate = true;
   }
   update(dt, groundAt) {
-    const o = this.o;
+    if (!this.active) return;
+    const o = this.o; let alive = 0;
     for (let i = 0; i < this.max; i++) {
       const d = this.d[i];
       if (d.life <= 0) continue;
+      alive++;
       d.life -= dt;
       if (d.life <= 0) { o.scale.setScalar(0); o.position.set(0, -999, 0); o.rotation.set(0, 0, 0); o.updateMatrix(); this.mesh.setMatrixAt(i, o.matrix); continue; }
       d.vy -= 26 * dt;
@@ -278,6 +287,7 @@ class Debris {
       o.updateMatrix(); this.mesh.setMatrixAt(i, o.matrix);
     }
     this.mesh.instanceMatrix.needsUpdate = true;
+    if (!alive) this.active = false;
   }
 }
 
@@ -316,17 +326,19 @@ export function cutLines(x, y, ang, color, n = 6, speed = 18) {
 export function addFx(update) { const f = { update, dead: false }; G.fx.push(f); return f; }
 
 const ringGeo = new THREE.RingGeometry(0.88, 1, 64);
+const ringPool = [];
 export function ring(x, y, z, color, { r0 = 0.3, r1 = 4, dur = 0.5, flat = false, intensity = 1.6, rot = 0 } = {}) {
-  const m = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({ color: new THREE.Color(color).multiplyScalar(intensity), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, toneMapped: false }));
-  m.position.set(x, y, z);
-  if (flat) m.rotation.x = -Math.PI / 2;
-  m.rotation.z = rot;
+  // pooled: a fight spawns dozens of rings a second, and a fresh material per ring means a program lookup per ring
+  let m = ringPool.pop();
+  if (!m) m = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({ transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, toneMapped: false }));
+  m.material.color.set(color).multiplyScalar(intensity); m.material.opacity = 1;
+  m.position.set(x, y, z); m.rotation.set(flat ? -Math.PI / 2 : 0, 0, rot); m.scale.setScalar(r0);
   scene.add(m);
   let t = 0;
   addFx((dt) => {
     t += dt; const k = Math.min(1, t / dur), e = easeOut(k);
     m.scale.setScalar(lerp(r0, r1, e)); m.material.opacity = (1 - k) * (1 - k);
-    if (k >= 1) { scene.remove(m); return false; }
+    if (k >= 1) { scene.remove(m); ringPool.push(m); return false; }
     return true;
   });
 }
@@ -388,8 +400,9 @@ function slashMaterial() {
   return slashBase;
 }
 // a swoosh arc: dir = ±1 facing; sweeps from rotStart over time. Style follows the active element; a Resonance imbue tints the tail.
+const slashPool = [];
 export function slash(x, y, dir, color, { radius = 2, angle = 2.2, dur = 0.22, rot = 0, sweep = 0.9, z = 0.3, intensity = 1.8, flip = 1 } = {}) {
-  const mat = slashMaterial().clone(); mat.toneMapped = false;
+  const mat = slashPool.pop() || slashMaterial().clone(); mat.toneMapped = false;
   const u = mat.uniforms, im = G.player?.imbue;
   u.uHead.value.set(color).multiplyScalar(intensity * 0.9); u.uTail.value.set(im ? im.color : color).multiplyScalar(intensity * 0.55);
   u.uStyle.value = SL_STYLE[G.element] ?? 0; u.uStyle2.value = im ? im.style : 0; u.uMix.value = im ? 0.35 + 0.2 * (im.power || 1) : 0; u.uSeed.value = Math.random() * 20;
@@ -403,7 +416,7 @@ export function slash(x, y, dir, color, { radius = 2, angle = 2.2, dur = 0.22, r
     m.rotation.z = rot * dir + (e - 0.5) * sweep * dir * flip;
     m.scale.set(radius * dir * (0.85 + e * 0.25), radius * flip * (0.85 + e * 0.25), 1);
     u.uFade.value = 1 - k * k; u.uTime.value = t;
-    if (k >= 1) { scene.remove(m); return false; }
+    if (k >= 1) { scene.remove(m); slashPool.push(mat); return false; }
     return true;
   });
 }

@@ -16,6 +16,8 @@ const RED = 0xf85149;
 const ICE = new THREE.Color(0x4db8ff);
 const box = new THREE.BoxGeometry(1, 1, 1), sph = new THREE.SphereGeometry(1, 16, 12), cyl = new THREE.CylinderGeometry(1, 1, 1, 8);
 const barGeo = new THREE.PlaneGeometry(1, 1);
+const BAR_BG = new THREE.MeshBasicMaterial({ color: 0x0d1117, transparent: true, depthTest: false });
+const BAR_FG = [0x7ee787, 0xffd33d, 0xff6b6b].map((c) => new THREE.MeshBasicMaterial({ color: c, transparent: true, depthTest: false, toneMapped: false })); // shared by every enemy: green / amber / red
 
 function mk(e, geo, color, { em = 0, ei = 0, rough = 0.5, metal = 0.3, x = 0, y = 0, z = 0, sx = 1, sy = 1, sz = 1, parent } = {}) {
   const mat = toonMaterial({ color, emissive: em, emissiveIntensity: ei, rim: 0xff7b72, rimK: 0.3 });
@@ -47,7 +49,7 @@ function base(type, x, y, o) {
     else { e.state = 'idle'; e.cd = 1; }
   };
   // hp bar
-  const bg = new THREE.Mesh(barGeo, new THREE.MeshBasicMaterial({ color: 0x0d1117, transparent: true, depthTest: false })), fg = new THREE.Mesh(barGeo, new THREE.MeshBasicMaterial({ color: 0x7ee787, transparent: true, depthTest: false, toneMapped: false }));
+  const bg = new THREE.Mesh(barGeo, BAR_BG), fg = new THREE.Mesh(barGeo, BAR_FG[0]);
   bg.renderOrder = 20; fg.renderOrder = 21;
   e.bar = new THREE.Group(); e.bar.add(bg, fg); e.barBg = bg; e.barFg = fg; e.bar.visible = false; scene.add(e.bar);
   return e;
@@ -825,7 +827,7 @@ function animate(e, dt, tm) {
     const w = Math.max(1.2, e.w), k = clamp(e.hp / e.hpMax, 0, 1);
     e.bar.position.set(e.x, e.y + e.h + 0.35, 1);
     e.barBg.scale.set(w + 0.06, 0.16, 1); e.barFg.scale.set(w * k, 0.1, 1); e.barFg.position.x = -w * (1 - k) / 2; e.barFg.position.z = 0.01;
-    e.barFg.material.color.setHex(k > 0.5 ? 0x7ee787 : k > 0.25 ? 0xffd33d : 0xff6b6b);
+    e.barFg.material = k > 0.5 ? BAR_FG[0] : k > 0.25 ? BAR_FG[1] : BAR_FG[2];
   }
 }
 

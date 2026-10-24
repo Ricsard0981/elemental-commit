@@ -329,10 +329,13 @@ export function explode(x, y, r, dmg, o = {}) {
 
 // ----------------------------------------------------------------- projectiles
 const geo = { orb: new THREE.SphereGeometry(1, 14, 10), box: new THREE.BoxGeometry(1, 1, 1) };
+const orbPool = [];
 export function spawnProj(o) {
   const col = new THREE.Color(o.color ?? 0xffffff).multiplyScalar(o.shape === 'rock' ? 1 : 2.2);
+  // orbs and blades reuse pooled materials (returned in endProj); rocks keep their own (they need lighting)
   const mesh = new THREE.Mesh(o.shape === 'rock' ? geo.box : geo.orb,
-    o.shape === 'rock' ? new THREE.MeshStandardMaterial({ color: o.color, roughness: 0.8, flatShading: true }) : new THREE.MeshBasicMaterial({ color: col, toneMapped: false }));
+    o.shape === 'rock' ? new THREE.MeshStandardMaterial({ color: o.color, roughness: 0.8, flatShading: true }) : (orbPool.pop() || new THREE.MeshBasicMaterial({ toneMapped: false })));
+  if (o.shape !== 'rock') mesh.material.color.copy(col);
   const r = o.r ?? 0.35;
   mesh.scale.set(o.shape === 'blade' ? r * 2.4 : r, o.shape === 'blade' ? r * 0.45 : r, r);
   mesh.position.set(o.x, o.y, 0);
@@ -345,6 +348,7 @@ export function spawnProj(o) {
 export function endProj(pr, hitSomething = true) {
   if (pr.dead) return;
   pr.dead = true; scene.remove(pr.mesh);
+  if (pr.shape !== 'rock' && pr.mesh.material.isMeshBasicMaterial) orbPool.push(pr.mesh.material);
   pr.onEnd?.(pr, hitSomething);
 }
 export function reflectProj(pr, mult = 2.5, pierce = false) {

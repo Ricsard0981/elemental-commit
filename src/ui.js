@@ -9,6 +9,7 @@ import { css, clamp } from './util.js';
 
 const $ = (id) => document.getElementById(id);
 let H = {}; // game callbacks
+const tg = (el, cls, on) => { const k = '_t' + cls; if (el[k] !== on) { el[k] = on; el.classList.toggle(cls, on); } }; // class toggles only when the value changes
 const restart = (el, cls) => { el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls); };
 
 const SVG = {
@@ -132,9 +133,7 @@ export function updateHUD(dt) {
       const f = cd > 0 ? cd / max : 0;
       put(s.querySelector('.cdfill'), 'transform', `scaleY(${f.toFixed(3)})`);
       put(s.querySelector('.cdnum'), 'text', cd > 0.05 ? (cd >= 1 ? String(Math.ceil(cd)) : cd.toFixed(1)) : '');
-      s.classList.toggle('cd', cd > 0.05);
-      s.classList.toggle('poor', !!cost && p.energy < cost);
-      s.classList.toggle('active', (id === 'guard' && p.guarding) || (id === 'main' && p.state === 'attack'));
+      tg(s, 'cd', cd > 0.05); tg(s, 'poor', !!cost && p.energy < cost); tg(s, 'active', (id === 'guard' && p.guarding) || (id === 'main' && p.state === 'attack'));
     };
     const e = ELEMENTS[G.element];
     set('main', 0, 1, 0); set('ranged', p.cd.ranged, p.cdMax.ranged, e.ranged.cost); set('guard', p.cd.guard, 0.35, 0);
