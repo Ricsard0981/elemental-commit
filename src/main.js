@@ -374,6 +374,7 @@ function frame(now) {
   const p = G.player;
 
   // global input
+  In.pollPad();
   if (In.hitNow('skills') && p && G.mode !== 'menu' && G.mode !== 'settings' && G.mode !== 'ui') { G.mode === 'skills' ? closeSkills() : openSkills(); }
   if (In.hitNow('pause')) { if (G.mode === 'play') pause(); else if (G.mode === 'paused') resume(); else if (G.mode === 'skills') closeSkills(); else if (G.mode === 'settings') closeSettings(); }
   if (G.run && G.run.active && G.mode === 'dead') { deadT += rdt; if (deadT > 1.4 && !document.getElementById('death').classList.contains('show')) UI.showRunOver(G.run); } else

@@ -1,6 +1,7 @@
 import { S, DEFAULTS, setSetting, isTouchDevice, qualityLevel, GFX_OPTS, FPS_CAPS, gfxTiers, isCustom } from './settings.js';
 import { sfx } from './audio.js';
 import { wipeSave } from './skills.js';
+import * as In from './input.js';
 
 const $ = (id) => document.getElementById(id);
 const SCHEMA = [
@@ -17,6 +18,11 @@ const SCHEMA = [
     { type: 'custom', render: () => graphicsRows() },
     { k: 'fps', type: 'toggle', label: 'Show FPS' },
   ] },
+  { section: 'Gameplay', items: [
+    { k: 'difficulty', type: 'seg', label: 'Difficulty', opts: [['easy', 'Easy'], ['normal', 'Normal'], ['hard', 'Hard']], hint: () => ({ easy: 'Enemies hit 30% softer, have 20% less health, act 12% slower; bigger parry window', normal: 'The intended experience', hard: 'Enemies hit 30% harder, have 25% more health, act 10% faster; smaller parry window' }[S.difficulty] || '') },
+    { k: 'cbTells', type: 'toggle', label: 'Colour-blind-safe tells', hint: () => 'Enemy attack warnings pulse bright yellow instead of red' },
+  ] },
+  { section: 'Controls', items: [{ type: 'custom', render: () => controlsRows() }] },
   { section: 'Comfort', items: [
     { k: 'shake', type: 'range', label: 'Screen shake', min: 0, max: 1.5, step: 0.1, fmt: (v) => (v === 0 ? 'Off' : Math.round(v * 100) + '%') },
     { k: 'flashes', type: 'toggle', label: 'Flashes & colour split', hint: () => 'Turn off to reduce flashing' },
@@ -53,6 +59,26 @@ function graphicsRows() {
     for (const o of GFX_OPTS) box.appendChild(seg(o.label, o.hint || '', o.opts, t[o.k], (v) => setSetting('gfx', { ...(S.gfx || {}), [o.k]: v })));
     frag.appendChild(box);
   }
+  return frag;
+}
+
+// ---- controls: gamepad status + key remapping (click a key, then press the new one; Esc cancels)
+function controlsRows() {
+  const frag = document.createDocumentFragment();
+  const info = document.createElement('div'); info.className = 'set-row';
+  info.innerHTML = `<label><span>Gamepad<small>${In.padConnected() ? 'Connected. A jump · X attack · Y ranged · B dash · RT defend · RB/LB specials · LT revert · left stick move/up/down · right stick aim' : 'Plug in or wake a controller and press any button (standard mapping)'}</small></span></label>`;
+  frag.appendChild(info);
+  const box = document.createElement('div'); box.className = 'adv-box keys';
+  for (const [a, label] of In.ACTIONS) {
+    const r = document.createElement('div'); r.className = 'set-row';
+    r.innerHTML = `<label><span>${label}</span><button class="mini keybtn" data-a="${a}">${In.keyName(In.DEFAULT_KEYS[a] && (S.keymap?.[a] || In.DEFAULT_KEYS[a]))}</button></label>`;
+    r.querySelector('button').onclick = (ev) => { const b = ev.currentTarget; b.textContent = 'press a key…'; b.classList.add('on'); In.captureNext((code) => { if (code) In.setBinding(a, code); sfx.click(); renderSettings(); }); };
+    box.appendChild(r);
+  }
+  const rs = document.createElement('div'); rs.className = 'set-row';
+  rs.innerHTML = '<label><span>Key bindings<small>Mouse buttons keep working as attack / ranged</small></span><button class="mini" data-reset>Reset keys</button></label>';
+  rs.querySelector('button').onclick = () => { In.resetBindings(); sfx.click(); renderSettings(); };
+  box.appendChild(rs); frag.appendChild(box);
   return frag;
 }
 

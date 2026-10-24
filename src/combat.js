@@ -9,7 +9,7 @@ import { addXP, xpNeed, prog } from './skills.js';
 import { cam } from './engine.js';
 import { clamp, rand, pick, randi, easeOut } from './util.js';
 import * as UI from './ui.js';
-import { haptic } from './settings.js';
+import { haptic, diff } from './settings.js';
 import { sliceEnemy, giveTokenSafe } from './enemies.js';
 import { styleMult, styleEnergy, styleLoot } from './style.js';
 import { react } from './reactions.js';
@@ -432,6 +432,7 @@ function damagePlayerInner(amount, src) {
   const p = G.player;
   if (!p || p.dead || p.hurtI > 0) return 'iframes';
   if (p.dashInv > 0) { perfectDodge(src); return 'iframes'; }
+  amount *= diff().dmg;
   const el = ELEMENTS[G.element], g = el.guard;
   const front = (src.x - p.x) * p.facing >= -0.4;
   const guarded = p.guarding && (front || g.allAround);

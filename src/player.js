@@ -12,7 +12,7 @@ import { emit } from './events.js';
 import { hitEnemy, enemyBox, hitBox, explode } from './combat.js';
 import { MOVES } from './elements.js';
 import { applyPatches } from './patches.js';
-import { haptic, S } from './settings.js';
+import { haptic, S, diff } from './settings.js';
 import { clamp, damp, lerp, rand, easeOut, sign } from './util.js';
 
 const tmp = [];
@@ -55,7 +55,7 @@ export class Player {
     this.hpMax = 100 + this.mods.hp;
     this.energyMax = 100 + this.mods.energy;
     this.maxJumps = 2 + this.mods.jumps + this.el.prof.jumps;
-    this.parryBase = 0.18 * (1 + this.mods.parry); this.parryWindow = this.parryBase; // ~11 frames at 60 fps, skills widen it
+    this.parryBase = 0.18 * (1 + this.mods.parry) * (1 + diff().parry); this.parryWindow = this.parryBase; // ~11 frames at 60 fps, skills widen it
     if (!first && old) this.hp = Math.min(this.hpMax, this.hp + (this.hpMax - old));
   }
 

@@ -10,6 +10,7 @@ import { damagePlayer, spawnProj, killEnemy, hitstop, slowmo, later, fb, witchK 
 import { groundWave } from './elements.js';
 import * as UI from './ui.js';
 import { clamp, damp, rand, lerp, sign, easeOut } from './util.js';
+import { S, diff } from './settings.js';
 
 const RED = 0xf85149;
 const ICE = new THREE.Color(0x4db8ff);
@@ -210,6 +211,7 @@ export function spawnEnemy(type, x, yOff = 0, o = {}) {
   const gy = groundAt(x);
   const y = type === 'pointer' || type === 'medic' ? Math.max(gy, 0) + (yOff || 4) : gy;
   const e = ({ bug: buildBug, pointer: buildPointer, brute: buildBrute, boss: buildBoss, dummy: buildDummy, shield: buildShield, charger: buildCharger, medic: buildMedic }[type])(x, type === 'boss' ? 28 : y, o);
+  if (!e.dummy) { const k = diff().hp; e.hp = e.hpMax = Math.round(e.hpMax * k); }
   if (o.elite) makeElite(e, o.elite);
   if (o.mini) { e.mini = true; e.name = 'Gatekeeper'; e.hp = e.hpMax = 340; e.poise = e.poiseMax = 160; e.w *= 1.5; e.h *= 1.5; e.group.scale.setScalar(1.6); e.xp = 120; e.commits = 30; e.heart = 0.8; }
   e.homeY = y;
@@ -240,7 +242,7 @@ function seamMat(color) {
   return m;
 }
 export function sliceEnemy(e, o = {}, big = false) {
-  if (e.sliced) return; e.sliced = true;
+  if (e.sliced) return; e.sliced = true; sfx.slice(big);
   const dir = o.dir || e.kdir || 1;
   let a;
   if (o.spike || o.kind === 'slam') a = Math.PI / 2;
@@ -750,7 +752,7 @@ function animate(e, dt, tm) {
   for (const m of e.mats) {
     const b = m.userData.base;
     if (e.flash > 0) { m.emissive.setRGB(1, 1, 1); m.emissiveIntensity = 1.8; }
-    else if (tele) { m.emissive.setHex(0xff2020); m.emissiveIntensity = tele * 1.5 + (b.ei || 0) * 0.5; }
+    else if (tele) { m.emissive.setHex(S.cbTells ? 0xfff2a0 : 0xff2020); m.emissiveIntensity = tele * 1.5 + (b.ei || 0) * 0.5; }
     else { m.emissive.setHex(b.em); m.emissiveIntensity = b.ei * (e.chill > 0 ? 0.5 : 1); }
     if (e.chill > 0 && !e.flash && !tele) { m.emissive.lerp(ICE, 0.5); m.emissiveIntensity = Math.max(m.emissiveIntensity, 0.5); }
   }
@@ -834,7 +836,7 @@ export function updateEnemies(dt) {
   for (let i = G.enemies.length - 1; i >= 0; i--) {
     const e = G.enemies[i];
     if (e.dead) { removeEnemy(e); G.enemies.splice(i, 1); if (G.boss === e) G.boss = null; continue; }
-    const tm = (e.chill > 0 ? (e.boss ? 0.8 : p.mods.frostbite ? 0.42 : 0.55) : 1) * witchK() * (e.mire > 0 ? 0.3 : 1); // chill slows a boss far less
+    const tm = (e.chill > 0 ? (e.boss ? 0.8 : p.mods.frostbite ? 0.42 : 0.55) : 1) * witchK() * (e.mire > 0 ? 0.3 : 1) * diff().speed; // chill slows a boss far less
     // spawn glitch
     if (e.spawnT > 0) {
       e.spawnT -= dt;

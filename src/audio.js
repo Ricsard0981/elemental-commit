@@ -185,6 +185,8 @@ export const sfx = {
   dodge() { duck(0.5, 0.6); noise({ dur: 0.5, f: 300, f2: 5200, vol: 0.2, swell: 0.85, type: 'bandpass', q: 1.2, wet: 0.4 }); bell(587, 1.1, 0.2, [1, 2.0, 3.01, 4.2], 0.28, 0.6); tone({ f: 140, f2: 60, dur: 0.5, vol: 0.18, type: 'sine', delay: 0.26 }); sparkle(1760, 3, 0.07, 0.3); },
   // execution: a metallic slice, a sub drop and a short bright tail
   execute() { duck(0.3, 0.6); click(0.45, 6000); noise({ dur: 0.18, f: 9000, f2: 1800, vol: 0.28, type: 'highpass' }); thump(60, 24, 0.7, 0.7, 0.25); bell(1319, 0.9, 0.14, [1, 2.76, 5.4], 0.05, 0.5); noise({ dur: 0.5, f: 500, f2: 4000, vol: 0.1, swell: 0.6, wet: 0.5, delay: 0.05 }); },
+  // a clean metallic slice for every kill: bright shing, short air tear, tiny sub
+  slice(big = false) { click(0.3, 6500); noise({ dur: big ? 0.22 : 0.14, f: 8500, f2: 2200, vol: big ? 0.2 : 0.14, type: 'highpass' }); tone({ f: big ? 1900 : 2600, f2: big ? 600 : 900, dur: 0.12, vol: 0.05, type: 'triangle' }); thump(big ? 80 : 110, 45, big ? 0.3 : 0.14, 0.3, 0.05); },
   // each reaction has its own voice, pitched by what it is made of
   reaction(name = 'STEAM') {
     duck(0.5, 0.4);
@@ -240,7 +242,7 @@ export const sfx = {
 };
 
 // per-sound retrigger floor + max simultaneous plays (ear fatigue guard): [min gap s, max plays per 250 ms]
-const GATE = { hit: [0.03, 4], swing: [0.05, 3], airhit: [0.045, 3], step: [0.09, 2], pickup: [0.03, 4], click: [0.02, 4], hover: [0.05, 2], shoot: [0.05, 3], explosion: [0.06, 3], kill: [0.04, 3], stagger: [0.1, 2], block: [0.06, 2], telegraph: [0.05, 3], land: [0.08, 2], enemyShoot: [0.05, 2], combo: [0.1, 2], reaction: [0.15, 2], dodge: [0.5, 1], execute: [0.2, 1] };
+const GATE = { hit: [0.03, 4], swing: [0.05, 3], airhit: [0.045, 3], step: [0.09, 2], pickup: [0.03, 4], click: [0.02, 4], hover: [0.05, 2], shoot: [0.05, 3], explosion: [0.06, 3], kill: [0.04, 3], slice: [0.05, 3], stagger: [0.1, 2], block: [0.06, 2], telegraph: [0.05, 3], land: [0.08, 2], enemyShoot: [0.05, 2], combo: [0.1, 2], reaction: [0.15, 2], dodge: [0.5, 1], execute: [0.2, 1] };
 const lastAt = {}, recentPlays = {};
 for (const k of Object.keys(sfx)) {
   const f = sfx[k], [gap, max] = GATE[k] || [0.02, 6];

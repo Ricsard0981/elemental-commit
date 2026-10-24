@@ -25,6 +25,9 @@ export const DEFAULTS = {
   sfx: 0.9,
   music: 0.6,
   fullscreen: true,    // go fullscreen + lock landscape when a run starts (touch)
+  difficulty: 'normal', // easy | normal | hard
+  cbTells: false,       // colour-blind-safe enemy tells (bright yellow-white pulses instead of red)
+  keymap: {},           // user key bindings: { action: 'KeyX' } (primary key only; mouse buttons stay)
   flickJump: false,    // touch: flick the stick up to jump (off: stick up + Attack = launcher)
 };
 
@@ -96,7 +99,17 @@ const PATTERNS = {
   parry: [12, 25, 18, 25, 60], level: [25, 40, 25, 40, 25, 40, 90], dash: 10, block: 22, cast: [14, 20, 22], boss: [60, 40, 120],
 };
 let lastBuzz = 0;
+// difficulty: enemy damage, enemy health, enemy speed (tells and attacks run slower or faster), and the parry window
+export const DIFF = {
+  easy: { dmg: 0.7, hp: 0.8, speed: 0.88, parry: 0.4 },
+  normal: { dmg: 1, hp: 1, speed: 1, parry: 0 },
+  hard: { dmg: 1.3, hp: 1.25, speed: 1.1, parry: -0.15 },
+};
+export const diff = () => DIFF[S.difficulty] || DIFF.normal;
+// controllers register here so haptic() can rumble a gamepad as well as vibrate a phone
+export const rumbleHooks = [];
 export function haptic(kind) {
+  for (const f of rumbleHooks) f(kind);
   if (!S.haptics || !canVibrate || !touchOn()) return;
   const now = performance.now();
   const big = typeof PATTERNS[kind] !== 'number';
