@@ -1,6 +1,7 @@
 // The elemental warriors: a realistic-proportion body (Quaternius, CC0) wearing a custom costume built in code:
 // zone-painted cloth + glowing runes, bone-attached armour, a carved mask, elemental hair, cape, hand trails.
 // Locomotion comes from the Quaternius animation library; combat poses are layered on top procedurally.
+import { makeOutfitMaterials, buildOutfit } from './outfits.js';
 import * as THREE from 'three';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
@@ -73,7 +74,7 @@ export class Hero {
     const c = el.color, c2 = el.color2, style = { fire: 0, water: 1, earth: 2, air: 3 }[key];
     const N = Q.ribbonN;
     this.hair = N >= 2 ? this.buildHair(N, style, c, c2) : [];
-    this.cape = N >= 2 ? new Ribbon(N + 2, key === 'air' ? 0.55 : 0.46, style, key === 'earth' ? 0x6b5a3a : c, c2, { alpha: 0.92, z: -0.12 }) : null;
+    this.cape = N >= 2 && (key === 'water' || key === 'air') ? new Ribbon(N + 2, key === 'air' ? 0.55 : 0.46, style, key === 'earth' ? 0x6b5a3a : c, c2, { alpha: 0.92, z: -0.12 }) : null;
     this.trails = Q.trailN > 0 ? this.hands.map(() => new Trail(Q.trailN, 0.24, style, c2, c)) : [];
     this.palms = [];
     for (const h of this.hands) {
@@ -103,6 +104,7 @@ export class Hero {
     this.darkM = toonMaterial({ color: p.b, rim: el.color2, rimK: 0.5 });
     this.glowM = new THREE.MeshBasicMaterial({ color: new THREE.Color(el.color2).multiplyScalar(2.8), toneMapped: false });
     this.glowM2 = new THREE.MeshBasicMaterial({ color: new THREE.Color(el.color).multiplyScalar(2.4), toneMapped: false });
+    makeOutfitMaterials(this); // Y2K streetwear palette (src/outfits.js)
   }
 
   // ---------------------------------------------------------------- costume (authored in T-pose model space, then bolted to bones)
@@ -145,20 +147,8 @@ export class Hero {
     const hand = j('hand_l'), elbow = j('lowerarm_l'), shoulder = j('upperarm_l');
     const knee = j('calf_l'), ankle = j('foot_l'), pelvis = j('pelvis'), head = j('Head'), chest = j('spine_03');
     const kit = { fire: this.fireKit, water: this.waterKit, earth: this.earthKit, air: this.airKit }[this.key];
-    // shared: belt + emblem, bracers, greaves
     const beltY = pelvis.y + 0.1;
-    this.part('pelvis', torus, this.armor, [0, beltY, 0.0], [0.17 * k, 0.17 * k, 0.12 * k], [Math.PI / 2, 0, 0]).scale.set(0.185 * k, 0.13 * k, 0.17 * k);
-    this.part('pelvis', oct, this.glowM, [0, beltY, 0.135 * k], [0.04, 0.05, 0.02], [0, 0, 0], false);
-    this.both((s, sf) => {
-      const mid = elbow.clone().lerp(hand, 0.5);
-      this.part('lowerarm' + sf, cyl, this.armor, [s * mid.x, mid.y, mid.z], [0.058 * k, 0.15, 0.058 * k], [0, 0, Math.PI / 2]);
-      this.part('lowerarm' + sf, torus, this.trimM, [s * (mid.x - 0.075), mid.y, mid.z], [0.06 * k, 0.06 * k, 0.06 * k], [0, Math.PI / 2, 0], false);
-      const cm = knee.clone().lerp(ankle, 0.42);
-      this.part('calf' + sf, cyl, this.armor, [s * cm.x, cm.y, cm.z - 0.005], [0.07 * k, 0.17, 0.075 * k]);
-      this.part('calf' + sf, torus, this.trimM, [s * cm.x, cm.y + 0.17, cm.z], [0.075 * k, 0.075 * k, 0.075 * k], [Math.PI / 2, 0, 0], false);
-    });
-    kit.call(this, { k, hand, elbow, shoulder, knee, ankle, pelvis, head, chest, beltY });
-    this.buildMask(head);
+    buildOutfit(this, { k, hand, elbow, shoulder, knee, ankle, pelvis, head, chest, beltY }); // faceless streetwear, per element
   }
   fireKit({ k, shoulder, chest, beltY, head }) {
     // asymmetric horned pauldron on the left, spiked bracer-plate on the right, crossed ember strap, flame tassets
@@ -247,7 +237,7 @@ export class Hero {
   buildHair(N, style, c, c2) {
     const k = this.key;
     const specs = {
-      fire: [[0.2], [0.17], [0.14]],
+      fire: [],
       water: [[0.27], [0.2]],
       earth: [],
       air: [[0.3], [0.2]],
