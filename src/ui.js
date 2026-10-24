@@ -1,3 +1,4 @@
+import { REV } from './revert.js';
 import { STYLE_NAMES, STYLE_COL, styleProgress } from './style.js';
 import { G } from './state.js';
 import { ELEMENTS, KEYS } from './elements.js';
@@ -145,6 +146,8 @@ export function updateHUD(dt) {
     $('combo-n').style.color = col; $('combo-rank').style.color = col; $('combo-rank').textContent = RANKS[Math.min(c.rank, RANKS.length - 1)];
   }
   put('combo-bar', 'transform', `scaleX(${clamp(c.t / 3.4, 0, 1).toFixed(3)})`);
+  // revert charges
+  const rc = REV.charges; if (_w.get('rev') !== rc) { _w.set('rev', rc); $('revert').classList.toggle('show', rc > 0); $('revert-n').textContent = '⟲'.repeat(rc); }
   // style meter
   const st = G.style, showS = st && (st.pts > 1 || st.rank > 0);
   if (_w.get('sshow') !== !!showS) { _w.set('sshow', !!showS); $('style').classList.toggle('show', !!showS); }

@@ -17,6 +17,7 @@ import { renderSettings } from './settingsUI.js';
 import { applyQuality, adaptResolution, perfStats, Q } from './engine.js';
 import { setVolumes, setSlow, setAmbience } from './audio.js';
 import { initStyle, updateStyle, resetStyle } from './style.js';
+import { updateRevert, resetRevert } from './revert.js';
 import { clamp } from './util.js';
 import { loadAssets, assets } from './assets.js';
 import { enterArena, leaveArena, updateArena, ARENA_L } from './arena.js';
@@ -51,7 +52,7 @@ function resetWorldState() {
   for (const cp of checkpoints) if (cp.active) { cp.active = false; }
   hintIdx = 0; bossStarted = false; winTimer = 0;
   G.checkpointX = 4;
-  G.combo = { n: 0, t: 0, best: 0, rank: 0 }; resetStyle();
+  G.combo = { n: 0, t: 0, best: 0, rank: 0 }; resetStyle(); resetRevert();
   G.stats = { kills: 0, commits: 0, time: 0, parries: 0, damageTaken: 0 };
   G.boss = null; G.freeze = 0; G.ts = 1; G.tsTarget = 1; G.tsHold = 0;
   // collectible commits along the route
@@ -108,6 +109,7 @@ function startTraining(key, mode, keepFlags = false) {
   G.element = key; G.training = { mode }; sfx.setElement(key);
   clearEnemies(); clearAll(); dyn.length = 0; UI.hideBoss();
   G.combo = { n: 0, t: 0, best: 0, rank: 0 }; resetStyle(); G.stats = { kills: 0, commits: 0, time: 0, parries: 0, damageTaken: 0 };
+  G.training = { mode }; resetRevert();
   G.boss = null; G.freeze = 0; G.ts = 1; G.tsTarget = 1; G.tsHold = 0;
   enterArena(); setAmbience('arena');
   const p = new Player(key); G.player = p; p.x = 12;
@@ -364,7 +366,7 @@ function frame(now) {
   G.dt = gdt; G.rdt = rdt;
   setSlow(G.ts); audio.lowHp = !!(p && !p.dead && G.mode === 'play' && p.hp / p.hpMax < 0.3);
   G.time += gdt;
-  updateCombatDebug(rdt); updateStyle(gdt);
+  updateCombatDebug(rdt); updateStyle(gdt); updateRevert(gdt, rdt);
   if (G.witch > 0) G.witch -= rdt; if (G.witchCd > 0) G.witchCd -= rdt;
   In.updateAim();
 

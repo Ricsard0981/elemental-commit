@@ -13,6 +13,7 @@ import { haptic } from './settings.js';
 import { sliceEnemy } from './enemies.js';
 import { styleMult, styleEnergy, styleLoot } from './style.js';
 import { react } from './reactions.js';
+import { autoRevert } from './revert.js';
 
 // ----------------------------------------------------------------- feedback hierarchy
 // One profile per kind of event (seconds / trauma / FOV degrees / aberration). Every contact, parry, kill and landing asks
@@ -467,6 +468,7 @@ function damagePlayerInner(amount, src) {
 }
 function playerDown(src) {
   const p = G.player;
+  if (autoRevert()) { p.hp = 1; p.hurtI = 3; return 'hit'; } // Revert saves you from a lethal hit
   if (p.mods.rebirth && !p.reborn) {
     p.reborn = true; p.hp = p.hpMax * 0.5; p.hurtI = 2.2;
     explode(p.x, p.y + 1, 7, 90, { color: 0xff6a2b, kx: 14, ky: 8, shake: 0.8 });

@@ -192,6 +192,10 @@ export const sfx = {
     bell(f, 0.8, 0.17, [1, 2.4, 4.1], 0, 0.5); thump(f > 400 ? 90 : 60, 30, 0.35, 0.4, 0.2);
     noise({ dur: 0.45, f: f * 2, f2: f * 5, vol: 0.14, swell: 0.5, type: 'bandpass', q: 1.5, wet: 0.45 });
   },
+  // Revert: a rewinding sweep, tape-stop descent and a clean landing chime
+  revertGain() { bell(1047, 0.6, 0.12, [1, 2.0, 3.0], 0, 0.5); sparkle(1568, 3, 0.05, 0.05); },
+  revert() { duck(0.25, 0.8); noise({ dur: 0.6, f: 6000, f2: 250, vol: 0.22, type: 'bandpass', q: 1.4, wet: 0.5 }); tone({ f: 880, f2: 110, dur: 0.6, vol: 0.14, type: 'sawtooth', wet: 0.4 }); for (let i = 0; i < 6; i++) click(0.12, 3000 + i * 400, i * 0.09); },
+  revertEnd() { thump(90, 36, 0.4, 0.5, 0.2); bell(784, 0.9, 0.16, [1, 2.0, 3.0, 5.0], 0, 0.5); sparkle(1568, 4, 0.06, 0.03); },
   guardUp(el = 'fire') { const f = { fire: 300, water: 420, earth: 180, air: 560 }[el] || 300; tone({ f, f2: f * 2, dur: 0.12, vol: 0.1, type: 'triangle', wet: 0.2 }); swoosh(f * 2, f * 6, 0.12, 0.06, 1); },
   // every enemy has its own warning sound: you should be able to tell WHO is about to attack with your eyes closed
   telegraph(kind = 'bug') {
