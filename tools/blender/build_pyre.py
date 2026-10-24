@@ -243,9 +243,9 @@ HEAD_SCALE, HEAD_PIVOT = 1.2, Vector((0, .02, 1.585))
 FACE_C, FACE_R = (0.0, 0.0, 1.70), (0.083, 0.088, 0.114)
 HC, HR = (0.0, 0.018, 1.737), (0.113, 0.123, 0.113)               # helmet shell
 
-HOODIE = [(.95, 0, .035, .19, .14), (1.05, 0, .03, .182, .132), (1.17, 0, .02, .176, .126), (1.32, 0, .0, .226, .145), (1.43, 0, .008, .248, .15), (1.5, 0, .03, .2, .12), (1.56, 0, .04, .1, .085)]
+HOODIE = [(.95, 0, .035, .19, .14), (1.05, 0, .03, .182, .132), (1.17, 0, .02, .176, .126), (1.32, 0, .0, .222, .143), (1.43, 0, .008, .234, .148), (1.5, 0, .03, .19, .118), (1.56, 0, .04, .1, .085)]
 VEST = [(1.0, 0, .02, .212, .158, .01), (1.06, 0, .018, .203, .15, .01), (1.14, 0, .016, .194, .14, .008), (1.23, 0, .008, .214, .15, .006), (1.31, 0, .0, .24, .162, .004),
-        (1.39, 0, .002, .258, .165), (1.45, 0, .01, .262, .16), (1.5, 0, .028, .232, .138), (1.525, 0, .036, .2, .122)]
+        (1.39, 0, .002, .245, .162), (1.45, 0, .01, .247, .158), (1.5, 0, .028, .22, .136), (1.525, 0, .036, .19, .12)]
 TORSO_BONES = ['pelvis', 'spine_01', 'spine_02', 'spine_03', 'clavicle_l', 'clavicle_r']
 
 
@@ -273,27 +273,27 @@ def front_slab(cell, pts, s=1, out=.004, th=.008, bones=None, smooth=False):
 
 
 def pin(x, z, r, col, out=.004):
-    finish(cone((x, vest_front_y(x, z, out + .003), z), r, r, .007, rot=(math.pi / 2, 0, 0), seg=10), col, TORSO_BONES, 0.07, smooth=False)
+    finish(cone((x, vest_front_y(x, z, out + .003), z), r, r, .007, rot=(math.pi / 2, 0, 0), seg=6), col, TORSO_BONES, 0.07, smooth=False)
 
 
 # ---------------------------------------------------------------- hoodie
-finish(tube('z', HOODIE, n=18), 'hoodie', TORSO_BONES, 0.07)
-finish(tube('z', [(.962, 0, .033, .205, .152, .02), (1.0, 0, .028, .2, .148, .02)], n=24), 'band', TORSO_BONES, 0.07)              # rust ribbed hem
-cowl = tube('z', [(1.47, 0, .03, .135, .118, .07), (1.515, 0, .035, .13, .112, .09), (1.565, 0, .045, .108, .095, .07), (1.6, 0, .05, .085, .078, .04)], n=18, caps=False)
-vfront = [f for f in {f for v in cowl for f in v.link_faces} if f.calc_center_median().y < -.02 and abs(f.calc_center_median().x) < .05 + (1.6 - f.calc_center_median().z) * .25]
+finish(tube('z', HOODIE, n=14), 'hoodie', TORSO_BONES, 0.07)
+finish(tube('z', [(.962, 0, .033, .205, .152, .02), (1.0, 0, .028, .2, .148, .02)], n=16), 'band', TORSO_BONES, 0.07)              # rust ribbed hem
+cowl = tube('z', [(1.465, 0, .03, .13, .114, .07), (1.505, 0, .036, .122, .106, .09), (1.54, 0, .046, .1, .09, .06)], n=14, caps=False)
+vfront = [f for f in {f for v in cowl for f in v.link_faces} if f.calc_center_median().y < -.02 and abs(f.calc_center_median().x) < .05 + (1.54 - f.calc_center_median().z) * .3]
 bmesh.ops.delete(bm, geom=vfront, context='FACES_ONLY')                                       # the V where the hood crosses at the front
 finish([v for v in cowl if v.is_valid], 'hoodie', ['spine_03', 'neck_01'], 0.06)
-hood = sphere((0, .15, 1.47), (.175, .05, .1), u=16, v=8)                                    # hood lying flat on the back, a fold down the middle
+hood = sphere((0, .15, 1.45), (.175, .05, .1), u=12, v=6)                                    # hood lying flat on the back, a fold down the middle
 for v in hood:
     v.co.y += .012 * math.cos(v.co.x / .175 * math.pi * 1.5) - .02 * max(0.0, (1.47 - v.co.z) / .1)
 finish(hood, 'hoodie', ['spine_03', 'spine_02'], 0.07)
-finish(sphere((0, .1, 1.56), (.12, .07, .06), u=12, v=6), 'hoodie', ['spine_03', 'neck_01'], 0.06)
+finish(sphere((0, .1, 1.525), (.115, .065, .05), u=10, v=6), 'hoodie', ['spine_03', 'neck_01'], 0.06)
 for s in (1, -1):                                                                              # long drawstrings with brass tips
     finish(tube('z', [(1.505, s * .03, -.112, .005, .005), (1.42, s * .036, -.135, .005, .005), (1.33, s * .034, -.142, .005, .005)], n=5), 'tape', ['spine_03', 'spine_02'], 0.05)
     finish(cube((s * .034, -.143, 1.318), (.011, .011, .026)), 'brass', ['spine_02'], 0.05, smooth=False)
 
 # ---------------------------------------------------------------- denim trucker vest
-vs = tube('z', VEST, n=24, caps=False)
+vs = tube('z', VEST, n=20, caps=False)
 slit = [f for f in {f for v in vs for f in v.link_faces}
         if f.calc_center_median().y < 0.0 and abs(f.calc_center_median().x) < .058 + max(0.0, f.calc_center_median().z - 1.28) * .4]
 bmesh.ops.delete(bm, geom=slit, context='FACES_ONLY')
@@ -319,8 +319,8 @@ for s in (1, -1):
     # spikes on the shoulder seam, pointing up and out + frayed armhole threads
     for k, (dx, dz, ang) in enumerate(((.17, 1.515, .35), (.205, 1.51, .6), (.24, 1.49, .85))):
         finish(cone((s * dx, .03, dz), .014, .0, .055, rot=(0, s * ang, 0), seg=5), 'silver', ['clavicle' + sf, 'spine_03'], 0.06, smooth=False)
-    for k in range(16):
-        a = -1.9 + k * .25
+    for k in range(10):
+        a = -1.9 + k * .4
         ln = .02 + (k % 3) * .012
         finish(cone((s * .262, .02 + math.sin(a) * .088, 1.39 + math.cos(a) * .1), .006, 0, ln, rot=(0, s * (1.4 + (k % 2) * .3), 0), seg=3), 'tape', ['clavicle' + sf, 'spine_03'], 0.06, smooth=False)
 # sewn patches (drawn on denim, so only the patch shape shows) + pins, placed like the sheet
@@ -334,9 +334,9 @@ pin(-.105, 1.44, .012, 'yellow'); pin(.105, 1.45, .011, 'orange'); pin(.17, 1.44
 torso_decal('p_crash', vest_prof, 1.235, 0.0, .3, .3, front=False, inset=.005)                    # painted on the back
 
 # ---------------------------------------------------------------- neck + head group
-finish(tube('z', [(1.47, 0, .035, .056, .056), (1.64, 0, .02, .054, .054)], n=10), 'skin', ['spine_03', 'neck_01', 'Head'], 0.05)
+finish(tube('z', [(1.47, 0, .035, .052, .056), (1.64, 0, .02, .05, .052)], n=8), 'skin', ['spine_03', 'neck_01', 'Head'], 0.05)
 head_from = len(PARTS)
-fv = sphere(FACE_C, FACE_R, u=18, v=12)                                                   # blank oval face, tapering to the chin
+fv = sphere(FACE_C, FACE_R, u=14, v=9)                                                   # blank oval face, tapering to the chin
 for v in fv:
     t = max(0.0, (FACE_C[2] - v.co.z) / FACE_R[2])
     v.co.x *= 1 - .25 * t
@@ -352,11 +352,11 @@ def helmet_cut(v, c, r, lower=0.0):
     if v.co.z < thr: v.co.z = thr
 
 
-hv = sphere(HC, HR, u=22, v=14)                                                           # round shell: straight brow, sides down over the ears
+hv = sphere(HC, HR, u=16, v=10)                                                           # round shell: straight brow, sides down over the ears
 for v in hv: helmet_cut(v, HC, HR)
 finish(hv, 'helmet', ['Head'], 0.02)
 LR = (HR[0] - .007, HR[1] - .007, HR[2] - .007)
-lv = sphere(HC, LR, u=22, v=14)                                                           # black liner peeking under the rim
+lv = sphere(HC, LR, u=16, v=8)                                                           # black liner peeking under the rim
 for v in lv: helmet_cut(v, HC, LR, lower=.012)
 finish(lv, 'lining', ['Head'], 0.02)
 
@@ -367,11 +367,11 @@ def on_helmet(d, out=0.0):
 
 
 for d in ((.45, -.72, .52), (-.45, -.72, .52), (.32, -.2, .92), (-.32, -.2, .92), (.3, .35, .88), (-.3, .35, .88), (.42, .78, .45), (-.42, .78, .45)):
-    finish(sphere(on_helmet(d, -.004), (.013, .013, .013), u=8, v=6), 'lining', ['Head'], 0.02)     # vents
+    finish(cone(on_helmet(d, -.002), .014, .014, .008, rot=Vector(d).normalized().to_track_quat('Z', 'Y').to_euler(), seg=6), 'lining', ['Head'], 0.02, smooth=False)     # vents
 ellipsoid_decal('p_sticker1', HC, HR, on_helmet((.93, -.05, .25)), on_helmet((.9, -.05, .43)), .05, inset=.003)
 
 
-def lick(p0, d, L, r0, col, curl=(0.0, 0.0, 0.0), segs=4):
+def lick(p0, d, L, r0, col, curl=(0.0, 0.0, 0.0), segs=3):
     """a pointed lick of flame from p0 along d, curling"""
     d = Vector(d).normalized()
     rings = []
@@ -379,7 +379,7 @@ def lick(p0, d, L, r0, col, curl=(0.0, 0.0, 0.0), segs=4):
         t = i / segs
         c = Vector(p0) + d * (L * t) + Vector(curl) * (L * t * t)
         r = max(.002, r0 * (1 - t) ** .9)
-        rings.append(ring(c, X3, Y3, r, r * .8, 6))
+        rings.append(ring(c, X3, Y3, r, r * .8, 5))
     finish(loft(rings), col, ['Head'], 0.02, mat=FLAME, smooth=False)
 
 
@@ -395,18 +395,18 @@ def fw(t): return (.07 + .1 * t / .3) if t < .3 else .17 * ((1 - t) / .7) ** .8 
 def fc(t): return Vector((.012 * math.sin(t * math.pi * 2.2), .025 * t * t, top + FH * t))
 
 
-finish(loft([ring(fc(t), X3, Y3, fw(t) * .5, fw(t) * .36, 10) for t in [i / 9 for i in range(10)]]), 'flame', ['Head'], 0.02, mat=FLAME, smooth=False)
+finish(loft([ring(fc(t), X3, Y3, fw(t) * .5, fw(t) * .36, 8) for t in [i / 7 for i in range(8)]]), 'flame', ['Head'], 0.02, mat=FLAME, smooth=False)
 for i, (t0, sx, sy, L, curl) in enumerate(((.42, -1, -.2, .13, (.0, 0, .3)), (.45, 1, .1, .14, (0, 0, .35)), (.6, -1, .2, .11, (.05, 0, .3)), (.63, 1, -.2, .12, (-.05, 0, .35)),
                                            (.74, -.5, .3, .1, (.05, .0, .3)), (.77, .5, .2, .09, (-.05, 0, .3)), (.5, .2, -1, .08, (0, 0, .3)), (.52, -.2, 1, .09, (0, 0, .3)))):
     lick(fc(t0), (sx * .8, sy * .5, 1.0), L, .028, 'flame', curl)
 for sy in (-1, 1):                                                       # yellow cores sitting proud of the body, front and back
     core = []
-    for i in range(7):
-        t = i / 6
+    for i in range(5):
+        t = i / 4
         tb = t * .62
         w = fw(tb) * (.62 - .2 * t)
         c = fc(tb) + Vector((0, sy * (fw(tb) * .36 - w * .12), .005))
-        core.append(ring(c, X3, Y3, w * .5, w * .16, 8))
+        core.append(ring(c, X3, Y3, w * .5, w * .16, 6))
     finish(loft(core), 'yellow', ['Head'], 0.02, mat=FLAME, smooth=False)
 for p, sc_ in (((-.085, .0, top + .3), .02), ((.09, .02, top + .36), .017), ((.035, -.01, top + .43), .014)):   # floating embers
     finish(cone(p, sc_ * .6, 0, sc_ * 2, seg=4, rot=(0, .4, .3)), 'flame', ['Head'], 0.02, mat=FLAME, smooth=False)
@@ -420,38 +420,39 @@ for v in {v for p in PARTS[head_from:] for v in p[0]}:
 for s in (1, -1):
     sf = '_l' if s > 0 else '_r'
     ab = ['clavicle' + sf, 'upperarm' + sf, 'lowerarm' + sf, 'hand' + sf]
-    finish(tube('x', [(.16, .06, 1.462, .07, .066), (.24, .064, 1.466, .08, .078), (.31, .067, 1.458, .066, .064), (.39, .07, 1.455, .07, .064),
-                      (.46, .073, 1.456, .047, .045), (.53, .073, 1.456, .058, .053), (.63, .069, 1.456, .043, .039), (.705, .065, 1.456, .035, .032)], n=12, s=s), 'skin', ab, 0.05)
+    finish(tube('x', [(.15, .058, 1.46, .085, .08), (.215, .062, 1.47, .1, .098), (.27, .066, 1.462, .092, .088), (.33, .069, 1.452, .08, .082),
+                      (.4, .074, 1.452, .084, .078), (.462, .074, 1.456, .062, .058), (.51, .073, 1.456, .072, .066), (.57, .071, 1.456, .066, .058),
+                      (.65, .068, 1.456, .052, .046), (.71, .066, 1.456, .046, .041)], n=10, s=s), 'skin', ab, 0.05)
     for k in range(4):
-        finish(tube('x', [(.615 + k * .019, .067, 1.456, .044, .041), (.628 + k * .019, .067, 1.456, .044, .041)], n=10, s=s), 'black' if k % 2 else 'lining', ab[2:], 0.03)
-    for k in range(6):                                                                            # studs on one band
-        a = k * math.pi / 3
-        finish(sphere((s * .66, .067 + math.cos(a) * .046, 1.456 + math.sin(a) * .043), (.006, .006, .006), u=6, v=4), 'silver', ab[2:], 0.03)
-    finish(sphere((s * .765, .066, 1.452), (.068, .056, .027), u=10, v=6), 'skin', ab[2:], 0.03)
-    finish(sphere((s * .84, .062, 1.444), (.058, .05, .022), rot=(0, s * .3, 0), u=10, v=6), 'skin', ab[3:], 0.03)
-    finish(sphere((s * .775, .016, 1.44), (.036, .03, .02), rot=(0, 0, s * .5), u=8, v=6), 'skin', ab[3:], 0.03)
+        finish(tube('x', [(.63 + k * .018, .067, 1.456, .056, .051), (.642 + k * .018, .067, 1.456, .056, .051)], n=8, s=s), 'black' if k % 2 else 'lining', ab[2:], 0.03)
+    for k in range(5):                                                                            # studs on one band
+        a = k * math.pi * 2 / 5
+        finish(cube((s * .675, .067 + math.cos(a) * .057, 1.456 + math.sin(a) * .052), (.009, .009, .009), rot=(a, 0, 0)), 'silver', ab[2:], 0.03, smooth=False)
+    finish(sphere((s * .77, .066, 1.452), (.075, .062, .032), u=8, v=6), 'skin', ab[2:], 0.03)
+    finish(sphere((s * .85, .062, 1.442), (.064, .056, .026), rot=(0, s * .35, 0), u=8, v=5), 'skin', ab[3:], 0.03)
+    finish(sphere((s * .78, .01, 1.438), (.04, .034, .023), rot=(0, 0, s * .5), u=6, v=5), 'skin', ab[3:], 0.03)
 
 # ---------------------------------------------------------------- pelvis, studded belt, chain on the left hip, back pockets
 finish(tube('z', [(1.0, 0, .03, .19, .14), (.95, 0, .035, .202, .15), (.86, 0, .035, .2, .145)], n=18), 'cargo', ['pelvis', 'spine_01', 'thigh_l', 'thigh_r'], 0.07)
-finish(tube('z', [(.928, 0, .034, .206, .154), (.962, 0, .033, .206, .154)], n=24), 'black', ['pelvis', 'spine_01'], 0.05)
+finish(tube('z', [(.928, 0, .034, .206, .154), (.962, 0, .033, .206, .154)], n=16), 'black', ['pelvis', 'spine_01'], 0.05)
 finish(cube((0, -.19, .945), (.05, .02, .036)), 'silver', ['pelvis'], 0.03, smooth=False)
-for k in range(22):
-    a = k * 2 * math.pi / 22
+for k in range(14):
+    a = k * 2 * math.pi / 14
     if abs(math.atan2(math.sin(a), -math.cos(a))) < .25: continue
     finish(cube((math.sin(a) * .21, .034 - math.cos(a) * .158, .945), (.013, .013, .013), rot=(0, 0, a)), 'silver', ['pelvis'], 0.04, smooth=False)
 
 
-def link(p, ang_z, alt, R=.022, Rz=.028, r=.007):
+def link(p, ang_z, alt, R=.024, Rz=.03, r=.008):
     rows = []
-    for a in range(8):
-        aa = 2 * math.pi * a / 8
+    for a in range(6):
+        aa = 2 * math.pi * a / 6
         c = Vector((math.cos(aa) * R, 0, math.sin(aa) * Rz))
-        rows.append([Matrix.Rotation(ang_z + (math.pi / 2 if alt else 0), 3, 'Z') @ (c + Vector((math.cos(2 * math.pi * b / 5) * r * math.cos(aa), math.sin(2 * math.pi * b / 5) * r, math.cos(2 * math.pi * b / 5) * r * math.sin(aa)))) + p for b in range(5)])
+        rows.append([Matrix.Rotation(ang_z + (math.pi / 2 if alt else 0), 3, 'Z') @ (c + Vector((math.cos(2 * math.pi * b / 4) * r * math.cos(aa), math.sin(2 * math.pi * b / 4) * r, math.cos(2 * math.pi * b / 4) * r * math.sin(aa)))) + p for b in range(4)])
     return loft(rows, wrap=True)
 
 
-for i in range(15):                                                                       # front belt loop on his left -> loops low -> back pocket
-    t = i / 14
+for i in range(11):                                                                       # front belt loop on his left -> loops low -> back pocket
+    t = i / 10
     p = Vector((.15 + .1 * math.sin(math.pi * t), -.17 + .35 * t, .935 - .19 * math.sin(math.pi * t)))
     finish(link(p, math.atan2(.35, .1 * math.pi * math.cos(math.pi * t)), i % 2), 'silver', ['pelvis', 'thigh_l'], 0.05)
 for s in (1, -1):
@@ -463,13 +464,19 @@ for s in (1, -1):
     sf = '_l' if s > 0 else '_r'
     lb = ['pelvis', 'thigh' + sf, 'calf' + sf, 'foot' + sf]
     X = lambda x: s * x
-    LEG = [(.99, X(.112), .036, .118, .128, .0), (.85, X(.116), .036, .118, .128, .02), (.7, X(.118), .04, .114, .124, .03), (.55, X(.118), .046, .108, .118, .04),
-           (.42, X(.116), .056, .104, .112, .04), (.33, X(.115), .064, .1, .108, .05), (.285, X(.114), .07, .106, .114, .1), (.255, X(.114), .074, .096, .104, .1),
-           (.228, X(.114), .076, .102, .108, .08), (.205, X(.114), .078, .095, .1, .04)]
-    finish(tube('z', LEG, n=16), 'cargo', lb, 0.06)
+    LEG = [(.99, X(.112), .036, .118, .128, .0), (.85, X(.118), .036, .12, .13, .03), (.7, X(.122), .04, .122, .132, .04), (.55, X(.126), .046, .124, .134, .06),
+           (.42, X(.13), .056, .132, .14, .07), (.32, X(.132), .064, .14, .148, .09), (.25, X(.132), .068, .15, .16, .12), (.2, X(.13), .066, .142, .152, .1),
+           (.16, X(.128), .064, .148, .16, .12), (.125, X(.126), .066, .148, .162, .08), (.1, X(.126), .068, .142, .156, .04)]
+    lv = tube('z', LEG, n=14)
+    for v in lv:                                                                                  # the hem pools over the heel, rides up over the laces
+        if v.co.z < .2:
+            k = (.2 - v.co.z) / .1
+            dy = v.co.y - .064
+            v.co.z += -.045 * k * max(0.0, dy / .16) + .075 * k * max(0.0, -dy / .16)
+    finish(lv, 'cargo', lb, 0.06)
     for z in (.57, .62):                                                                     # knee darts
-        finish(tube('z', [(z, X(.118), .046, .11, .12), (z + .006, X(.118), .046, .11, .12)], n=16), 'cargoDark', lb[1:3], 0.05)
-    px = X(.118 + .108)
+        finish(tube('z', [(z, X(.126), .046, .126, .136), (z + .006, X(.126), .046, .126, .136)], n=14), 'cargoDark', lb[1:3], 0.05)
+    px = X(.122 + .116)
     finish(cube((px, .045, .64), (.045, .15, .16)), 'cargo', lb[:3], 0.05, smooth=False)                                       # bellows pocket
     finish(cube((px + X(.004), .045, .73), (.054, .158, .048)), 'cargoDark', lb[:3], 0.05, smooth=False)                      # flap
     finish(sphere((px + X(.028), .045, .715), (.008, .01, .01), u=6, v=4), 'black', lb[:3], 0.05)
@@ -478,14 +485,14 @@ for s in (1, -1):
     sb = ['calf' + sf, 'foot' + sf, 'ball' + sf]
     flame = ('shoeflame', lambda co: ((co.y + .29) / .45, co.z / .25))
     finish(tube('y', [(.14, cx, .085, .066, .08), (.07, cx, .1, .078, .1), (-.03, cx, .09, .082, .085), (-.13, cx, .07, .084, .062), (-.2, cx, .058, .08, .048),
-                      (-.25, cx, .05, .066, .036), (-.275, cx, .046, .045, .026)], n=16), 'shoeflame', sb, 0.05, proj=flame[1])
-    finish(tube('z', [(.07, cx, .072, .074, .08), (.24, cx, .075, .073, .073)], n=16), 'shoeflame', sb, 0.05, proj=flame[1])
-    finish(tube('z', [(.225, cx, .076, .079, .079), (.252, cx, .077, .076, .076)], n=16), 'rust', sb, 0.05)                           # padded collar
+                      (-.25, cx, .05, .066, .036), (-.275, cx, .046, .045, .026)], n=12), 'shoeflame', sb, 0.05, proj=flame[1])
+    finish(tube('z', [(.07, cx, .072, .074, .08), (.24, cx, .075, .073, .073)], n=12), 'shoeflame', sb, 0.05, proj=flame[1])
+    finish(tube('z', [(.225, cx, .076, .079, .079), (.252, cx, .077, .076, .076)], n=12), 'rust', sb, 0.05)                           # padded collar
     finish(sphere((cx, .0, .205), (.052, .03, .06), rot=(.35, 0, 0), u=10, v=6), 'rust', sb, 0.05)                                      # tongue
-    finish(sphere((cx, -.205, .052), (.082, .082, .044), u=12, v=8), 'lilac', sb, 0.05)                                                 # rubber toe cap
+    finish(sphere((cx, -.205, .052), (.082, .082, .044), u=10, v=6), 'lilac', sb, 0.05)                                                 # rubber toe cap
     SOLE = [(.165, .026, .074, .026), (.1, .025, .082, .025), (.0, .027, .08, .024), (-.12, .025, .088, .025), (-.22, .026, .086, .026), (-.28, .03, .064, .022), (-.3, .036, .04, .016)]
-    finish(loft([sring(Vector((cx, y, cz)), X3, Z3, rx, rz, 16, 4.0) for y, cz, rx, rz in SOLE]), 'white', sb, 0.05)
-    finish(loft([sring(Vector((cx, y, cz + rz * .25)), X3, Z3, rx + .002, .004, 16, 4.0) for y, cz, rx, rz in SOLE[:-1]]), 'lining', sb, 0.05)
+    finish(loft([sring(Vector((cx, y, cz)), X3, Z3, rx, rz, 12, 4.0) for y, cz, rx, rz in SOLE[::2] + [SOLE[-1]]]), 'white', sb, 0.05)
+    finish(loft([sring(Vector((cx, y, cz + rz * .25)), X3, Z3, rx + .002, .004, 12, 4.0) for y, cz, rx, rz in SOLE[:-1:2]]), 'lining', sb, 0.05)
     for k in range(6):
         finish(cube((cx, -.012 - k * .027, .205 - k * .021), (.07, .012, .011), rot=(.6, 0, 0)), 'white', sb, 0.05, smooth=False)
 
@@ -554,6 +561,36 @@ for o in bpy.data.objects:
         o.name = 'Pyre_Flame' if o.data.materials and o.data.polygons and o.data.materials[o.data.polygons[0].material_index].name == 'PyreFlame' else 'Pyre'
         o.data.name = o.name
         print('MESH', o.name, 'tris', sum(len(p.vertices) - 2 for p in o.data.polygons), 'verts', len(o.data.vertices))
+
+# ================================================================ rest pose: relaxed A-pose, elbows bent, wrists turned in
+# Clips set each bone's local rotation outright, so a bent bind pose still plays every existing animation correctly;
+# it only changes how he looks unanimated and makes shoulders/elbows deform from a natural angle.
+
+
+def rest_rot(name, axis, deg):
+    pb = arm.pose.bones[name]
+    h = arm.matrix_world @ pb.head
+    pb.matrix = (Matrix.Translation(h) @ Matrix.Rotation(math.radians(deg), 4, axis) @ Matrix.Translation(-h)) @ pb.matrix
+    bpy.context.view_layer.update()
+
+
+for s_, sf in ((1, '_l'), (-1, '_r')):
+    rest_rot('upperarm' + sf, 'Y', s_ * 48)          # arms down to ~45 degrees
+    rest_rot('upperarm' + sf, 'X', -6)               # a touch forward
+    rest_rot('lowerarm' + sf, 'X', -20)              # elbows bent forward
+    rest_rot('lowerarm' + sf, 'Y', s_ * 6)
+    rest_rot('hand' + sf, 'Y', -s_ * 12)             # wrists in
+meshes = [o for o in bpy.data.objects if o.type == 'MESH']
+for o in meshes:                                     # bake the posed shape into the meshes, then make the pose the new rest
+    bpy.context.view_layer.objects.active = o
+    bpy.ops.object.modifier_apply(modifier='Armature')
+    m = o.modifiers.new('Armature', 'ARMATURE')
+    m.object = arm
+bpy.context.view_layer.objects.active = arm
+bpy.ops.object.mode_set(mode='POSE')
+bpy.ops.pose.select_all(action='SELECT')
+bpy.ops.pose.armature_apply(selected=False)
+bpy.ops.object.mode_set(mode='OBJECT')
 
 bpy.ops.export_scene.gltf(filepath=OUT, export_format='GLB', export_animations=False, export_skins=True, export_yup=True, export_apply=False,
                           export_texcoords=True, export_normals=True, export_cameras=False, export_lights=False, export_image_format='AUTO')

@@ -281,13 +281,13 @@ def rot(b, axis, deg):
 rot('thigh_l', 'X', -84); rot('thigh_l', 'Z', 14)
 rot('thigh_r', 'X', -82); rot('thigh_r', 'Z', -16)
 rot('calf_l', 'X', 52); rot('calf_r', 'X', 84)
-rot('foot_l', 'X', 18); rot('foot_r', 'X', 30)
+rot('foot_l', 'X', 18); rot('foot_r', 'X', -28)
 # torso leans in, head tips down toward the low camera, a little attitude
-rot('spine_01', 'X', 10); rot('spine_02', 'X', 8); rot('spine_03', 'X', 4); rot('spine_03', 'Z', -6)
+rot('spine_01', 'X', 12); rot('spine_02', 'X', 10); rot('spine_03', 'X', 8); rot('spine_03', 'Z', -8); rot('clavicle_l', 'Y', 6); rot('clavicle_r', 'Y', -10)
 rot('neck_01', 'X', 10); rot('Head', 'X', 6); rot('Head', 'Z', -10); rot('Head', 'Y', 6)
 # left forearm resting across the left knee, right hand on the nose of the standing deck
-rot('upperarm_l', 'Y', 80); rot('upperarm_l', 'X', -35); rot('lowerarm_l', 'X', -50); rot('lowerarm_l', 'Z', 18); rot('hand_l', 'X', 45)
-rot('upperarm_r', 'Y', 12); rot('upperarm_r', 'X', -14); rot('lowerarm_r', 'Y', 34); rot('hand_r', 'Y', 10)
+rot('upperarm_l', 'Y', 32); rot('upperarm_l', 'X', -29); rot('lowerarm_l', 'X', -30); rot('lowerarm_l', 'Z', 18); rot('hand_l', 'X', 45)
+rot('upperarm_r', 'Y', 60); rot('upperarm_r', 'X', -8); rot('lowerarm_r', 'X', 14); rot('lowerarm_r', 'Y', 28); rot('hand_r', 'Y', 10)
 
 arm.location = (0.0, BOX_FRONT + .37, BOX_H - .855)
 bpy.context.view_layer.update()
