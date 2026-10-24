@@ -1,0 +1,18 @@
+import { open, sleep, gameWait, shot } from './harness.mjs';
+const { browser, page, errors } = await open({ query: '?debug', mobile: true });
+const ev = (f, a) => page.evaluate(f, a);
+await ev(() => window.__game.startTraining('fire', 'sandbox')); await sleep(1200);
+await ev(() => { const g = window.__game, p = g.G.player; document.getElementById('lab')?.classList.add('closed'); g.G.trainAttack = false; for (const e of g.G.enemies) e.dead = true; p.x = 30; });
+const box = await ev(() => { const r = document.querySelector('.tc-stance').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2, shown: getComputedStyle(document.querySelector('.tc-stance')).display }; });
+const cdp = await page.context().newCDPSession(page);
+const touch = async (type, x, y) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [{ x, y, id: 1 }] });
+await touch('touchStart', box.x, box.y); await sleep(120); await touch('touchEnd'); await gameWait(page, 0.3);
+const a = await ev(() => ({ skate: window.__game.G.player.skate, lbl: document.querySelector('.tc-stance .tc-lbl').textContent }));
+await gameWait(page, 0.3);
+await touch('touchStart', box.x, box.y); await sleep(120); await touch('touchEnd'); await gameWait(page, 0.4);
+const b = await ev(() => window.__game.G.player.skate);
+await touch('touchStart', box.x, box.y); await sleep(700); await touch('touchEnd'); await gameWait(page, 0.3);
+const c = await ev(() => ({ emote: window.__game.G.player.emote?.n, skate: window.__game.G.player.skate }));
+await shot(page, 'p8_touch');
+console.log(JSON.stringify({ box, tapOn: a, tapOff: b, longPress: c }), JSON.stringify(errors));
+await browser.close();

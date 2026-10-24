@@ -1,0 +1,14 @@
+import { open, sleep, gameWait, vpress, shot, cropShot } from './harness.mjs';
+const { browser, page, errors } = await open({});
+await page.evaluate(() => window.__game.startTraining('fire', 'sandbox'));
+await sleep(600);
+await page.evaluate(() => { const g = window.__game, p = g.G.player; p.infEnergy = true; g.G.trainAttack = false; const e = g.spawnEnemy('bug', p.x + 1.6, 0); e.spawnT = 0; e.hp = 5; const d = g.spawnEnemy('brute', p.x + 6, 0); d.spawnT = 0; d.hp = 5; });
+await sleep(300);
+await vpress(page, ['main'], 0.05);
+await gameWait(page, 0.25);
+await cropShot(page, 'slice_a', 260);
+await gameWait(page, 0.25);
+await cropShot(page, 'slice_b', 260);
+const r = await page.evaluate(() => ({ enemies: window.__game.G.enemies.filter((e) => !e.dead && e.type !== 'dummy').length, fx: window.__game.G.fx.length, progs: window.__game.perfStats.hitches.map((h) => h.newPrograms) }));
+console.log(JSON.stringify(r), errors);
+await browser.close();

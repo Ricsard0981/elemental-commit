@@ -1,0 +1,14 @@
+import { open, sleep, shot } from './harness.mjs';
+const mobile = process.argv[2] === 'mobile';
+const { browser, page, errors } = await open({ mobile, query: '?debug' });
+await sleep(900); await shot(page, (mobile ? 'm_' : '') + 'title');
+await page.click('#t-run'); await sleep(500);
+const sel = await page.evaluate(() => ({ menu: document.getElementById('menu').classList.contains('show'), title: document.getElementById('title').classList.contains('show'), mode: window.__game.G.menuMode }));
+await page.click('#btn-menu-back'); await sleep(300);
+const back = await page.evaluate(() => document.getElementById('title').classList.contains('show'));
+await page.click('#t-credits'); await sleep(300); await page.click('#btn-credits-close');
+await page.click('#t-settings'); await sleep(300); const st = await page.evaluate(() => document.getElementById('settings').classList.contains('show')); await page.click('#btn-settings-close'); await sleep(200);
+await page.click('#t-campaign'); await page.click('.card[data-el="fire"]'); await sleep(1500);
+const play = await page.evaluate(() => window.__game.G.mode);
+console.log(JSON.stringify({ sel, back, settings: st, play }), errors);
+await browser.close();

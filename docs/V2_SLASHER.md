@@ -77,7 +77,7 @@ CPU profile finding that drove the pass: three.js `getParameters` / program-cach
 - Two simultaneous wave spawns in Room Run (timer + update loop) (caught by the run test, fixed).
 
 ## 11. How to test (PC)
-Serve the branch: `npx http-server -p 8092 -c-1 .` in `C:\programok\ELEMENT_GAME_v2`, open http://localhost:8092. The Lab (Training Grounds) has every new enemy; infinite energy + no cooldowns make move testing easy.
+Serve: double-click `Play.bat` (or `npx http-server -p 8080 -c-1 .`), open http://localhost:8080. The Lab (Training Grounds) has every new enemy; infinite energy + no cooldowns make move testing easy.
 1. Kill something with a finisher: look for the cut, shards and streaks. 2. Watch the Style letter climb while mixing moves, drop when you repeat one. 3. Dash through an attack for witch time. 4. Break a Shieldling's shield, then execute it. 5. Burn + chill an enemy for STEAM, etc. 6. Parry twice, then press **R** after taking damage. 7. Menu → Room Run, play a few rooms. 8. Settings → Controls: rebind a key; plug in a gamepad.
 
 ## 12. NOT verified
@@ -108,7 +108,7 @@ The first v2 UI still looked like a generic dark dashboard (rounded GitHub-grey 
 **Not done / not verified:** the Fire-Skater (waiting for the owner's instructions); the Campaign world is not re-skinned (the world overhaul is separate); the heroes' outfits are first drafts judged only on screenshots; iPhone 13 untested.
 
 ## 15. Pyre: the Fire hero's own Blender model
-Fire is now **Pyre**, the faceless fire-punk skater from `ELEMENT_GAME_v2/assets/concept/FIRE_GUY`. He is a separate model built entirely by script in Blender (headless, repeatable):
+Fire is now **Pyre**, the faceless fire-punk skater from `assets/concept/pyre/`. He is a separate model built entirely by script in Blender (headless, repeatable):
 - `tools/blender/atlas_gen.mjs` draws the 1024 texture atlas (flat swatches, sewn patches, the CRASH back art, the shoe flame print, the deck graphic) into `atlas.png` + `atlas.json`.
 - `tools/blender/build_pyre.py` models him (bmesh), UV-maps every part to an atlas cell, skins him to the game's own rig (same bone names, so every clip in `anims.glb` plays) and exports `assets/hero/pyre.glb` (~7.6k tris, flame as its own glowing mesh). The rest pose is a relaxed A-pose with bent elbows; clips set bone rotations outright, so this does not affect animation.
 - `tools/blender/build_deck.py` builds the purple IGNITE board, `assets/hero/pyre_deck.glb` (~1k tris).

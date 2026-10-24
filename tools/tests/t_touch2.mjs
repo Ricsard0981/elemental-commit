@@ -1,0 +1,13 @@
+import { open, sleep, gameWait } from './harness.mjs';
+const { browser, ctx, page, errors } = await open({ mobile: true, query: '?debug' });
+await page.evaluate(() => window.__game.startTraining('water', 'sandbox'));
+await sleep(900); await gameWait(page, 3.2);
+const info = await page.evaluate(() => { const b = document.querySelector('.tc-revert'); const r = b.getBoundingClientRect(); const x = r.x + r.width / 2, y = r.y + r.height / 2; const top = document.elementFromPoint(x, y); return { x, y, top: top.className + '|' + top.id + '|' + (top.parentElement?.className || ''), disp: getComputedStyle(b).display, op: getComputedStyle(b).opacity, pe: getComputedStyle(b).pointerEvents }; });
+console.log(JSON.stringify(info));
+const cdp = await ctx.newCDPSession(page);
+await page.evaluate(() => { window.__log = []; const In = window.__game.In; const o = In.vDown; });
+await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: info.x, y: info.y }] }); await sleep(60);
+console.log(await page.evaluate(async () => ({ held: document.querySelector('.tc-revert').className, rev: (await import('./src/revert.js')).REV.charges, buf: (await import('./src/revert.js')).REV.buf.length })));
+await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] }); await sleep(300);
+console.log(await page.evaluate(async () => (await import('./src/revert.js')).REV.charges), errors);
+await browser.close();

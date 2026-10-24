@@ -2,7 +2,7 @@
 // (cell rectangles) for build_pyre.py. Run from a folder that has `playwright` installed:
 //   node tools/blender/atlas_gen.mjs      (writes tools/blender/atlas.png + tools/blender/atlas.json)
 import fs from 'fs';
-const { chromium } = await import(process.env.PLAYWRIGHT || 'playwright'); // e.g. PLAYWRIGHT=file:///C:/programok/_v2_tools/node_modules/playwright/index.mjs
+const { chromium } = await import(process.env.PLAYWRIGHT || new URL('../tests/node_modules/playwright/index.mjs', import.meta.url).href); // resolves from tools/tests/node_modules (run `npm install` in tools/tests once)
 import path from 'path';
 import { fileURLToPath } from 'url';
 const here = path.dirname(fileURLToPath(import.meta.url));

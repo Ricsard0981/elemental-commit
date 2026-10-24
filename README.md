@@ -11,6 +11,23 @@ Zero build step. The four heroes are built on two CC0 base bodies + a CC0 animat
 npx http-server -p 8080 .   # or: python3 -m http.server 8080
 ```
 
+## Project layout
+
+```
+ELEMENT_GAME/            the whole game (one repo, branch main, deployed to GitHub Pages)
+  Play.bat               double-click to play locally (http://localhost:8080)
+  index.html, style.css  page + UI skin
+  src/                   game code (ES modules, no build step) — map in CLAUDE.md
+  assets/hero/           3D models: base bodies, animation library, Pyre (pyre.glb) + his deck (pyre_deck.glb)
+  assets/concept/        concept art (assets/concept/pyre = the Fire hero's sheet)
+  assets/fonts/          web fonts
+  vendor/                three.js r170 + credits
+  tools/blender/         scripts that BUILD Pyre and his deck in Blender, plus preview / look-dev renders
+  tools/tests/           headless Playwright tests (see tools/tests/README.md)
+  docs/                  design docs, handoff notes, research
+  backup/prototype-v1/   the previous version of the game, still playable
+```
+
 ## The vertical slice
 
 One complete level ("`main` branch"), start to finish, ~8–12 minutes:
@@ -46,7 +63,7 @@ Touch controls switch on automatically on touch screens (or force them in **Sett
 ### Performance
 Quality presets (Low / Medium / High) scale pixel ratio, shadows, bloom, particle budget, the number of animated skyline rows and the flash-light count. **Auto** (the default) picks Medium on phones and High on desktops. It then runs **dynamic resolution**: when frames run long it lowers the render scale to 55%, and if that's still not enough it drops bloom, then shadows, then particles. Benchmarks are in [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md).
 
-## v2: the "Slasher" update (this branch)
+## v2: the "Slasher" update
 Slice deaths and cut-line hit streaks · a **Style meter** (D to SSS) that rewards variety · **perfect dodge** with witch time · **executions** on poise-broken enemies · **Revert**, a limited rewind charged by perfect parries · six **elemental reactions** (steam, thermal shock, magma, firestorm, mud, sandstorm) · new enemies (Shieldling, Rammer, Hotfix medic, elite affixes, the Gatekeeper mini-boss) · **Room Run**, a roguelite mode with Patches, shops and the boss · gamepad, key remapping, difficulty and colour-blind-safe tells. Details and how to test: [`docs/V2_SLASHER.md`](docs/V2_SLASHER.md). The previous version is playable in [`backup/prototype-v1/`](backup/prototype-v1/).
 
 ## Elements
@@ -55,7 +72,7 @@ Each element has **1 main attack, 1 ranged attack, 1 defence, 2 specials**, its 
 
 | | Main (`J`) | Ranged (`K`) | Defend (`F`) | Special 1 (`Q`) | Special 2 (`E`) |
 |---|---|---|---|---|---|
-| 🔥 **Fire** | Flame Blade — fast 3-hit combo, burning finisher | Fireball — exploding projectile | Flame Ward — parry → fire nova | Phoenix Dash — invulnerable fire dash + firetrail | Meteor Storm — rain of meteors |
+| 🔥 **Fire (Pyre)** | Street Rhythm — capoeira kicks, Deck Slam finisher | Fireball — exploding projectile | Kick-Turn — deck block, perfect → 360 fire wave | Ignite Grind — rail-locking fire grind, backflip dismount | Volcanic Spit-Trick — burning graffiti stamp (+ meteors in BLAZE) |
 | 💧 **Water** | Tide Whip — wide chilling sweeps, wave finisher | Water Bolt — rapid homing bolts | Bubble Shield — block, perfect → heal + pop wave | Tidal Wave — screen-crossing crash | Healing Rain — heal zone that hurts enemies |
 | ⛰ **Earth** | Stone Fists — slow & heavy, ground slam | Rock Throw — lobbed boulder, shrapnel | Stone Skin — −85% damage, perfect → stun all | Quake — leap + slam, shockwaves | Stone Bastion — pillars that launch & block |
 | 🌪 **Air** | Gale Blades — very fast, long reach | Wind Cutter — piercing crescent | Wind Wall — deflects projectiles, perfect → gust | Cyclone — tornado that pulls & shreds | Sky Dance — free flight + haste |

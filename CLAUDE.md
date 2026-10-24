@@ -13,7 +13,7 @@ via `.github/workflows/pages.yml`).
 - Phone testing: push to `main` and open the Pages URL. The owner tests on an **iPhone 13**.
 - Debug handle in the browser console: `window.__game` (G, startRun, spawnEnemy, giveXP, ENG, Q, perfStats, In, …).
 - `?debug` in the URL turns three.js shader error checks back on.
-- Automated checks: Playwright (headless Chromium) driving `window.__game`, with phone emulation + CDP touch events for touch controls.
+- Automated checks: Playwright (headless Chromium) driving `window.__game`, with phone emulation + CDP touch events for touch controls. They live in `tools/tests/` (`npm install` there once; README inside). Pyre's model/deck are rebuilt with the Blender scripts in `tools/blender/`.
 
 ## Code map (`src/`)
 main.js (loop, run lifecycle, arenas, checkpoints, win/death) · engine.js (renderer, bloom/FX pass, particles, debris, rings/slashes, camera, quality presets, dynamic resolution, shader warm-up) · world.js (level layout, collision, contribution-graph terrain, backdrop) · player.js · elements.js (4 elements × main/ranged/guard/2 specials) · enemies.js · combat.js (damage, parry, projectiles, pickups, combo, XP) · skills.js (trees, progression, save) · ui.js (HUD, skill tree UI) · touch.js (touch controls) · settings.js / settingsUI.js · input.js (keyboard, mouse, touch, gamepad, remapping) · style.js (Style meter) · revert.js (rewind) · reactions.js (elemental reactions) · pyre.js (Fire hero Pyre: Skate Mode, Heat/BLAZE, kit, grind, emotes) · hero.js (models, poses) · assets.js (glb loading; Pyre's own model from tools/blender) · run.js + patches.js (Room Run mode) · dbg.js (combat debug) · audio.js (all synthesized) · state.js (shared `G`) · util.js

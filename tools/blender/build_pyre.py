@@ -233,7 +233,7 @@ def flat_decal(cell, loc, w, h, nx, rot=0.0, bones=('Head',), mat=MAIN):
 
 
 # ================================================================ PYRE
-# Matched to ELEMENT_GAME_v2/assets/concept/FIRE_GUY (sheet + pencil turnaround): round skate helmet with vents over a blank peach oval,
+# Matched to assets/concept/pyre (sheet + pencil turnaround): round skate helmet with vents over a blank peach oval,
 # one tall torch flame from the crown, brown hoodie (hood bunched round the neck, draped on the back, rust ribbed hem), a sleeveless
 # denim trucker vest (pointed collar, V-flap chest pockets, slanted hand pockets, spiked + frayed shoulders, sewn patches and pins,
 # CRASH mushroom painted on the back), bare arms with stacked black bracelets, studded belt, chain on the left hip, relaxed olive

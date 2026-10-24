@@ -3,7 +3,7 @@
 > **Status update (branch `v2-slasher`).** Done in v2: Style meter with variety rank, perfect dodge + witch time, executions, elemental reactions (6), **Revert**,
 > Shieldling / Rammer / Hotfix / elite affixes / Gatekeeper mini-boss, **Room Run** with Patches, shop and rest stops (+ a daily seed), gamepad with rumble, key remapping,
 > difficulty and colour-blind-safe tells, a touch Revert button, an optimisation pass. Still open from this list: a second boss and biomes (world overhaul), story frame,
-> music variety, achievements/stats page, a real online leaderboard, CI smoke tests in the repo (the scripts exist in `C:\programok\_v2_tools`), and the iPhone 13 / headphones verification.
+> music variety, achievements/stats page, a real online leaderboard, CI smoke tests in the repo (the scripts live in `tools/tests/`), and the iPhone 13 / headphones verification.
 > See `docs/V2_SLASHER.md` for what shipped. The text below is the ORIGINAL analysis and is partly OUTDATED.
 
 A researched gap analysis and roadmap. It is **opinion backed by evidence, not a spec**: nothing here is implemented, and the ranking is mine, for the owner to overrule.
