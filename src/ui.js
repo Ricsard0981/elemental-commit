@@ -51,7 +51,7 @@ export function initUI(handlers) {
     cards.appendChild(card);
   });
   refreshCards();
-  addEventListener('keydown', (e) => { if (G.mode === 'menu' && /^Digit[1-4]$/.test(e.code)) { sfx.click(); H.onPick(KEYS[+e.code[5] - 1]); } });
+  addEventListener('keydown', (e) => { if (G.mode === 'menu' && document.getElementById('menu').classList.contains('show') && /^Digit[1-4]$/.test(e.code)) { sfx.click(); H.onPick(KEYS[+e.code[5] - 1]); } });
   // ---- hud slots
   const ab = $('abilities');
   SLOTS.forEach(([id, key, label]) => {
@@ -86,6 +86,19 @@ export function refreshCards() {
 }
 
 export function show(id, on = true) { $(id).classList.toggle('show', on); }
+// Main menu (title) -> element select: the title picks the mode, the select screen picks the element
+export function showTitle() {
+  ['menu', 'death', 'win', 'pause', 'skills', 'credits'].forEach((id) => show(id, false)); show('title', true);
+  document.body.classList.remove('run-mode');
+  requestAnimationFrame(() => document.getElementById('t-campaign')?.focus({ preventScroll: true }));
+}
+export function showSelect(mode) {
+  G.menuMode = mode; document.body.classList.toggle('run-mode', mode === 'run');
+  const seg = document.getElementById('mode-seg');
+  if (seg) seg.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.mode === mode));
+  const d = document.getElementById('mode-desc'); if (d) d.textContent = mode === 'run' ? 'Room Run: random rooms, a Patch after each, shops and a final boss.' : 'Campaign: the hand-built level and boss.';
+  show('title', false); show('menu', true);
+}
 export function setHudVisible(v) { $('hud').classList.toggle('show', v); }
 
 // ----------------------------------------------------------------- HUD

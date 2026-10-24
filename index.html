@@ -48,13 +48,46 @@
 </div>
 <div id="banner"></div>
 
-<section id="menu" class="screen show">
+<section id="title" class="screen show">
+  <div class="t-dots"></div>
+  <div class="t-stars" aria-hidden="true"><i>✦</i><i>★</i><i>✦</i><i>+</i><i>★</i><i>✦</i></div>
+  <header class="t-logo">
+    <div class="t-pre">★ THE CORRUPTION IS SPREADING ★</div>
+    <h1 class="t-h1"><span data-t="ELEMENTAL">ELEMENTAL</span></h1>
+    <div class="t-stamp"><b>COMMIT</b><i>v2.0</i></div>
+    <div class="t-sub">4 elements · 1 broken codebase · zero faces</div>
+  </header>
+  <nav class="t-menu" aria-label="Main menu">
+    <button class="t-btn" id="t-campaign"><em>01</em><b>Campaign</b><small>the hand-built level + boss</small></button>
+    <button class="t-btn hot" id="t-run"><em>02</em><b>Room Run</b><small>random rooms, patches, a boss</small><u>NEW</u></button>
+    <button class="t-btn" id="t-train"><em>03</em><b>Training Grounds</b><small>dummies · trials · endless</small></button>
+    <button class="t-btn" id="t-settings"><em>04</em><b>Settings</b><small>graphics · controls · gamepad</small></button>
+    <button class="t-btn" id="t-credits"><em>05</em><b>Credits</b><small>who made what</small></button>
+  </nav>
+  <footer class="t-foot"><span class="t-bar"></span><span>BEST PLAYED LOUD · 60 FPS · 1999 ENERGY</span><span class="kb-only">↑ ↓ + Enter</span></footer>
+</section>
+<section id="credits" class="screen">
+  <div class="panel wide cred">
+    <h2>Credits</h2>
+    <p><b>Elemental Commit</b> is made by Ricsi, with Claude.</p>
+    <ul>
+      <li><b>three.js</b> (MIT): rendering</li>
+      <li><b>Quaternius</b> Universal Base Characters and Animation Library (CC0)</li>
+      <li><b>Barlow</b> / Barlow Condensed (SIL OFL 1.1): all UI type</li>
+      <li><b>Audio</b>: every sound and the music are synthesized in the browser (WebAudio)</li>
+    </ul>
+    <p class="muted">Full licences: vendor/CREDITS.md</p>
+    <button id="btn-credits-close" class="primary">Back</button>
+  </div>
+</section>
+<section id="menu" class="screen">
   <button id="btn-settings-menu" class="gear" aria-label="Settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
   <div class="title">
     <div class="logo"><i></i><i></i><i></i><i></i></div>
     <h1>ELEMENTAL <span>COMMIT</span></h1>
     <p>Fight through the contribution graph. Fix the bugs. Merge into <code>main</code>.</p>
   </div>
+  <button id="btn-menu-back" class="back-btn">‹ Back</button>
   <div id="mode-seg"><button data-mode="campaign" class="on">Campaign</button><button data-mode="run">Room Run <em>NEW</em></button></div><label id="daily-row"><input type="checkbox" id="daily-chk"> Daily run: everyone gets the same rooms and patch offers today</label><p id="mode-desc">Campaign: the hand-built level and boss.</p>
   <div id="cards"></div>
   <button id="btn-train" class="train-btn"><b>Training Grounds</b><small>Dummies · DPS meter · endless waves · combo trials</small></button>

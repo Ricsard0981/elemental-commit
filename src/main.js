@@ -88,7 +88,7 @@ function toMenu() {
   endRun(); leaveTraining(); showSelect(false); setAmbience('level');
   G.mode = 'menu'; UI.setHudVisible(false);
   ['pause', 'death', 'win', 'skills'].forEach((id) => UI.show(id, false));
-  UI.refreshCards(); UI.show('menu', true);
+  UI.refreshCards(); UI.showTitle();
   if (G.player) { G.player.destroy(); G.player = null; }
   resetWorldState(); UI.hideBoss();
   setAtmosphere(0x39d353);
@@ -96,7 +96,7 @@ function toMenu() {
 // ----------------------------------------------------------------- Training Grounds
 const trainHandlers = {
   start: (k, mode) => startTraining(k, mode),
-  back: () => { showSelect(false); UI.show('menu', true); },
+  back: () => { showSelect(false); UI.showTitle(); },
   toSelect: () => { leaveTraining(); G.mode = 'menu'; UI.setHudVisible(false); ['pause', 'death', 'win', 'skills'].forEach((id) => UI.show(id, false)); showSelect(true); },
   toMenu: () => toMenu(),
   restart: () => startTraining(G.element, TR.mode),
@@ -224,6 +224,25 @@ UI.initUI({
 });
 initTouch(); syncBody();
 document.getElementById('btn-train').onclick = () => { sfx.click(); UI.show('menu', false); showSelect(true); };
+{ // ---- main menu (title screen)
+  const T = (id, fn) => { document.getElementById(id).onclick = () => { initAudio(); sfx.click(); fn(); }; };
+  T('t-campaign', () => UI.showSelect('campaign'));
+  T('t-run', () => UI.showSelect('run'));
+  T('t-train', () => { UI.show('title', false); showSelect(true); });
+  T('t-settings', () => openSettings());
+  T('t-credits', () => UI.show('credits', true));
+  T('btn-credits-close', () => UI.show('credits', false));
+  T('btn-menu-back', () => UI.showTitle());
+  const nav = document.querySelector('.t-menu');
+  addEventListener('keydown', (e) => {
+    if (G.mode !== 'menu' || !document.getElementById('title').classList.contains('show') || document.getElementById('credits').classList.contains('show')) return;
+    const bs = [...nav.querySelectorAll('button')], i = bs.indexOf(document.activeElement);
+    if (e.code === 'ArrowDown' || e.code === 'KeyS') { bs[(i + 1) % bs.length].focus(); sfx.hover(); e.preventDefault(); }
+    else if (e.code === 'ArrowUp' || e.code === 'KeyW') { bs[(i - 1 + bs.length) % bs.length].focus(); sfx.hover(); e.preventDefault(); }
+    else if (/^Digit[1-5]$/.test(e.code)) bs[+e.code[5] - 1].click();
+  });
+  nav.querySelectorAll('button').forEach((b) => (b.onmouseenter = () => sfx.hover()));
+}
 document.getElementById('btn-pause').onclick = () => { pause(); sfx.click(); };
 document.getElementById('btn-pause-settings').onclick = openSettings;
 document.getElementById('btn-settings-menu').onclick = openSettings;
