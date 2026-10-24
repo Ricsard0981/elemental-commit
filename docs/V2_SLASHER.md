@@ -69,6 +69,7 @@ Measured with the same scripted fight (6 enemies attacking, 10 s) on the headles
 | v2 before the pass | 9.3 and 8.0 |
 | v2 after the pass | 6.5, 4.6 and 2.3 |
 The machine was in use by the owner while this ran, so **the runs are noisy**; the honest reading is "v2 costs about what the prototype costs despite many more features". `renderer.info.programs` stayed at 41 across a run of every element, move, new enemy, reaction, Revert and a full Room Run (**0 runtime shader compiles**).
+On **Medium**, the same smoke run on the headless software renderer showed 8-10 programs created after boot. This is NOT new: the prototype does the same (4). Cause: the software renderer is so slow that **dynamic resolution** drops to its minimum scale and sheds shadows, which recompiles the materials without shadows (the cache key flips `shadows 1 -> 0`). High (no dynamic resolution) and Low (no shadows to shed) show 0. On a real GPU it only happens if the device really cannot keep up.
 CPU profile finding that drove the pass: three.js `getParameters` / program-cache-key work from creating a new material for every ring, slash and projectile.
 
 ## 10. Bugs found while building this
