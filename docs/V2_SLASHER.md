@@ -95,3 +95,18 @@ The first v2 UI still looked like a generic dark dashboard (rounded GitHub-grey 
 - **Game-specific details:** HP/energy as segmented ledger bars, the Style rank as a tilted stamp tile, primary buttons in paper-white, stats as segmented pips, touch buttons as flat discs with an accent rim.
 - Checked on desktop and a 844x390 phone viewport (Menu, HUD, skill tree, pause, Lab, Settings). Not checked on a real phone.
 
+
+## 14. Y2K / Spider-Verse art pass, main menu, faceless heroes, the Fire-Skater
+**Main menu:** a title screen (`#title`) with Campaign / Room Run / Training Grounds / Settings / Credits, then the element-select screen with a Back button. Keyboard: arrows or W/S, Enter, or the digits 1-5.
+**Look:**
+- The arena is now a neon-grid Y2K street: a striped retro sun and star field, a pink/cyan/lime palette, a graffiti-covered back wall (tags are drawn on canvases in `arena.js`), neon signs, floating chrome toys, a blocky city skyline. Room Run rooms have their own fog mood.
+- **Comic print** post effect (`engine.js` FX pass, `Q.comic`, Graphics > "Comic print look": off on Potato/Low, Light on Medium, Full on High/Ultra): coloured (purple) shadows, richer colour, a Ben-Day halftone dot screen that grows in the dark areas, a little paper grain.
+- Menu/HUD keep the "ink & ledger" skin; the title adds the hot-pink / cyan / lime sticker palette and offset-print logo.
+- The **Campaign** level still uses the old contribution-graph world (the world overhaul is separate), so it does not have this look yet.
+**Heroes:** all four are faceless (a blank mannequin head) in Y2K streetwear (`src/outfits.js`): Fire a punk skater, Water a raver (headphones, twin buns, cargo pants), Earth a skater brute (hoodie, beanie, backpack), Air a roller kid (goggles, windbreaker, rollerblades).
+**Fire-Skater** (from the owner's brief): void-black face under a cracked skate helmet with a flame mohawk, a patched denim vest with pins and a chain, baggy cargo pants, oversized skate shoes, a graffiti deck on his back.
+- **Heat gauge** (passive): skating at speed (running or dashing) and landing hits builds Heat; at full Heat he BLAZES for 6 s and every main hit splashes burning damage. HUD bar under Energy.
+- **Perfect parry = kick turn:** a 360 on the board, flame waves both ways, a white flash.
+- **Ignite Grind (Q, was Phoenix Dash):** the deck appears under his feet; burning graffiti decals along the path. Skid marks on dashes and hard landings.
+- **Volcanic Spit-Trick (E, was Meteor Storm):** a leap and spin, a fire-breath stream, a huge burning fire-graffiti stamp on the floor (6 s, burns everything on it) with eruptions. The tree's fork now decides the finish: **Armageddon** or **Solar Flare** rain meteors / one colossal meteor onto the stamp.
+**Not done / not verified:** the concept art images were not readable by me (only the text of the brief), so colours and proportions are my interpretation; "grind on a wall or rail" is not implemented (the lane has no rails); the three other heroes' outfits are first drafts; the Campaign world is not re-skinned; iPhone 13 untested.
