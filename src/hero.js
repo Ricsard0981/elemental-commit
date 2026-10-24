@@ -42,16 +42,19 @@ const torus = new THREE.TorusGeometry(1, 0.16, 6, 20);
 export class Hero {
   constructor(key, el) {
     this.key = key; this.el = el;
-    const def = this.def = DEF[key], src = assets[def.body];
+    const def = this.def = DEF[key];
+    this.pyre = key === 'fire' && !!assets.pyre;      // Fire is Pyre: his own Blender-built model (tools/blender/build_pyre.py)
+    const src = this.pyre ? assets.pyre : assets[def.body];
     this.group = new THREE.Group();
     this.tilt = new THREE.Group(); this.group.add(this.tilt);
     this.pivot = new THREE.Group(); this.tilt.add(this.pivot);
     const model = this.model = SkeletonUtils.clone(src.scene);
     this.pivot.add(model);
-    // scale to the target height (bodies are 1.81 / 1.77 m tall)
-    const bodyH = def.body === 'm' ? 1.81 : 1.77;
+    // scale to the target height (bodies are 1.81 / 1.77 m tall; Pyre is 1.9 m to the top of his helmet)
+    const bodyH = this.pyre ? 1.9 : def.body === 'm' ? 1.81 : 1.77;
     this.s = def.height / bodyH;
-    this.pivot.scale.set(this.s * def.width, this.s, this.s * def.width);
+    this.width = this.pyre ? 1 : def.width;
+    this.pivot.scale.set(this.s * this.width, this.s, this.s * this.width);
     model.updateMatrixWorld(true);
     const bones = this.bones = {};
     model.traverse((o) => { if (o.isBone) bones[o.name] = o; });
@@ -61,11 +64,13 @@ export class Hero {
     this.ink = Q.outlines ? outlineMaterial({ thick: 0.012 }) : null;
     this.bodyMesh = skinned[0]; this.inkParts = Q.outlines ? outlineMaterial({ thick: 0.009 }) : null;
     for (const o of skinned) {
-      o.material = this.mat; o.castShadow = true; o.receiveShadow = false; o.frustumCulled = false;
-      if (this.ink) addOutline(o, this.ink);
+      const flame = this.pyre && o.name.includes('Flame');
+      o.material = flame ? this.flameM : this.mat; o.castShadow = !flame; o.receiveShadow = false; o.frustumCulled = false;
+      if (this.ink) addOutline(o, flame ? this.inkParts : this.ink);
     }
     this.parts = [];
-    this.buildCostume(); this.bakeCostume();
+    if (!this.pyre) { this.buildCostume(); this.bakeCostume(); }
+    else this.attachDeck();
     model.rotation.y = Math.PI / 2; // glTF faces +Z, the game faces +X
     // animation
     this.an = new Animator(model, assets.anims);
@@ -97,7 +102,12 @@ export class Hero {
     const { def, el } = this, z = ZONES[def.body], p = def.pal;
     const map = this.model.getObjectByProperty('isSkinnedMesh', true)?.material?.map ?? null;
     if (map) map.colorSpace = THREE.SRGBColorSpace;
-    this.mat = costumeMaterial({ map, rim: el.color2, rimK: 0.75, zones: z, kit: def.kit, style: def.style, colors: { a: p.a, b: p.b, trim: p.trim, glow: el.color2 } });
+    if (this.pyre && map) {
+      // one atlas of flat swatches + patch art: no mipmaps, so neighbouring cells never bleed into each other at a distance
+      map.minFilter = THREE.LinearFilter; map.generateMipmaps = false; map.needsUpdate = true;
+      this.mat = toonMaterial({ map, rim: el.color2, rimK: 0.45 });
+      this.flameM = new THREE.MeshBasicMaterial({ map, color: new THREE.Color(1.5, 1.35, 1.2), toneMapped: false });   // the torch flame glows into the bloom
+    } else this.mat = costumeMaterial({ map, rim: el.color2, rimK: 0.75, zones: z, kit: def.kit, style: def.style, colors: { a: p.a, b: p.b, trim: p.trim, glow: el.color2 } });
     this.armor = toonMaterial({ color: p.armor, rim: el.color2, rimK: 0.7 });
     this.trimM = toonMaterial({ color: p.trim, emissive: el.color, emissiveIntensity: 0.55, rim: el.color2, rimK: 0.5 });
     this.clothM = toonMaterial({ color: p.a, rim: el.color2, rimK: 0.5 });
@@ -139,6 +149,24 @@ export class Hero {
       if (this.ink && mat !== this.glowM && mat !== this.glowM2) addOutline(m, this.inkParts);
     }
     this.parts = [];
+  }
+  // Pyre's board, strapped diagonally across his back (graphic facing out). It lives on spine_03, so every clip carries it.
+  attachDeck() {
+    const deck = this.deck = assets.deck.scene.clone(true);
+    const meshes = [];
+    deck.traverse((o) => { if (o.isMesh) meshes.push(o); });   // collect first: addOutline adds children while we walk
+    meshes.forEach((o) => {
+      const map = o.material.map;
+      if (map) { map.colorSpace = THREE.SRGBColorSpace; map.minFilter = THREE.LinearFilter; map.generateMipmaps = false; }
+      o.material = this.deckM ||= toonMaterial({ map, rim: this.el.color2, rimK: 0.45 });
+      o.castShadow = true; o.frustumCulled = false;
+      if (this.ink) addOutline(o, this.inkParts);
+    });
+    // model space (glTF): +Y up, he faces +Z; the deck's grip faces +Y and its length runs along Z
+    deck.position.set(0, 1.27, -0.215);
+    deck.quaternion.setFromAxisAngle(new THREE.Vector3(0, 0, 1), 0.45).multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI / 2));
+    this.model.add(deck); this.model.updateMatrixWorld(true);
+    this.bones.spine_03.attach(deck);
   }
   both(fn) { fn(1, '_l'); fn(-1, '_r'); } // +x is the character's left in the bind pose
   buildCostume() {
@@ -388,7 +416,7 @@ export class Hero {
     this.pivot.rotation.y = this.spin;
     const gnd = p.onGround, stretch = !gnd && st !== 'dash' ? clamp(Math.abs(p.vy) / 40, 0, 0.14) : 0;
     const sy = 1 - p.squash * 0.45 + stretch, sxz = 1 + p.squash * 0.4 - stretch * 0.5;
-    this.pivot.scale.set(this.s * this.def.width * sxz, this.s * sy, this.s * this.def.width * sxz);
+    this.pivot.scale.set(this.s * this.width * sxz, this.s * sy, this.s * this.width * sxz);
     this.group.updateMatrixWorld(true);
     // ---- ribbons follow the posed skeleton
     const t = G.time, dirx = -p.facing;

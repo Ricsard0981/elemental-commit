@@ -106,3 +106,13 @@ The first v2 UI still looked like a generic dark dashboard (rounded GitHub-grey 
 **Heroes:** all four are faceless (a blank mannequin head) in Y2K streetwear (`src/outfits.js`): Fire a punk skater, Water a raver (headphones, twin buns, cargo pants), Earth a skater brute (hoodie, beanie, backpack), Air a roller kid (goggles, windbreaker, rollerblades).
 **Fire-Skater:** deliberately NOT built yet. The owner has a detailed brief and concept art for it and asked to do it later; an early prototype of it was written and reverted (it is in git history, commits b4a6366 and its revert). Fire currently wears the first-draft punk outfit.
 **Not done / not verified:** the Fire-Skater (waiting for the owner's instructions); the Campaign world is not re-skinned (the world overhaul is separate); the heroes' outfits are first drafts judged only on screenshots; iPhone 13 untested.
+
+## 15. Pyre: the Fire hero's own Blender model
+Fire is now **Pyre**, the faceless fire-punk skater from `ELEMENT_GAME_v2/assets/concept/FIRE_GUY`. He is a separate model built entirely by script in Blender (headless, repeatable):
+- `tools/blender/atlas_gen.mjs` draws the 1024 texture atlas (flat swatches, sewn patches, the CRASH back art, the shoe flame print, the deck graphic) into `atlas.png` + `atlas.json`.
+- `tools/blender/build_pyre.py` models him (bmesh), UV-maps every part to an atlas cell, skins him to the game's own rig (same bone names, so every clip in `anims.glb` plays) and exports `assets/hero/pyre.glb` (~7.6k tris, flame as its own glowing mesh). The rest pose is a relaxed A-pose with bent elbows; clips set bone rotations outright, so this does not affect animation.
+- `tools/blender/build_deck.py` builds the purple IGNITE board, `assets/hero/pyre_deck.glb` (~1k tris).
+- `render_preview.py` renders a front/3-4/side/back sheet; `photo_pyre.py` is a look-dev photo set (night, brick wall, sodium lights + flash, toon bands, ink outlines, halftone) and is not part of the game.
+Run: `blender --background --python tools/blender/build_pyre.py` (Blender 5.2).
+In game (`hero.js`): when `pyre.glb` and `pyre_deck.glb` load, Fire uses them (toon material on the atlas, a glowing flame material, outlines) and skips the procedural costume; the deck rides on `spine_03`. If either fails to load, Fire falls back to the old body + outfit.
+**Not done yet:** Skate Mode, the Heat gauge, board attacks, parry, backflips (the plan is in this repo's history / the Pyre plan). **Not verified:** iPhone 13 frame rate with Pyre; the colours read darker in the arena lighting than in the Blender renders.
