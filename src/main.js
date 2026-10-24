@@ -111,7 +111,7 @@ function startRoomRun(key) {
   clearEnemies(); clearAll(); dyn.length = 0; UI.hideBoss();
   G.combo = { n: 0, t: 0, best: 0, rank: 0 }; resetStyle(); G.stats = { kills: 0, commits: 0, time: 0, parries: 0, damageTaken: 0 };
   resetRevert(); REV.charges = 1;
-  startRoomRunState(key);
+  startRoomRunState(key, !!document.getElementById('daily-chk')?.checked);
   G.boss = null; G.freeze = 0; G.ts = 1; G.tsTarget = 1; G.tsHold = 0; G.witch = 0;
   enterArena(); setAmbience('arena');
   const p = new Player(key); G.player = p; p.x = 10; p.hurtI = 1; p.sinceHurt = 99;

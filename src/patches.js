@@ -2,7 +2,7 @@
 // merged into player.mods, so they stack with the permanent tree. Element patches only show up for your element; MERGE patches need
 // your element AND your secondary (Resonance) element, which is what makes picking a secondary a real decision.
 import { G } from './state.js';
-import { rand } from './util.js';
+import { rr } from './util.js';
 import { addFx } from './skills.js';
 
 const P = (id, name, desc, tag, rare, fx, extra = {}) => ({ id, name, desc, tag, rare, fx, ...extra });
@@ -55,11 +55,11 @@ export function offerPatches(n, run, rare) {
   const pool = PATCHES.filter((p) => eligible(p, run));
   const out = [];
   while (out.length < n && pool.length) {
-    const wantRare = rare ? Math.random() < 0.7 : Math.random() < 0.12;
+    const wantRare = rare ? rr() < 0.7 : rr() < 0.12;
     const sub = pool.filter((p) => (p.rare > 0) === wantRare);
     const src = sub.length ? sub : pool;
     // merge patches are rare AND exciting: weight them up so a good secondary actually pays off
-    const w = src.map((p) => (p.tag === 'merge' ? 2.5 : 1)); let t = w.reduce((a, b) => a + b, 0) * Math.random(), i = 0;
+    const w = src.map((p) => (p.tag === 'merge' ? 2.5 : 1)); let t = w.reduce((a, b) => a + b, 0) * rr(), i = 0;
     while (i < src.length - 1 && (t -= w[i]) > 0) i++;
     const pick = src[i]; out.push(pick); pool.splice(pool.indexOf(pick), 1);
   }

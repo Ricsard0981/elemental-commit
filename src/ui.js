@@ -30,7 +30,7 @@ export function initUI(handlers) {
   // mode switch: the authored Campaign, or a randomised Room Run
   G.menuMode = G.menuMode || 'campaign';
   const seg = document.getElementById('mode-seg');
-  if (seg) seg.querySelectorAll('button').forEach((b) => { b.classList.toggle('on', b.dataset.mode === G.menuMode); b.onclick = () => { sfx.click(); G.menuMode = b.dataset.mode; seg.querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b)); document.getElementById('mode-desc').textContent = G.menuMode === 'run' ? 'Room Run: random rooms, a Patch after each, shops and a final boss. New!' : 'Campaign: the hand-built level and boss.'; }; });
+  if (seg) seg.querySelectorAll('button').forEach((b) => { b.classList.toggle('on', b.dataset.mode === G.menuMode); b.onclick = () => { sfx.click(); G.menuMode = b.dataset.mode; document.body.classList.toggle('run-mode', G.menuMode === 'run'); seg.querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b)); document.getElementById('mode-desc').textContent = G.menuMode === 'run' ? 'Room Run: random rooms, a Patch after each, shops and a final boss. New!' : 'Campaign: the hand-built level and boss.'; }; });
   KEYS.forEach((k, i) => {
     const e = ELEMENTS[k];
     const card = document.createElement('button');

@@ -12,7 +12,8 @@ import { gainRevert, REV } from './revert.js';
 import { offerPatches, patchById, TAG_COL } from './patches.js';
 import { ELEMENTS, KEYS } from './elements.js';
 import { cam, ring, screenFlash } from './engine.js';
-import { pick, rand, clamp } from './util.js';
+import { pickR as pick, rand, clamp, rr, seedRng, todaySeed } from './util.js';
+import { scene } from './engine.js';
 
 const PLAN = [['combat', 'elite'], ['combat', 'elite'], ['shop', 'rest'], ['combat', 'elite'], ['minibos'], ['shop', 'rest'], ['boss']];
 const TYPE = {
@@ -27,8 +28,10 @@ const BEST_KEY = 'elemental-commit-runs-v1';
 const api = { gainRevert: (n) => gainRevert(n), giveRes: () => { const r = G.run; r.res = pick(KEYS.filter((k) => k !== r.key)); r.hasRes = true; G.player?.refreshMods(); } };
 
 export function runActive() { return !!(G.run && G.run.active); }
-export function newRun(key) {
-  G.run = { active: true, key, room: 0, depth: 0, type: 'combat', patches: [], res: null, hasRes: false, wave: 0, waves: [], delay: 0, cleared: false, spawning: 0, rooms: 0, bestStyle: 0, startedAt: performance.now() };
+const FOG = { combat: 0xd9a68a, elite: 0xd98a86, shop: 0xe3cf8f, rest: 0x9ad9a8, minibos: 0xb08ad9, boss: 0x8a86b8 };
+export function newRun(key, daily = false) {
+  const seed = daily ? todaySeed() : Math.floor(Math.random() * 1e9); seedRng(seed);
+  G.run = { seed, daily, active: true, key, room: 0, depth: 0, type: 'combat', patches: [], res: null, hasRes: false, wave: 0, waves: [], delay: 0, cleared: false, spawning: 0, rooms: 0, bestStyle: 0, startedAt: performance.now() };
   return G.run;
 }
 export function runMods(m) { /* patches are merged by Player.refreshMods through patches.applyPatches */ return m; }
@@ -143,7 +146,8 @@ export function enterRoom(type) {
   clearEnemies(); clearAll();
   p.x = 10; p.y = 0; p.vx = 0; p.vy = 0; p.hurtI = Math.max(p.hurtI, 1); cam.x = p.x + 4;
   r.waves = buildWaves(type, r.rooms - 1);
-  const info = document.getElementById('runinfo'); if (info) { info.classList.add('show'); info.innerHTML = `<b>ROOM ${r.rooms}/${PLAN.length + 1}</b> ${TYPE[type].icon} ${TYPE[type].name}`; }
+  const info = document.getElementById('runinfo'); if (info) { info.classList.add('show'); info.innerHTML = `<b>ROOM ${r.rooms}/${PLAN.length + 1}</b> ${TYPE[type].icon} ${TYPE[type].name} <small>seed ${r.daily ? 'DAILY ' : ''}${r.seed}</small>`; }
+  if (scene.fog && FOG[type]) scene.fog.color.setHex(FOG[type]); // each room type has its own mood
   ring(p.x, p.y + 1, 0.5, ELEMENTS[r.key].color, { r0: 0.3, r1: 6, dur: 0.7 });
   UI.banner(TYPE[type].name.toUpperCase(), TYPE[type].desc, '#ffd33d', 2.2);
   if (type === 'shop') { later(0.6, shop); return; }
@@ -173,8 +177,8 @@ export function renderPatches() {
   const el = document.getElementById('patches'); if (!el) return;
   const r = G.run; el.innerHTML = r && r.active ? r.patches.map((id) => { const p = patchById(id); return `<i style="--c:${TAG_COL[p.tag]}" title="${p.name}: ${p.desc}">${p.name}</i>`; }).join('') : '';
 }
-export function startRoomRunState(key) {
-  newRun(key); renderPatches();
+export function startRoomRunState(key, daily = false) {
+  newRun(key, daily); renderPatches();
   const info = document.getElementById('runinfo'); if (info) info.classList.remove('show');
 }
 export function firstRoom() { G.run.depth = 0; enterRoom('combat'); }
@@ -187,7 +191,9 @@ export function finishRunVictory() {
   const isBest = !prev || t < prev.time; if (isBest) { best[r.key] = { time: t, patches: r.patches.length, style: r.bestStyle }; try { localStorage.setItem(BEST_KEY, JSON.stringify(best)); } catch { /* ignore */ } }
   sfx.checkpoint(); G.mode = 'ui';
   const s = G.stats, names = ['D', 'C', 'B', 'A', 'S', 'SS', 'SSS'];
-  openScreen(`<div class="panel wide"><div class="merged">RUN COMPLETE ✔</div><h2>The Monolith is refactored.</h2><div class="win-stats"><div><span>Time</span><b>${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}</b></div><div><span>Rooms</span><b>${r.rooms}</b></div><div><span>Patches</span><b>${r.patches.length}</b></div><div><span>Best style</span><b>${names[r.bestStyle]}</b></div><div><span>Kills</span><b>${s.kills}</b></div><div><span>Perfect parries</span><b>${s.parries}</b></div></div>${isBest ? '<div id="win-new" style="display:block">★ New best run</div>' : ''}<div class="row"><button class="primary" id="run-again">Run again</button><button id="run-menu">Main menu</button></div></div>`, (sc) => {
+  openScreen(`<div class="panel wide"><div class="merged">RUN COMPLETE ✔</div><h2>The Monolith is refactored.</h2><div class="win-stats"><div><span>Time</span><b>${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}</b></div><div><span>Rooms</span><b>${r.rooms}</b></div><div><span>Patches</span><b>${r.patches.length}</b></div><div><span>Best style</span><b>${names[r.bestStyle]}</b></div><div><span>Kills</span><b>${s.kills}</b></div><div><span>Perfect parries</span><b>${s.parries}</b></div></div>${isBest ? '<div id="win-new" style="display:block">★ New best run</div>' : ''}<p class="muted">Seed ${r.daily ? 'DAILY ' : ''}${r.seed}</p><div class="row"><button class="primary" id="run-again">Run again</button><button id="run-share">Copy result</button><button id="run-menu">Main menu</button></div></div>`, (sc) => {
+    const share = `Elemental Commit · Room Run · ${ELEMENTS[r.key].name} · ${r.daily ? 'Daily ' + r.seed : 'seed ' + r.seed} · ${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')} · style ${names[r.bestStyle]} · ${r.patches.length} patches`;
+    sc.querySelector('#run-share').onclick = () => { try { navigator.clipboard.writeText(share); UI.toast('Result copied', '#7ee787'); } catch { UI.toast(share, '#7ee787'); } };
     sc.querySelector('#run-again').onclick = () => { closeScreen(); window.dispatchEvent(new CustomEvent('run-again')); };
     sc.querySelector('#run-menu').onclick = () => { closeScreen(); window.dispatchEvent(new CustomEvent('run-menu')); };
   });

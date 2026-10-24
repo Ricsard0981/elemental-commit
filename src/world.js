@@ -54,6 +54,8 @@ export const hints = [
   { x: 25, text: '<b>K</b> / <b>Right click</b> — ranged attack (aim with the mouse) · <b>Q</b> / <b>E</b> — specials', touch: 'Hold <b>Ranged</b> to fire (auto-aims) — <i>drag</i> from it to aim manually · the two outer buttons are your specials' },
   { x: 44, text: 'Hold <b>F</b> to defend. Tap it <i>just before</i> a hit lands for a <b>PERFECT PARRY</b>', touch: 'Hold <b>Defend</b> to block. Tap it <i>just before</i> a hit lands for a <b>PERFECT PARRY</b>' },
   { x: 56, text: 'Press <b>Tab</b> to open your skill tree and spend skill points', touch: 'Tap <b>Skills</b> (top-left) to spend skill points' },
+  { x: 62, text: '<b>Perfect parries</b> charge <b>Revert</b> (<b>R</b>): it rewinds ~3 seconds, and saves you from a lethal hit automatically', touch: 'Perfect parries charge <b>Revert</b> (the ⟲ button): a 3-second rewind that also saves you from a lethal hit' },
+  { x: 66, text: 'Dash <i>through</i> an attack for a <b>PERFECT DODGE</b> (enemies slow down). Vary your moves to raise your <b>Style</b> (top-left)', touch: 'Dash <i>through</i> an attack for a <b>PERFECT DODGE</b>. Vary your moves to raise your <b>Style</b>' },
 ];
 export const BOSS_X0 = 218, BOSS_X1 = 264;
 
